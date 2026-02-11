@@ -205,3 +205,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# JobHunter specific
+# Database files
+data/jobhunter.db
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Application logs
+data/*.log
+
+# User CV (contains personal data)
+data/cv.txt
+
+# Selenium logs
+geckodriver.log
+chromedriver.log
