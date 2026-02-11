@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - JobHunter{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Job Offers Dashboard</h2>
+    <div class="stats-summary">
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.total_offers }}</span>
+            <span class="stat-label">Total Offers</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.tracked }}</span>
+            <span class="stat-label">Tracked</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.cv_sent }}</span>
+            <span class="stat-label">CV Sent</span>
+        </div>
+    </div>
+</div>
+
+<div class="table-container">
+    {% if offers %}
+    <table class="offers-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Contract</th>
+                <th>Source</th>
+                <th>Posted Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for offer in offers %}
+            <tr>
+                <td><a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a></td>
+                <td>{{ offer.company }}</td>
+                <td>{{ offer.location or 'N/A' }}</td>
+                <td>{{ offer.contract_type or 'N/A' }}</td>
+                <td><span class="badge badge-{{ offer.source }}">{{ offer.source }}</span></td>
+                <td>{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>
+                <td>
+                    {% if offer.tracking %}
+                    <span class="status-badge status-{{ offer.tracking.status.lower().replace(' ', '-') }}">
+                        {{ offer.tracking.status }}
+                    </span>
+                    {% else %}
+                    <span class="status-badge status-new">New</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small">View Offer</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <h3>No job offers found</h3>
+        <p>Run the scrapers to populate the dashboard with job offers.</p>
+        <code>python scripts/run_scrapers.py</code>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

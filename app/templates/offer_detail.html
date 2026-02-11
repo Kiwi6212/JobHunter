@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}{{ offer.title }} - JobHunter{% endblock %}
+
+{% block content %}
+<div class="offer-detail">
+    <div class="offer-header">
+        <h2>{{ offer.title }}</h2>
+        <div class="offer-meta">
+            <span class="company">{{ offer.company }}</span>
+            <span class="location">{{ offer.location or 'Location not specified' }}</span>
+            <span class="badge badge-{{ offer.source }}">{{ offer.source }}</span>
+        </div>
+    </div>
+
+    <div class="offer-content">
+        <div class="offer-section">
+            <h3>Job Details</h3>
+            <table class="detail-table">
+                <tr>
+                    <th>Contract Type:</th>
+                    <td>{{ offer.contract_type or 'N/A' }}</td>
+                </tr>
+                <tr>
+                    <th>Posted Date:</th>
+                    <td>{{ offer.posted_date.strftime('%Y-%m-%d %H:%M') if offer.posted_date else 'N/A' }}</td>
+                </tr>
+                <tr>
+                    <th>Found Date:</th>
+                    <td>{{ offer.found_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                <tr>
+                    <th>Relevance Score:</th>
+                    <td>{{ offer.relevance_score }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="offer-section">
+            <h3>Description</h3>
+            <div class="description">
+                {{ offer.description or 'No description available' }}
+            </div>
+        </div>
+
+        {% if offer.tracking %}
+        <div class="offer-section">
+            <h3>Tracking Information</h3>
+            <table class="detail-table">
+                <tr>
+                    <th>Status:</th>
+                    <td><span class="status-badge status-{{ offer.tracking.status.lower().replace(' ', '-') }}">{{ offer.tracking.status }}</span></td>
+                </tr>
+                <tr>
+                    <th>CV Sent:</th>
+                    <td>{{ 'Yes' if offer.tracking.cv_sent else 'No' }}</td>
+                </tr>
+                <tr>
+                    <th>Follow-up Done:</th>
+                    <td>{{ 'Yes' if offer.tracking.follow_up_done else 'No' }}</td>
+                </tr>
+                {% if offer.tracking.date_sent %}
+                <tr>
+                    <th>Date Sent:</th>
+                    <td>{{ offer.tracking.date_sent.strftime('%Y-%m-%d') }}</td>
+                </tr>
+                {% endif %}
+                {% if offer.tracking.notes %}
+                <tr>
+                    <th>Notes:</th>
+                    <td>{{ offer.tracking.notes }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="offer-actions">
+            <a href="{{ offer.url }}" target="_blank" class="btn btn-primary">View Original Offer</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -42,8 +42,8 @@ def init_db():
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
-    print("✓ Database initialized successfully!")
-    print(f"✓ Tables created: {', '.join(Base.metadata.tables.keys())}")
+    print("[OK] Database initialized successfully!")
+    print(f"[OK] Tables created: {', '.join(Base.metadata.tables.keys())}")
 
 
 def get_db():
@@ -61,19 +61,19 @@ def get_db():
 def drop_all_tables():
     """
     Drop all tables from the database.
-    ⚠️ WARNING: This will delete all data! Use only for development/testing.
+    WARNING: This will delete all data! Use only for development/testing.
     """
-    print("⚠️  Dropping all tables...")
+    print("[!] Dropping all tables...")
     Base.metadata.drop_all(bind=engine)
-    print("✓ All tables dropped")
+    print("[OK] All tables dropped")
 
 
 def reset_db():
     """
     Reset the database by dropping and recreating all tables.
-    ⚠️ WARNING: This will delete all data! Use only for development/testing.
+    WARNING: This will delete all data! Use only for development/testing.
     """
-    print("⚠️  Resetting database...")
+    print("[!] Resetting database...")
     drop_all_tables()
     init_db()
-    print("✓ Database reset complete")
+    print("[OK] Database reset complete")

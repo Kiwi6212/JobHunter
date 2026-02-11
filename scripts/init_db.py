@@ -32,12 +32,12 @@ def main():
     reset_flag = "--reset" in sys.argv
 
     if reset_flag:
-        print("⚠️  WARNING: --reset flag detected!")
-        print("⚠️  This will delete ALL existing data in the database.")
+        print("[!] WARNING: --reset flag detected!")
+        print("[!] This will delete ALL existing data in the database.")
         response = input("Are you sure you want to continue? (yes/no): ").strip().lower()
 
         if response != "yes":
-            print("❌ Operation cancelled")
+            print("[X] Operation cancelled")
             return
 
         print()

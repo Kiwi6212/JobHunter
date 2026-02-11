@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics - JobHunter{% endblock %}
+
+{% block content %}
+<div class="stats-page">
+    <h2>Application Statistics</h2>
+
+    <div class="stats-grid">
+        <div class="stat-card large">
+            <span class="stat-number">{{ stats.total_offers }}</span>
+            <span class="stat-label">Total Offers Found</span>
+        </div>
+        <div class="stat-card large">
+            <span class="stat-number">{{ stats.tracked }}</span>
+            <span class="stat-label">Offers Tracked</span>
+        </div>
+        <div class="stat-card large">
+            <span class="stat-number">{{ stats.cv_sent }}</span>
+            <span class="stat-label">CVs Sent</span>
+        </div>
+        <div class="stat-card large">
+            <span class="stat-number">{{ stats.follow_ups }}</span>
+            <span class="stat-label">Follow-ups Done</span>
+        </div>
+    </div>
+
+    <div class="status-breakdown">
+        <h3>Applications by Status</h3>
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for status, count in stats.status_counts.items() %}
+                <tr>
+                    <td><span class="status-badge status-{{ status.lower().replace(' ', '-') }}">{{ status }}</span></td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
