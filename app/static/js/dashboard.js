@@ -192,6 +192,7 @@
   var filterSource = document.getElementById("filter-source");
   var filterCompany = document.getElementById("filter-company");
   var filterSearch = document.getElementById("filter-search");
+  var showRecruiters = document.getElementById("show-recruiters");
   var visibleCount = document.getElementById("visible-count");
   var pageInfo = document.getElementById("page-info");
   var pageNext = document.getElementById("page-next");
@@ -202,13 +203,16 @@
     var source = filterSource ? filterSource.value : "";
     var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
     var search = filterSearch ? filterSearch.value.toLowerCase().trim() : "";
+    var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
 
     filteredRows = [];
     for (var i = 0; i < allRows.length; i++) {
       var row = allRows[i];
       var show = true;
 
-      if (status && row.dataset.status !== status) show = false;
+      // Hide recruiters unless toggle is checked
+      if (!includeRecruiters && row.dataset.offerType === "recruiter") show = false;
+      if (show && status && row.dataset.status !== status) show = false;
       if (show && source && row.dataset.source !== source) show = false;
       if (show && company && row.dataset.company.indexOf(company) === -1) show = false;
       if (show && search) {
@@ -246,6 +250,7 @@
   if (filterSource) filterSource.addEventListener("change", applyFilters);
   if (filterCompany) filterCompany.addEventListener("input", applyFilters);
   if (filterSearch) filterSearch.addEventListener("input", applyFilters);
+  if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
 
   if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); });
   if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); });
@@ -257,6 +262,7 @@
       if (filterSource) filterSource.value = "";
       if (filterCompany) filterCompany.value = "";
       if (filterSearch) filterSearch.value = "";
+      if (showRecruiters) showRecruiters.checked = false;
       applyFilters();
     });
   }

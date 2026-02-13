@@ -31,6 +31,7 @@ class Offer(Base):
     # Source tracking
     source = Column(String(50), nullable=False)  # france_travail, wttj, indeed, etc.
     external_id = Column(String(255), nullable=True)  # ID from source for deduplication
+    offer_type = Column(String(20), nullable=False, default="job")  # job or recruiter
 
     # Dates
     posted_date = Column(DateTime, nullable=True)  # When posted by company

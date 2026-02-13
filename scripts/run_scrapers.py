@@ -74,6 +74,7 @@ def save_offers_to_db(offers):
                 external_id=offer_data.get("external_id"),
                 posted_date=offer_data.get("posted_date"),
                 relevance_score=offer_data.get("relevance_score", 0.0),
+                offer_type=offer_data.get("offer_type", "job"),
                 found_date=datetime.utcnow(),
             )
 

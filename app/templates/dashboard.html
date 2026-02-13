@@ -54,6 +54,11 @@
         <label for="filter-search">Search</label>
         <input type="text" id="filter-search" placeholder="Search title, company...">
     </div>
+    <div class="filter-group filter-toggle">
+        <label>
+            <input type="checkbox" id="show-recruiters"> Afficher les recruteurs potentiels
+        </label>
+    </div>
     <button class="btn btn-secondary btn-small" id="filters-reset">Reset</button>
 </div>
 
@@ -85,7 +90,8 @@
                 data-status="{{ offer.tracking.status if offer.tracking else 'New' }}"
                 data-location="{{ (offer.location or '')|lower }}"
                 data-date="{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else '' }}"
-                data-score="{{ offer.relevance_score or 0 }}">
+                data-score="{{ offer.relevance_score or 0 }}"
+                data-offer-type="{{ offer.offer_type or 'job' }}">
                 <td class="col-title">
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>
                 </td>

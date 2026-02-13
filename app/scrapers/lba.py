@@ -335,6 +335,7 @@ class LaBonneAlternanceScraper(BaseScraper):
                 url=url,
                 external_id=f"lba_recruiter_{external_id}" if external_id else None,
                 posted_date=None,
+                offer_type="recruiter",
             )
 
         except Exception as e:

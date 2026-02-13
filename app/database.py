@@ -5,7 +5,7 @@ Handles SQLite database initialization and provides session factory.
 
 import os
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.models import Base
 
@@ -42,8 +42,30 @@ def init_db():
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
+    # Auto-migrate: add missing columns to existing tables
+    _migrate_columns()
+
     print("[OK] Database initialized successfully!")
     print(f"[OK] Tables created: {', '.join(Base.metadata.tables.keys())}")
+
+
+def _migrate_columns():
+    """Add missing columns to existing tables and backfill data."""
+    insp = inspect(engine)
+    if "offers" in insp.get_table_names():
+        existing = [c["name"] for c in insp.get_columns("offers")]
+        if "offer_type" not in existing:
+            print("[MIGRATE] Adding offer_type column to offers table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE offers ADD COLUMN offer_type VARCHAR(20) NOT NULL DEFAULT 'job'"
+                ))
+                # Backfill: rows with external_id starting with lba_recruiter_ are recruiters
+                conn.execute(text(
+                    "UPDATE offers SET offer_type = 'recruiter' "
+                    "WHERE external_id LIKE 'lba_recruiter_%'"
+                ))
+            print("[MIGRATE] Done. Backfilled recruiter tags from external_id.")
 
 
 def get_db():

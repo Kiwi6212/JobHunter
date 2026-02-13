@@ -78,6 +78,7 @@ class BaseScraper(ABC):
             "external_id": kwargs.get("external_id"),
             "posted_date": kwargs.get("posted_date"),
             "relevance_score": kwargs.get("relevance_score", 0.0),
+            "offer_type": kwargs.get("offer_type", "job"),
         }
 
     def run(self):
