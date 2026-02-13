@@ -234,12 +234,17 @@ class LaBonneAlternanceScraper(BaseScraper):
             # Build title
             title = offer_data.get("title", "Unknown Title")
 
-            # Build company name
+            # Build company name (try multiple fields)
             company = (
                 workplace.get("brand")
                 or workplace.get("name")
                 or workplace.get("legal_name")
-                or "Unknown Company"
+                or workplace.get("enseigne")
+                or workplace.get("description", "")[:100].strip()
+                or self._extract_company_from_description(
+                    offer_data.get("description", "")
+                )
+                or identifier.get("partner_label", "Unknown Company")
             )
 
             # Build location string
@@ -310,6 +315,7 @@ class LaBonneAlternanceScraper(BaseScraper):
                 workplace.get("brand")
                 or workplace.get("name")
                 or workplace.get("legal_name")
+                or workplace.get("enseigne")
                 or "Unknown Company"
             )
 
@@ -334,3 +340,23 @@ class LaBonneAlternanceScraper(BaseScraper):
         except Exception as e:
             logger.warning(f"[la_bonne_alternance] Error parsing recruiter: {e}")
             return None
+
+    @staticmethod
+    def _extract_company_from_description(description):
+        """Try to extract company name from offer description text."""
+        if not description:
+            return None
+        # Look for patterns like "Raison sociale: COMPANY" or "Employeur: COMPANY"
+        import re
+        patterns = [
+            r'[Rr]aison sociale\s*[:\-]\s*(.+?)(?:\s*[Ss]tatut|\s*[Pp]oste|\n)',
+            r'[Ee]mployeur\s*[:\-]\s*(.+?)(?:\n|\s{2,})',
+            r'[Ee]ntreprise\s*[:\-]\s*(.+?)(?:\n|\s{2,})',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, description)
+            if match:
+                name = match.group(1).strip().strip('*').strip()
+                if name and len(name) > 2:
+                    return name
+        return None

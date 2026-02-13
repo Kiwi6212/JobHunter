@@ -6,11 +6,23 @@ and target company matching.
 
 import logging
 import re
+import unicodedata
 from datetime import datetime
 
 from config import KEYWORDS, FILTERS, TARGET_COMPANIES
 
 logger = logging.getLogger(__name__)
+
+# Accent mapping for French characters
+ACCENT_MAP = str.maketrans(
+    "àâäéèêëïîôùûüÿçœæÀÂÄÉÈÊËÏÎÔÙÛÜŸÇŒÆ",
+    "aaaeeeeiioouuycoeAAAEEEEIIOOUUYCOE",
+)
+
+
+def normalize_text(text):
+    """Remove accents and normalize text for matching."""
+    return text.lower().translate(ACCENT_MAP)
 
 
 class FilterEngine:
@@ -18,7 +30,7 @@ class FilterEngine:
     Filters and scores job offers based on configured criteria.
 
     Filtering steps:
-        1. Keyword matching (title + description)
+        1. Keyword matching (title + description) with accent-insensitive search
         2. Location filtering (Ile-de-France departments)
         3. Contract type filtering (alternance)
         4. Relevance scoring (keyword density + target company bonus)
@@ -32,10 +44,18 @@ class FilterEngine:
         # Departments that are part of Ile-de-France
         self.idf_departments = set(FILTERS.get("departments", []))
 
-        # Pre-compile keyword patterns for efficient matching
-        self.keyword_patterns = [
-            re.compile(re.escape(kw), re.IGNORECASE) for kw in KEYWORDS
-        ]
+        # Pre-compile keyword patterns WITH accent-normalized versions
+        # This matches both "systèmes" and "systemes"
+        self.keyword_patterns = []
+        for kw in KEYWORDS:
+            # Original pattern (with accents)
+            self.keyword_patterns.append(re.compile(re.escape(kw), re.IGNORECASE))
+            # Normalized pattern (without accents)
+            normalized = normalize_text(kw)
+            if normalized != kw.lower():
+                self.keyword_patterns.append(
+                    re.compile(re.escape(normalized), re.IGNORECASE)
+                )
 
     def filter_offers(self, offers):
         """
@@ -96,15 +116,19 @@ class FilterEngine:
     def _matches_keywords(self, offer):
         """
         Check if at least one keyword matches the offer title or description.
+        Searches both original text and accent-normalized text.
 
         Returns True if any keyword is found.
         """
-        title = (offer.get("title") or "").lower()
-        description = (offer.get("description") or "").lower()
-        text = f"{title} {description}"
+        title = offer.get("title") or ""
+        description = offer.get("description") or ""
+
+        # Search both original and accent-normalized text
+        text = f"{title} {description}".lower()
+        text_normalized = normalize_text(f"{title} {description}")
 
         for pattern in self.keyword_patterns:
-            if pattern.search(text):
+            if pattern.search(text) or pattern.search(text_normalized):
                 return True
 
         return False
@@ -165,21 +189,26 @@ class FilterEngine:
         """
         score = 0.0
         title = (offer.get("title") or "").lower()
+        title_norm = normalize_text(offer.get("title") or "")
         description = (offer.get("description") or "").lower()
+        desc_norm = normalize_text(offer.get("description") or "")
         company = (offer.get("company") or "").lower()
 
         # Keyword matches in title (high value)
         title_matches = 0
         for pattern in self.keyword_patterns:
-            if pattern.search(title):
+            if pattern.search(title) or pattern.search(title_norm):
                 title_matches += 1
+        # Divide by 2 to avoid double-counting accented + non-accented patterns
+        title_matches = (title_matches + 1) // 2
         score += min(title_matches * 15, 45)
 
         # Keyword matches in description (lower value)
         desc_matches = 0
         for pattern in self.keyword_patterns:
-            if pattern.search(description):
+            if pattern.search(description) or pattern.search(desc_norm):
                 desc_matches += 1
+        desc_matches = (desc_matches + 1) // 2
         score += min(desc_matches * 5, 20)
 
         # Target company bonus

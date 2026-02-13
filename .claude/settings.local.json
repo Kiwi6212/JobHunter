@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nSet up project structure and configuration\n\nInitialize JobHunter project with folder structure, dependencies, and configuration files for Phase 1 Step 1:\n- Create app structure with scrapers, services, templates, and static folders\n- Add requirements.txt with all necessary dependencies \\(Flask, Selenium, APScheduler, Anthropic API\\)\n- Add .env.example template with API keys and configuration variables\n- Add config.py with search criteria, filters, and target companies\n- Update .gitignore to exclude database files, logs, and sensitive data\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(gpg --list-secret-keys:*)",
+      "Bash(git config:*)",
+      "Bash(gpg --full-generate-key:*)",
+      "Bash(gpg --armor --export:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(python scripts/init_db.py:*)",
+      "Bash(py:*)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/python:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "WebFetch(domain:labonnealternance.apprentissage.beta.gouv.fr)",
+      "WebFetch(domain:api.francetravail.io)",
+      "WebFetch(domain:doc.apprentissage.beta.gouv.fr)",
+      "Bash(curl:*)",
+      "Bash(python -c:*)",
+      "Bash(python3:*)",
+      "Bash(where:*)",
+      "Bash(dir:*)",
+      "Bash(py.exe -c:*)",
+      "Bash(findstr:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}
