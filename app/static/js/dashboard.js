@@ -44,20 +44,31 @@
   var noteTimers = {};
 
   function saveTracking(offerId, data) {
-    console.time("ajax-save-" + offerId);
+    var t0 = performance.now();
+    console.log("[DIAG] fetch START offer=" + offerId, data);
     fetch("/api/tracking/" + offerId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        var t1 = performance.now();
+        console.log("[DIAG] fetch response received offer=" + offerId +
+          " status=" + r.status + " (" + (t1 - t0).toFixed(1) + "ms)");
+        return r.json();
+      })
       .then(function (res) {
-        console.timeEnd("ajax-save-" + offerId);
+        var t2 = performance.now();
+        console.log("[DIAG] json parsed offer=" + offerId +
+          " (" + (t2 - t0).toFixed(1) + "ms total)");
+        if (res.server_ms !== undefined) {
+          console.log("[DIAG] server processing: " + res.server_ms + "ms");
+        }
         if (!res.ok) {
           console.error("Save failed", res.error);
           return;
         }
-        console.time("dom-update-" + offerId);
+        var t3 = performance.now();
         var row = tbody.querySelector('tr[data-offer-id="' + offerId + '"]');
         if (!row) return;
 
@@ -73,11 +84,13 @@
           fuLabel.textContent = res.tracking.follow_up_date
             ? formatShort(res.tracking.follow_up_date) : "";
         }
-        console.timeEnd("dom-update-" + offerId);
+        var t4 = performance.now();
+        console.log("[DIAG] dom-update offer=" + offerId +
+          " (" + (t4 - t3).toFixed(1) + "ms)");
       })
       .catch(function (err) {
-        console.timeEnd("ajax-save-" + offerId);
-        console.error("Network error:", err);
+        console.error("[DIAG] Network error after " +
+          (performance.now() - t0).toFixed(1) + "ms:", err);
       });
   }
 
@@ -89,11 +102,16 @@
   // ── Event delegation: one "change" listener on tbody ───────────────
 
   tbody.addEventListener("change", function (e) {
-    console.time("change-handler");
+    var t0 = performance.now();
     var target = e.target;
     var row = target.closest(".offer-row");
-    if (!row) { console.timeEnd("change-handler"); return; }
+    if (!row) {
+      console.log("[DIAG] change: no .offer-row (" + (performance.now() - t0).toFixed(1) + "ms)");
+      return;
+    }
     var offerId = row.dataset.offerId;
+    var t1 = performance.now();
+    console.log("[DIAG] change: row lookup (" + (t1 - t0).toFixed(1) + "ms)");
 
     // Status dropdown
     if (target.dataset.field === "status") {
@@ -103,14 +121,21 @@
       // Update interview counter
       if (oldStatus === "Interview" && newStatus !== "Interview") counts.interviews--;
       if (oldStatus !== "Interview" && newStatus === "Interview") counts.interviews++;
+      var t2 = performance.now();
+      console.log("[DIAG] change: counter update (" + (t2 - t1).toFixed(1) + "ms)");
+
       renderStats();
+      var t3 = performance.now();
+      console.log("[DIAG] change: renderStats (" + (t3 - t2).toFixed(1) + "ms)");
 
       // Update data attribute + color
       row.dataset.status = newStatus;
       target.className = "status-select status-color-" +
         newStatus.toLowerCase().replace(/ /g, "-");
+      var t4 = performance.now();
+      console.log("[DIAG] change: DOM class update (" + (t4 - t3).toFixed(1) + "ms)");
+      console.log("[DIAG] change TOTAL (status) = " + (t4 - t0).toFixed(1) + "ms → calling fetch");
 
-      console.timeEnd("change-handler");
       saveTracking(offerId, { status: newStatus });
       return;
     }
@@ -123,15 +148,21 @@
       // Update counter
       if (field === "cv_sent") counts.cv += checked ? 1 : -1;
       if (field === "follow_up_done") counts.fu += checked ? 1 : -1;
+      var t2b = performance.now();
+      console.log("[DIAG] change: counter update (" + (t2b - t1).toFixed(1) + "ms)");
+
       renderStats();
+      var t3b = performance.now();
+      console.log("[DIAG] change: renderStats (" + (t3b - t2b).toFixed(1) + "ms)");
 
       var payload = {};
       payload[field] = checked;
-      console.timeEnd("change-handler");
+      console.log("[DIAG] change TOTAL (checkbox) = " + (t3b - t0).toFixed(1) + "ms → calling fetch");
+
       saveTracking(offerId, payload);
       return;
     }
-    console.timeEnd("change-handler");
+    console.log("[DIAG] change: unhandled target (" + (performance.now() - t0).toFixed(1) + "ms)");
   });
 
   // ── Event delegation: one "input" listener for notes (debounced) ───

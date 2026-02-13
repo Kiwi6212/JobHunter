@@ -3,6 +3,7 @@ Flask routes for JobHunter dashboard.
 Handles all web interface endpoints and API endpoints for AJAX updates.
 """
 
+import time
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, jsonify
@@ -66,11 +67,15 @@ def update_tracking(offer_id):
     Accepts JSON with any combination of: status, cv_sent, follow_up_done,
     date_sent, follow_up_date, notes.
     """
+    t_start = time.perf_counter()
     db = SessionLocal()
     try:
+        t_q0 = time.perf_counter()
         tracking = db.query(Tracking).filter(Tracking.offer_id == offer_id).first()
+        t_q1 = time.perf_counter()
+        print(f"[DIAG] query tracking: {(t_q1 - t_q0) * 1000:.1f}ms")
+
         if not tracking:
-            # Verify offer exists before creating tracking
             offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
             if not offer_exists:
                 return jsonify({'error': 'Offer not found'}), 404
@@ -79,6 +84,7 @@ def update_tracking(offer_id):
 
         data = request.get_json()
 
+        t_upd0 = time.perf_counter()
         if 'status' in data:
             if data['status'] in VALID_STATUSES:
                 tracking.status = data['status']
@@ -101,10 +107,20 @@ def update_tracking(offer_id):
             tracking.notes = data['notes'].strip() if data['notes'] else None
 
         tracking.updated_at = datetime.utcnow()
+        t_upd1 = time.perf_counter()
+        print(f"[DIAG] update fields: {(t_upd1 - t_upd0) * 1000:.1f}ms")
+
+        t_c0 = time.perf_counter()
         db.commit()
+        t_c1 = time.perf_counter()
+        print(f"[DIAG] db.commit: {(t_c1 - t_c0) * 1000:.1f}ms")
+
+        t_total = (time.perf_counter() - t_start) * 1000
+        print(f"[DIAG] TOTAL server time for offer {offer_id}: {t_total:.1f}ms")
 
         return jsonify({
             'ok': True,
+            'server_ms': round(t_total, 1),
             'tracking': {
                 'status': tracking.status,
                 'cv_sent': tracking.cv_sent,
