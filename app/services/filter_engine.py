@@ -13,6 +13,10 @@ from config import KEYWORDS, FILTERS, TARGET_COMPANIES
 
 logger = logging.getLogger(__name__)
 
+# Sources that are already pre-filtered by relevance criteria (e.g. ROME codes).
+# These bypass the keyword filter and only go through location filtering.
+PREFILTERED_SOURCES = {"la_bonne_alternance"}
+
 # Accent mapping for French characters
 ACCENT_MAP = str.maketrans(
     "àâäéèêëïîôùûüÿçœæÀÂÄÉÈÊËÏÎÔÙÛÜŸÇŒÆ",
@@ -103,9 +107,12 @@ class FilterEngine:
 
         Returns True if the offer should be kept, False if rejected.
         """
-        # Check keyword match (at least one keyword must be found)
-        if not self._matches_keywords(offer):
-            return False
+        source = offer.get("source", "")
+
+        # Sources pre-filtered by ROME codes skip keyword matching
+        if source not in PREFILTERED_SOURCES:
+            if not self._matches_keywords(offer):
+                return False
 
         # Check location (if location data is available)
         if offer.get("location") and not self._matches_location(offer):
