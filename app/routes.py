@@ -44,16 +44,14 @@ def dashboard():
             'interviews': interview_count,
         }
 
-        # Collect unique sources and companies for filter dropdowns
+        # Collect unique sources for filter dropdown
         sources = sorted(set(o.source for o in offers))
-        companies = sorted(set(o.company for o in offers))
 
         return render_template(
             'dashboard.html',
             offers=offers,
             stats=stats,
             sources=sources,
-            companies=companies,
             statuses=VALID_STATUSES,
         )
     finally:

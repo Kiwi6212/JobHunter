@@ -26,7 +26,12 @@
       "Bash(dir:*)",
       "Bash(py.exe -c:*)",
       "Bash(findstr:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git -C \"c:/Users/pc/JobHunter\" stash pop)",
+      "Bash(git -C \"c:/Users/pc/JobHunter\" add app/static/js/dashboard.js app/templates/dashboard.html)",
+      "Bash(git -C \"c:/Users/pc/JobHunter\" commit -S -m \"$\\(cat <<''EOF''\nUpdate stats counters in real-time on tracking changes\n\nCV Sent, Follow-ups and Interviews counters now update instantly when\ncheckboxes are toggled or status is changed, without page reload.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"c:/Users/pc/JobHunter\" add app/static/js/dashboard.js)",
+      "Bash(git -C \"c:/Users/pc/JobHunter\" commit -S -m \"$\\(cat <<''EOF''\nFix: event delegation for performance + optimistic stats updates\n\nReplaced 1200+ individual event listeners with 2 delegated listeners on\ntbody \\(change + input\\). Stats counters now update instantly on user action\n\\(optimistic\\) instead of waiting for AJAX response. Removed duplicate\nstatus select listeners.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

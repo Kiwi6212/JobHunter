@@ -181,46 +181,74 @@
     }, 600);
   });
 
-  // ── Filtering ──────────────────────────────────────────────────────
+  // ── Filtering + Pagination ─────────────────────────────────────────
+
+  var PAGE_SIZE = 25;
+  var currentPage = 0;
+  var filteredRows = [];
+  var allRows = Array.from(tbody.querySelectorAll(".offer-row"));
 
   var filterStatus = document.getElementById("filter-status");
   var filterSource = document.getElementById("filter-source");
   var filterCompany = document.getElementById("filter-company");
   var filterSearch = document.getElementById("filter-search");
   var visibleCount = document.getElementById("visible-count");
+  var pageInfo = document.getElementById("page-info");
+  var pageNext = document.getElementById("page-next");
+  var pagePrev = document.getElementById("page-prev");
 
   function applyFilters() {
     var status = filterStatus ? filterStatus.value : "";
     var source = filterSource ? filterSource.value : "";
-    var company = filterCompany ? filterCompany.value.toLowerCase() : "";
+    var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
     var search = filterSearch ? filterSearch.value.toLowerCase().trim() : "";
 
-    var rows = tbody.querySelectorAll(".offer-row");
-    var shown = 0;
-
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
+    filteredRows = [];
+    for (var i = 0; i < allRows.length; i++) {
+      var row = allRows[i];
       var show = true;
 
       if (status && row.dataset.status !== status) show = false;
       if (show && source && row.dataset.source !== source) show = false;
-      if (show && company && row.dataset.company !== company) show = false;
+      if (show && company && row.dataset.company.indexOf(company) === -1) show = false;
       if (show && search) {
         var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
         if (text.indexOf(search) === -1) show = false;
       }
 
-      row.style.display = show ? "" : "none";
-      if (show) shown++;
+      if (show) filteredRows.push(row);
     }
 
-    if (visibleCount) visibleCount.textContent = shown;
+    currentPage = 0;
+    renderPage();
+  }
+
+  function renderPage() {
+    var totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    var start = currentPage * PAGE_SIZE;
+    var end = start + PAGE_SIZE;
+
+    for (var i = 0; i < allRows.length; i++) {
+      allRows[i].style.display = "none";
+    }
+    for (var j = start; j < end && j < filteredRows.length; j++) {
+      filteredRows[j].style.display = "";
+    }
+
+    if (visibleCount) visibleCount.textContent = filteredRows.length;
+    if (pageInfo) pageInfo.textContent = "Page " + (currentPage + 1) + " / " + totalPages;
+    if (pagePrev) pagePrev.disabled = currentPage === 0;
+    if (pageNext) pageNext.disabled = currentPage >= totalPages - 1;
   }
 
   if (filterStatus) filterStatus.addEventListener("change", applyFilters);
   if (filterSource) filterSource.addEventListener("change", applyFilters);
-  if (filterCompany) filterCompany.addEventListener("change", applyFilters);
+  if (filterCompany) filterCompany.addEventListener("input", applyFilters);
   if (filterSearch) filterSearch.addEventListener("input", applyFilters);
+
+  if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); });
+  if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); });
 
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
@@ -232,6 +260,9 @@
       applyFilters();
     });
   }
+
+  // Initial render: show first page
+  applyFilters();
 
   // ── Column sorting ─────────────────────────────────────────────────
 
@@ -258,27 +289,26 @@
   });
 
   function sortTable(col, asc) {
-    var rows = Array.from(tbody.querySelectorAll(".offer-row"));
-
-    rows.sort(function (a, b) {
+    function cmp(a, b) {
       var va, vb;
-
       if (col === "score") {
         va = parseFloat(a.dataset.score) || 0;
         vb = parseFloat(b.dataset.score) || 0;
         return asc ? va - vb : vb - va;
       }
-
       va = a.dataset[col] || "";
       vb = b.dataset[col] || "";
-
       if (va < vb) return asc ? -1 : 1;
       if (va > vb) return asc ? 1 : -1;
       return 0;
-    });
-
-    for (var i = 0; i < rows.length; i++) {
-      tbody.appendChild(rows[i]);
     }
+
+    allRows.sort(cmp);
+    for (var i = 0; i < allRows.length; i++) {
+      tbody.appendChild(allRows[i]);
+    }
+
+    // Re-filter to rebuild filteredRows in new sort order, then re-render page
+    applyFilters();
   }
 })();

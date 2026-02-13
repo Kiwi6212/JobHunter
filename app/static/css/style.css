@@ -260,6 +260,20 @@ body {
     font-size: 0.82rem;
     color: var(--text-secondary);
     border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.pagination-controls button:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 /* ── Sortable columns ────────────────────────────────────── */

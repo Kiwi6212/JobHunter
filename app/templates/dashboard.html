@@ -48,12 +48,7 @@
     </div>
     <div class="filter-group">
         <label for="filter-company">Company</label>
-        <select id="filter-company">
-            <option value="">All</option>
-            {% for c in companies %}
-            <option value="{{ c }}">{{ c }}</option>
-            {% endfor %}
-        </select>
+        <input type="text" id="filter-company" placeholder="Filter by company...">
     </div>
     <div class="filter-group">
         <label for="filter-search">Search</label>
@@ -132,6 +127,11 @@
     </div>
     <div class="table-footer">
         <span id="visible-count">{{ offers|length }}</span> / {{ offers|length }} offers
+        <span class="pagination-controls">
+            <button class="btn btn-small" id="page-prev" disabled>&laquo; Prev</button>
+            <span id="page-info">Page 1</span>
+            <button class="btn btn-small" id="page-next">Next &raquo;</button>
+        </span>
     </div>
 </div>
 {% else %}
