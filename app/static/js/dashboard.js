@@ -5,6 +5,33 @@
 (function () {
   "use strict";
 
+  // ── Stats counters ──────────────────────────────────────────────────
+
+  var statCvSent = document.getElementById("stat-cv-sent");
+  var statFollowUps = document.getElementById("stat-follow-ups");
+  var statInterviews = document.getElementById("stat-interviews");
+
+  function updateStats() {
+    var rows = document.querySelectorAll(".offer-row");
+    var cvCount = 0;
+    var fuCount = 0;
+    var intCount = 0;
+
+    rows.forEach(function (row) {
+      var cvCb = row.querySelector('[data-field="cv_sent"]');
+      var fuCb = row.querySelector('[data-field="follow_up_done"]');
+      var statusSel = row.querySelector('[data-field="status"]');
+
+      if (cvCb && cvCb.checked) cvCount++;
+      if (fuCb && fuCb.checked) fuCount++;
+      if (statusSel && statusSel.value === "Interview") intCount++;
+    });
+
+    if (statCvSent) statCvSent.textContent = cvCount;
+    if (statFollowUps) statFollowUps.textContent = fuCount;
+    if (statInterviews) statInterviews.textContent = intCount;
+  }
+
   // ── AJAX save ────────────────────────────────────────────────────────
 
   let saveTimers = {};
@@ -56,6 +83,9 @@
             "status-select status-color-" +
             data.status.toLowerCase().replace(/ /g, "-");
         }
+
+        // Update stats counters in real-time
+        updateStats();
       })
       .catch(function (err) {
         console.error("Network error:", err);
