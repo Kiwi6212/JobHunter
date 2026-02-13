@@ -11,62 +11,138 @@
             <span class="stat-label">Total Offers</span>
         </div>
         <div class="stat-card">
-            <span class="stat-number">{{ stats.tracked }}</span>
-            <span class="stat-label">Tracked</span>
-        </div>
-        <div class="stat-card">
             <span class="stat-number">{{ stats.cv_sent }}</span>
             <span class="stat-label">CV Sent</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.follow_ups }}</span>
+            <span class="stat-label">Follow-ups</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ stats.interviews }}</span>
+            <span class="stat-label">Interviews</span>
         </div>
     </div>
 </div>
 
+{% if offers %}
+<!-- Filters bar -->
+<div class="filters-bar">
+    <div class="filter-group">
+        <label for="filter-status">Status</label>
+        <select id="filter-status">
+            <option value="">All</option>
+            {% for s in statuses %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-group">
+        <label for="filter-source">Source</label>
+        <select id="filter-source">
+            <option value="">All</option>
+            {% for src in sources %}
+            <option value="{{ src }}">{{ src }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-group">
+        <label for="filter-company">Company</label>
+        <select id="filter-company">
+            <option value="">All</option>
+            {% for c in companies %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-group">
+        <label for="filter-search">Search</label>
+        <input type="text" id="filter-search" placeholder="Search title, company...">
+    </div>
+    <button class="btn btn-secondary btn-small" id="filters-reset">Reset</button>
+</div>
+
 <div class="table-container">
-    {% if offers %}
-    <table class="offers-table">
+    <div class="table-scroll">
+    <table class="offers-table" id="offers-table">
         <thead>
             <tr>
-                <th>Title</th>
-                <th>Company</th>
-                <th>Location</th>
-                <th>Contract</th>
-                <th>Source</th>
-                <th>Posted Date</th>
+                <th class="sortable" data-col="title">Title <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="company">Company <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="location">Location <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="source">Source <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="date">Posted <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="score">Score <span class="sort-icon"></span></th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>CV Sent</th>
+                <th>Follow-up</th>
+                <th>Notes</th>
+                <th>Link</th>
             </tr>
         </thead>
         <tbody>
             {% for offer in offers %}
-            <tr>
-                <td><a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a></td>
-                <td>{{ offer.company }}</td>
-                <td>{{ offer.location or 'N/A' }}</td>
-                <td>{{ offer.contract_type or 'N/A' }}</td>
+            <tr class="offer-row"
+                data-offer-id="{{ offer.id }}"
+                data-title="{{ offer.title|lower }}"
+                data-company="{{ offer.company|lower }}"
+                data-source="{{ offer.source }}"
+                data-status="{{ offer.tracking.status if offer.tracking else 'New' }}"
+                data-location="{{ (offer.location or '')|lower }}"
+                data-date="{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else '' }}"
+                data-score="{{ offer.relevance_score or 0 }}">
+                <td class="col-title">
+                    <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>
+                </td>
+                <td class="col-company">{{ offer.company }}</td>
+                <td class="col-location">{{ offer.location or 'N/A' }}</td>
                 <td><span class="badge badge-{{ offer.source }}">{{ offer.source }}</span></td>
-                <td>{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>
+                <td class="col-date">{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>
+                <td class="col-score">{{ '%.0f' % (offer.relevance_score or 0) }}</td>
                 <td>
-                    {% if offer.tracking %}
-                    <span class="status-badge status-{{ offer.tracking.status.lower().replace(' ', '-') }}">
-                        {{ offer.tracking.status }}
-                    </span>
-                    {% else %}
-                    <span class="status-badge status-new">New</span>
-                    {% endif %}
+                    <select class="status-select status-color-{{ (offer.tracking.status if offer.tracking else 'New').lower().replace(' ', '-') }}"
+                            data-field="status">
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {{ 'selected' if (offer.tracking and offer.tracking.status == s) or (not offer.tracking and s == 'New') }}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="col-checkbox">
+                    <input type="checkbox" class="tracking-checkbox" data-field="cv_sent"
+                           {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}>
+                    <span class="date-label">{{ offer.tracking.date_sent.strftime('%m/%d') if offer.tracking and offer.tracking.date_sent else '' }}</span>
+                </td>
+                <td class="col-checkbox">
+                    <input type="checkbox" class="tracking-checkbox" data-field="follow_up_done"
+                           {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}>
+                    <span class="date-label">{{ offer.tracking.follow_up_date.strftime('%m/%d') if offer.tracking and offer.tracking.follow_up_date else '' }}</span>
+                </td>
+                <td class="col-notes">
+                    <input type="text" class="notes-input" data-field="notes"
+                           value="{{ offer.tracking.notes or '' if offer.tracking else '' }}"
+                           placeholder="...">
                 </td>
                 <td>
-                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small">View Offer</a>
+                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small" title="View original offer">View</a>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
-    {% else %}
-    <div class="empty-state">
-        <h3>No job offers found</h3>
-        <p>Run the scrapers to populate the dashboard with job offers.</p>
-        <code>python scripts/run_scrapers.py</code>
     </div>
-    {% endif %}
+    <div class="table-footer">
+        <span id="visible-count">{{ offers|length }}</span> / {{ offers|length }} offers
+    </div>
 </div>
+{% else %}
+<div class="empty-state">
+    <h3>No job offers found</h3>
+    <p>Run the scrapers to populate the dashboard with job offers.</p>
+    <code>python scripts/run_scrapers.py</code>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
