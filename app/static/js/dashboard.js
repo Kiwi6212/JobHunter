@@ -44,6 +44,7 @@
   var noteTimers = {};
 
   function saveTracking(offerId, data) {
+    console.time("ajax-save-" + offerId);
     fetch("/api/tracking/" + offerId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -51,11 +52,12 @@
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
+        console.timeEnd("ajax-save-" + offerId);
         if (!res.ok) {
           console.error("Save failed", res.error);
           return;
         }
-        // Update date labels from server response
+        console.time("dom-update-" + offerId);
         var row = tbody.querySelector('tr[data-offer-id="' + offerId + '"]');
         if (!row) return;
 
@@ -71,8 +73,12 @@
           fuLabel.textContent = res.tracking.follow_up_date
             ? formatShort(res.tracking.follow_up_date) : "";
         }
+        console.timeEnd("dom-update-" + offerId);
       })
-      .catch(function (err) { console.error("Network error:", err); });
+      .catch(function (err) {
+        console.timeEnd("ajax-save-" + offerId);
+        console.error("Network error:", err);
+      });
   }
 
   function formatShort(dateStr) {
@@ -83,9 +89,10 @@
   // ── Event delegation: one "change" listener on tbody ───────────────
 
   tbody.addEventListener("change", function (e) {
+    console.time("change-handler");
     var target = e.target;
     var row = target.closest(".offer-row");
-    if (!row) return;
+    if (!row) { console.timeEnd("change-handler"); return; }
     var offerId = row.dataset.offerId;
 
     // Status dropdown
@@ -103,6 +110,7 @@
       target.className = "status-select status-color-" +
         newStatus.toLowerCase().replace(/ /g, "-");
 
+      console.timeEnd("change-handler");
       saveTracking(offerId, { status: newStatus });
       return;
     }
@@ -119,8 +127,11 @@
 
       var payload = {};
       payload[field] = checked;
+      console.timeEnd("change-handler");
       saveTracking(offerId, payload);
+      return;
     }
+    console.timeEnd("change-handler");
   });
 
   // ── Event delegation: one "input" listener for notes (debounced) ───

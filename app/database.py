@@ -19,8 +19,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Create SQLite engine
 engine = create_engine(
     Config.SQLALCHEMY_DATABASE_URI,
-    echo=Config.DEBUG,  # Log SQL queries in debug mode
-    connect_args={"check_same_thread": False}  # Allow SQLite to work with multiple threads
+    echo=False,
+    connect_args={"check_same_thread": False},
 )
 
 # Session factory

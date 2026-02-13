@@ -6,7 +6,7 @@ Handles all web interface endpoints and API endpoints for AJAX updates.
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, jsonify
-from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
 from app.models import Offer, Tracking
@@ -29,7 +29,7 @@ def dashboard():
     """
     db = SessionLocal()
     try:
-        offers = db.query(Offer).outerjoin(Tracking).all()
+        offers = db.query(Offer).options(joinedload(Offer.tracking)).all()
 
         total_offers = len(offers)
         cv_sent_count = db.query(Tracking).filter(Tracking.cv_sent == True).count()
@@ -68,12 +68,12 @@ def update_tracking(offer_id):
     """
     db = SessionLocal()
     try:
-        offer = db.query(Offer).filter(Offer.id == offer_id).first()
-        if not offer:
-            return jsonify({'error': 'Offer not found'}), 404
-
         tracking = db.query(Tracking).filter(Tracking.offer_id == offer_id).first()
         if not tracking:
+            # Verify offer exists before creating tracking
+            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+            if not offer_exists:
+                return jsonify({'error': 'Offer not found'}), 404
             tracking = Tracking(offer_id=offer_id, status='New')
             db.add(tracking)
 
