@@ -44,6 +44,10 @@ class APIKeys:
     FRANCE_TRAVAIL_API_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token"
     FRANCE_TRAVAIL_OFFERS_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
 
+    # La bonne alternance
+    LBA_API_KEY = os.getenv("LBA_API_KEY")
+    LBA_API_URL = "https://api.apprentissage.beta.gouv.fr/api"
+
     # Anthropic
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
@@ -115,6 +119,15 @@ CAREER_SITES = {
     "Alten": "https://www.alten.com/rejoignez-nous",
     "Bouygues Telecom": "https://www.bouyguestelecom.fr/groupe/recrutement",
 }
+
+# ROME codes for sysadmin/network admin job searches
+# Used by La bonne alternance API (no free-text search, ROME codes only)
+ROME_CODES = [
+    "M1801",  # Administration de systemes d'information
+    "M1810",  # Production et exploitation de systemes d'information
+    "I1401",  # Maintenance informatique et bureautique
+    "M1802",  # Expertise et support en systemes d'information
+]
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
