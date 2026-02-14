@@ -18,6 +18,7 @@ sys.path.insert(0, str(project_root))
 from app.database import SessionLocal, init_db
 from app.models import Offer, Tracking
 from app.scrapers.lba import LaBonneAlternanceScraper
+from app.scrapers.wttj import WTTJScraper
 from app.services.filter_engine import FilterEngine
 from config import LOG_LEVEL
 
@@ -116,8 +117,8 @@ def main():
     # Initialize scrapers
     scrapers = [
         LaBonneAlternanceScraper(),
+        WTTJScraper(),
         # FranceTravailScraper(),  # TODO: Add when API keys available
-        # WTTJScraper(),           # TODO: Phase 4
         # IndeedScraper(),         # TODO: Phase 4
     ]
 
