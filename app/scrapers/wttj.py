@@ -21,7 +21,7 @@ ALGOLIA_URL = f"https://{ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/wttj_jobs_pro
 # Paris center for geo-search
 IDF_CENTER_LAT = 48.8566
 IDF_CENTER_LNG = 2.3522
-IDF_RADIUS_M = 60000  # 60km in meters
+IDF_RADIUS_M = 80000  # 80km in meters
 
 # WTTJ sub-category for network/sysadmin roles
 SYSADMIN_SUBCATEGORY = "network-engineering-and-administration-yZjhm"
@@ -32,6 +32,15 @@ SEARCH_QUERIES = [
     "administrateur systèmes",
     "technicien infrastructure",
     "ingénieur réseaux",
+    "support informatique",
+    "technicien système",
+    "DevOps",
+    "cloud",
+    "infrastructure IT",
+    "helpdesk",
+    "administrateur réseau",
+    "sécurité informatique",
+    "système information",
 ]
 
 

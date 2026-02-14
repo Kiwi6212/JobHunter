@@ -19,8 +19,8 @@ IDF_CENTER = {
     "longitude": 2.3522,
 }
 
-# 60km radius covers most of Ile-de-France
-IDF_RADIUS_KM = 60
+# 80km radius covers all of Ile-de-France
+IDF_RADIUS_KM = 80
 
 
 class LaBonneAlternanceScraper(BaseScraper):
