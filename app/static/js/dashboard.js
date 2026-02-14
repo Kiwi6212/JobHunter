@@ -212,12 +212,13 @@
       var row = allRows[i];
       var show = true;
 
-      // Hide recruiters unless toggle is checked (but keep target company recruiters when target filter is on)
-      if (!includeRecruiters && row.dataset.offerType === "recruiter") {
-        if (!onlyTarget || row.dataset.target !== "1") show = false;
+      // Hide recruiters unless toggle is checked
+      if (!includeRecruiters && row.dataset.offerType === "recruiter") show = false;
+      // Show only target companies with relevant score when target filter is on
+      if (show && onlyTarget) {
+        var score = parseFloat(row.dataset.score) || 0;
+        if (row.dataset.target !== "1" || score < 25) show = false;
       }
-      // Show only target companies if toggle is checked
-      if (show && onlyTarget && row.dataset.target !== "1") show = false;
       if (show && status && row.dataset.status !== status) show = false;
       if (show && source && row.dataset.source !== source) show = false;
       if (show && company && row.dataset.company.indexOf(company) === -1) show = false;

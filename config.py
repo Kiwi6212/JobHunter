@@ -115,7 +115,7 @@ TARGET_COMPANIES = [
     "Air France-KLM", "CMA CGM", "Natixis", "BPCE",
     "Veolia", "Schneider Electric", "Air Liquide", "Vinci",
     "Thales", "Airbus", "Dassault Systèmes",
-    "EDF", "Engie", "TotalEnergies", "SNCF", "RATP", "La Poste", "GEPSA",
+    "EDF", "Engie", "TotalEnergies", "SNCF", "RATP", "La Poste",
     # Banques & Assurances
     "BNP Paribas", "Société Générale", "Crédit Agricole", "AXA",
 ]
