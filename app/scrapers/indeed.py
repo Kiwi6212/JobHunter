@@ -1,30 +1,40 @@
 """
 Scraper for Indeed France (fr.indeed.com).
-Fetches apprenticeship/alternance job offers via HTML scraping with BeautifulSoup.
+Fetches apprenticeship/alternance job offers using Selenium with Brave browser
+and undetected-chromedriver to bypass Cloudflare anti-bot protection.
 
-Indeed uses aggressive anti-bot protection (Cloudflare). This scraper:
-1. Establishes a session by visiting the homepage first (gets cookies)
-2. Uses realistic browser headers and referer chains
-3. Applies longer delays between requests
-4. Gracefully handles 403/CAPTCHA blocks
+Note: Indeed blocks headless browsers, so Brave runs in visible (minimized)
+mode. A browser window will briefly appear during scraping.
 """
 
 import logging
+import os
 import re
+import time
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, urljoin
 
-import requests
+import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 
 from app.scrapers.base_scraper import BaseScraper
-from config import ScrapingConfig
 
 logger = logging.getLogger(__name__)
 
 # Indeed France base URL
 BASE_URL = "https://fr.indeed.com"
 SEARCH_URL = f"{BASE_URL}/jobs"
+
+# Brave browser path
+BRAVE_PATH = os.getenv(
+    "BRAVE_PATH",
+    r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+)
+
+# Brave Chromium major version (update when Brave updates)
+BRAVE_VERSION_MAIN = 145
 
 # Search queries (alternance keywords for sysadmin/infra roles)
 SEARCH_QUERIES = [
@@ -38,19 +48,21 @@ SEARCH_QUERIES = [
 # Location filter
 LOCATION = "Île-de-France"
 
-# Max pages per query (15 results per page on Indeed France)
+# Max pages per query (10 results per page)
 MAX_PAGES = 3
+
+# Max seconds to wait for Cloudflare challenge to resolve
+CLOUDFLARE_WAIT = 15
 
 
 class IndeedScraper(BaseScraper):
     """
-    Scraper for Indeed France via HTML parsing.
+    Scraper for Indeed France via Selenium + undetected-chromedriver.
 
-    Searches for alternance offers in Île-de-France using keyword queries.
-    Parses job cards from search result pages using BeautifulSoup.
-
-    Note: Indeed may block requests despite mitigation measures.
-    The scraper handles blocks gracefully and returns whatever it can collect.
+    Uses Brave browser (minimized window) to bypass Cloudflare protection.
+    Indeed blocks headless browsers, so a visible window is required.
+    Searches for alternance offers in Île-de-France, parses job cards,
+    and deduplicates by job key.
     """
 
     @property
@@ -59,101 +71,130 @@ class IndeedScraper(BaseScraper):
 
     def __init__(self):
         super().__init__()
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": ScrapingConfig.USER_AGENT,
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-            ),
-            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "DNT": "1",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0",
-        })
-        self._session_ready = False
+        self.driver = None
 
-    def _init_session(self):
-        """Visit the Indeed homepage to establish cookies and session."""
-        if self._session_ready:
-            return True
+    def _create_driver(self):
+        """Create an undetected Chrome driver using Brave browser."""
+        if not os.path.exists(BRAVE_PATH):
+            logger.error(f"[indeed] Brave not found at {BRAVE_PATH}")
+            return None
+
+        options = uc.ChromeOptions()
+        options.binary_location = BRAVE_PATH
+
+        # NO headless — Indeed blocks it. Use minimized window instead.
+        options.add_argument("--start-minimized")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--lang=fr-FR")
 
         try:
-            logger.info("[indeed] Initializing session (visiting homepage)...")
-            response = self.session.get(BASE_URL, timeout=self.config.TIMEOUT)
-
-            if response.status_code == 200:
-                self._session_ready = True
-                logger.info(
-                    f"[indeed] Session initialized "
-                    f"({len(self.session.cookies)} cookies set)"
-                )
-                return True
-
-            logger.warning(
-                f"[indeed] Homepage returned {response.status_code}. "
-                f"Scraping may be blocked."
+            driver = uc.Chrome(
+                options=options,
+                headless=False,
+                use_subprocess=True,
+                version_main=BRAVE_VERSION_MAIN,
             )
-            # Still try to continue
-            return True
+            driver.set_page_load_timeout(30)
+            # Minimize window immediately
+            driver.minimize_window()
+            logger.info("[indeed] Brave browser started (minimized)")
+            return driver
+        except Exception as e:
+            logger.error(f"[indeed] Failed to start Brave: {e}")
+            return None
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[indeed] Failed to initialize session: {e}")
+    def _wait_for_cloudflare(self):
+        """Wait for Cloudflare 'Un instant...' challenge to resolve."""
+        for i in range(CLOUDFLARE_WAIT):
+            title = self.driver.title.lower()
+            if "instant" not in title and "blocked" not in title and title:
+                return True
+            time.sleep(1)
+
+        title = self.driver.title
+        if "blocked" in title.lower():
+            logger.error("[indeed] Blocked by Indeed after Cloudflare challenge.")
             return False
+        if "instant" in title.lower():
+            logger.warning("[indeed] Cloudflare challenge did not resolve in time.")
+            return False
+
+        return True
 
     def collect(self):
         """
         Collect alternance offers from Indeed France.
 
-        Establishes a browser-like session first, then searches multiple
-        keyword queries with pagination and deduplication.
+        Launches Brave via undetected-chromedriver, waits for Cloudflare
+        challenge, then searches each keyword query with pagination.
 
         Returns:
             list[dict]: Normalized offer dictionaries.
         """
-        # Establish session with cookies
-        if not self._init_session():
+        self.driver = self._create_driver()
+        if not self.driver:
             return []
 
-        self._delay()  # Wait after homepage visit
+        try:
+            # Visit homepage and wait for Cloudflare challenge
+            logger.info("[indeed] Visiting homepage (waiting for Cloudflare)...")
+            self.driver.get(BASE_URL)
 
-        all_offers = []
-        blocked = False
+            if not self._wait_for_cloudflare():
+                return []
 
-        for query in SEARCH_QUERIES:
-            if blocked:
-                logger.warning("[indeed] Skipping remaining queries due to blocking.")
-                break
-
-            logger.info(f"[indeed] Searching: '{query}'")
-            offers, was_blocked = self._search_query(query)
-            all_offers.extend(offers)
-            blocked = was_blocked
+            logger.info(f"[indeed] Homepage loaded: '{self.driver.title}'")
             self._delay()
 
-        # Deduplicate by external_id
-        seen_ids = set()
-        unique_offers = []
-        for offer in all_offers:
-            eid = offer.get("external_id")
-            if eid and eid in seen_ids:
-                continue
-            if eid:
-                seen_ids.add(eid)
-            unique_offers.append(offer)
+            all_offers = []
+            blocked = False
 
-        logger.info(
-            f"[indeed] Total unique offers: {len(unique_offers)} "
-            f"(from {len(all_offers)} raw results)"
-        )
+            for query in SEARCH_QUERIES:
+                if blocked:
+                    logger.warning(
+                        "[indeed] Skipping remaining queries due to blocking."
+                    )
+                    break
 
-        return unique_offers
+                logger.info(f"[indeed] Searching: '{query}'")
+                offers, was_blocked = self._search_query(query)
+                all_offers.extend(offers)
+                blocked = was_blocked
+                self._delay()
+
+            # Deduplicate by external_id
+            seen_ids = set()
+            unique_offers = []
+            for offer in all_offers:
+                eid = offer.get("external_id")
+                if eid and eid in seen_ids:
+                    continue
+                if eid:
+                    seen_ids.add(eid)
+                unique_offers.append(offer)
+
+            logger.info(
+                f"[indeed] Total unique offers: {len(unique_offers)} "
+                f"(from {len(all_offers)} raw results)"
+            )
+
+            return unique_offers
+
+        finally:
+            self._quit_driver()
+
+    def _quit_driver(self):
+        """Safely quit the browser driver."""
+        if self.driver:
+            try:
+                self.driver.quit()
+                logger.info("[indeed] Browser closed")
+            except Exception:
+                pass
+            self.driver = None
 
     def _search_query(self, query):
         """
@@ -165,7 +206,7 @@ class IndeedScraper(BaseScraper):
         offers = []
 
         for page in range(MAX_PAGES):
-            start = page * 10  # Indeed uses 10 results per page
+            start = page * 10
 
             params = {
                 "q": query,
@@ -190,46 +231,41 @@ class IndeedScraper(BaseScraper):
 
     def _fetch_page(self, params, query, page_num):
         """
-        Fetch and parse a single search results page.
+        Navigate to a search results page and parse it.
 
         Returns:
             tuple: (offers_list_or_None, was_blocked)
         """
         url = f"{SEARCH_URL}?{urlencode(params)}"
 
-        # Update referer to look like natural browsing
-        self.session.headers["Referer"] = (
-            BASE_URL if page_num == 1
-            else f"{SEARCH_URL}?{urlencode({**params, 'start': (page_num - 2) * 10})}"
-        )
-        self.session.headers["Sec-Fetch-Site"] = "same-origin"
-
         try:
-            response = self.session.get(url, timeout=self.config.TIMEOUT)
+            self.driver.get(url)
 
-            if response.status_code == 403:
+            # Always wait for Cloudflare challenge to resolve
+            if not self._wait_for_cloudflare():
+                return None, True
+
+            # Wait for job results to appear
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    lambda d: (
+                        d.find_elements(By.CSS_SELECTOR, "div.job_seen_beacon")
+                        or d.find_elements(By.CSS_SELECTOR, "[data-jk]")
+                        or d.find_elements(By.ID, "mosaic-jobResults")
+                    )
+                )
+            except Exception:
+                pass  # Timeout waiting, try to parse anyway
+
+            # Final block check on resolved page
+            title_lower = self.driver.title.lower()
+            if "blocked" in title_lower:
                 logger.warning(
-                    f"[indeed] Blocked (403) on q='{query}' page {page_num}. "
-                    f"Indeed anti-bot protection active."
+                    f"[indeed] Blocked on q='{query}' page {page_num}. Stopping."
                 )
                 return None, True
 
-            if response.status_code != 200:
-                logger.error(
-                    f"[indeed] HTTP {response.status_code} on q='{query}' page {page_num}"
-                )
-                return None, False
-
-            # Check for CAPTCHA/block page
-            text_lower = response.text.lower()
-            if "captcha" in text_lower or "unusual traffic" in text_lower:
-                logger.warning(
-                    f"[indeed] CAPTCHA detected on q='{query}' page {page_num}. "
-                    f"Stopping all Indeed queries."
-                )
-                return None, True
-
-            soup = BeautifulSoup(response.text, "lxml")
+            soup = BeautifulSoup(self.driver.page_source, "lxml")
             offers = self._parse_results(soup)
 
             logger.info(
@@ -238,22 +274,21 @@ class IndeedScraper(BaseScraper):
 
             return offers, False
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[indeed] Request error: {e}")
+        except Exception as e:
+            logger.error(f"[indeed] Error fetching page: {e}")
             return None, False
 
     def _parse_results(self, soup):
         """Parse job cards from an Indeed search results page."""
         offers = []
 
-        # Indeed job cards: look for elements with data-jk (job key)
-        job_cards = soup.find_all(attrs={"data-jk": True})
+        # Indeed card container: div.job_seen_beacon holds all job info
+        job_cards = soup.select("div.job_seen_beacon")
 
         if not job_cards:
-            # Fallback: try finding job cards by common class patterns
+            # Fallback selectors
             job_cards = soup.select(
-                "div.job_seen_beacon, div.cardOutline, "
-                "div.result, li.css-5lfssm"
+                "div.cardOutline, div.result, li.css-5lfssm"
             )
 
         for card in job_cards:
@@ -266,21 +301,16 @@ class IndeedScraper(BaseScraper):
     def _parse_card(self, card):
         """Parse a single job card into a normalized offer dict."""
         try:
-            # Extract job key for external_id
-            job_key = card.get("data-jk", "")
-            if not job_key:
-                jk_el = card.find(attrs={"data-jk": True})
-                if jk_el:
-                    job_key = jk_el.get("data-jk", "")
+            # Extract job key from the title link's data-jk attribute
+            jk_el = card.find(attrs={"data-jk": True})
+            job_key = jk_el.get("data-jk", "") if jk_el else ""
 
-            # Title
+            # Title (inside h2.jobTitle > a > span)
             title_el = (
                 card.select_one("h2.jobTitle a span")
-                or card.select_one("h2.jobTitle span")
+                or card.select_one("a.jcs-JobTitle span")
                 or card.select_one("h2.jobTitle a")
                 or card.select_one("h2.jobTitle")
-                or card.select_one("a.jcs-JobTitle span")
-                or card.select_one("a.jcs-JobTitle")
             )
             title = title_el.get_text(strip=True) if title_el else None
             if not title:
@@ -300,38 +330,43 @@ class IndeedScraper(BaseScraper):
             else:
                 url = ""
 
-            # Company name
+            # Company name (span with data-testid="company-name")
             company_el = (
                 card.select_one("[data-testid='company-name']")
                 or card.select_one("span.companyName")
                 or card.select_one("span.company")
             )
-            company = company_el.get_text(strip=True) if company_el else "Non renseigné"
+            company = (
+                company_el.get_text(strip=True) if company_el else "Non renseigné"
+            )
 
-            # Location
+            # Location (div with data-testid="text-location")
             location_el = (
                 card.select_one("[data-testid='text-location']")
                 or card.select_one("div.companyLocation")
-                or card.select_one("span.companyLocation")
             )
             location = location_el.get_text(strip=True) if location_el else None
 
-            # Description snippet
+            # Description snippet (from metadata list items)
             snippet_el = (
                 card.select_one("div.job-snippet")
-                or card.select_one("div.heading6")
+                or card.select_one("ul.jobCardShelfContainer")
                 or card.select_one("table.jobCardShelfContainer")
             )
-            description = snippet_el.get_text(strip=True) if snippet_el else None
+            description = (
+                snippet_el.get_text(strip=True) if snippet_el else None
+            )
 
-            # Posted date (relative text like "il y a 3 jours")
+            # Posted date (span.date or data-testid)
             date_el = (
                 card.select_one("span.date")
                 or card.select_one("[data-testid='myJobsStateDate']")
             )
             posted_date = None
             if date_el:
-                posted_date = self._parse_relative_date(date_el.get_text(strip=True))
+                posted_date = self._parse_relative_date(
+                    date_el.get_text(strip=True)
+                )
 
             external_id = f"indeed_{job_key}" if job_key else None
 
