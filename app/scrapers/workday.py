@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 COMPANIES = [
     ("thales", 3, "Careers", "Thales"),
     ("ag", 3, "Airbus", "Airbus"),
+    ("ratp", 3, "RATP_Externe", "RATP"),
+    ("airliquidehr", 3, "AirLiquideExternalCareer", "Air Liquide"),
 ]
 
 # Search queries combining alternance + domain keywords
