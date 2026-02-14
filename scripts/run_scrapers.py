@@ -23,6 +23,7 @@ from app.scrapers.indeed import IndeedScraper
 from app.scrapers.smartrecruiters import SmartRecruitersScraper
 from app.scrapers.workday import WorkdayScraper
 from app.scrapers.lever import LeverScraper
+from app.scrapers.talentbrew import TalentBrewScraper
 from app.services.filter_engine import FilterEngine
 from config import LOG_LEVEL
 
@@ -126,6 +127,7 @@ def main():
         SmartRecruitersScraper(),
         WorkdayScraper(),
         LeverScraper(),
+        TalentBrewScraper(),
         # FranceTravailScraper(),  # TODO: Add when API keys available
     ]
 

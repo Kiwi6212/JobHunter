@@ -24,6 +24,7 @@ COMPANIES = [
     ("SopraSteria1", "Sopra Steria"),
     ("Devoteam", "Devoteam"),
     ("Alten", "Alten"),
+    ("Scalian", "Scalian"),
 ]
 
 # Search queries to find alternance/apprenticeship offers
