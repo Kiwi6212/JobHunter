@@ -19,6 +19,7 @@ from app.database import SessionLocal, init_db
 from app.models import Offer, Tracking
 from app.scrapers.lba import LaBonneAlternanceScraper
 from app.scrapers.wttj import WTTJScraper
+from app.scrapers.indeed import IndeedScraper
 from app.services.filter_engine import FilterEngine
 from config import LOG_LEVEL
 
@@ -118,8 +119,8 @@ def main():
     scrapers = [
         LaBonneAlternanceScraper(),
         WTTJScraper(),
+        IndeedScraper(),
         # FranceTravailScraper(),  # TODO: Add when API keys available
-        # IndeedScraper(),         # TODO: Phase 4
     ]
 
     # Collect from all sources
