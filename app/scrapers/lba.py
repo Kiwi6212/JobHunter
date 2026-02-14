@@ -234,17 +234,14 @@ class LaBonneAlternanceScraper(BaseScraper):
             # Build title
             title = offer_data.get("title", "Unknown Title")
 
-            # Build company name (try multiple fields)
+            # Build company name (try structured fields only, never descriptions)
             company = (
                 workplace.get("brand")
                 or workplace.get("name")
                 or workplace.get("legal_name")
                 or workplace.get("enseigne")
-                or workplace.get("description", "")[:100].strip()
-                or self._extract_company_from_description(
-                    offer_data.get("description", "")
-                )
-                or identifier.get("partner_label", "Unknown Company")
+                or identifier.get("partner_label")
+                or "Non renseigné"
             )
 
             # Build location string
@@ -316,7 +313,7 @@ class LaBonneAlternanceScraper(BaseScraper):
                 or workplace.get("name")
                 or workplace.get("legal_name")
                 or workplace.get("enseigne")
-                or "Unknown Company"
+                or "Non renseigné"
             )
 
             address = location_data.get("address", "")
@@ -342,22 +339,3 @@ class LaBonneAlternanceScraper(BaseScraper):
             logger.warning(f"[la_bonne_alternance] Error parsing recruiter: {e}")
             return None
 
-    @staticmethod
-    def _extract_company_from_description(description):
-        """Try to extract company name from offer description text."""
-        if not description:
-            return None
-        # Look for patterns like "Raison sociale: COMPANY" or "Employeur: COMPANY"
-        import re
-        patterns = [
-            r'[Rr]aison sociale\s*[:\-]\s*(.+?)(?:\s*[Ss]tatut|\s*[Pp]oste|\n)',
-            r'[Ee]mployeur\s*[:\-]\s*(.+?)(?:\n|\s{2,})',
-            r'[Ee]ntreprise\s*[:\-]\s*(.+?)(?:\n|\s{2,})',
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, description)
-            if match:
-                name = match.group(1).strip().strip('*').strip()
-                if name and len(name) > 2:
-                    return name
-        return None

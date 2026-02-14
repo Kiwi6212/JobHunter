@@ -52,20 +52,31 @@ def init_db():
 def _migrate_columns():
     """Add missing columns to existing tables and backfill data."""
     insp = inspect(engine)
-    if "offers" in insp.get_table_names():
-        existing = [c["name"] for c in insp.get_columns("offers")]
-        if "offer_type" not in existing:
-            print("[MIGRATE] Adding offer_type column to offers table...")
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE offers ADD COLUMN offer_type VARCHAR(20) NOT NULL DEFAULT 'job'"
-                ))
-                # Backfill: rows with external_id starting with lba_recruiter_ are recruiters
-                conn.execute(text(
-                    "UPDATE offers SET offer_type = 'recruiter' "
-                    "WHERE external_id LIKE 'lba_recruiter_%'"
-                ))
-            print("[MIGRATE] Done. Backfilled recruiter tags from external_id.")
+    if "offers" not in insp.get_table_names():
+        return
+
+    existing = [c["name"] for c in insp.get_columns("offers")]
+
+    if "offer_type" not in existing:
+        print("[MIGRATE] Adding offer_type column to offers table...")
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE offers ADD COLUMN offer_type VARCHAR(20) NOT NULL DEFAULT 'job'"
+            ))
+            conn.execute(text(
+                "UPDATE offers SET offer_type = 'recruiter' "
+                "WHERE external_id LIKE 'lba_recruiter_%'"
+            ))
+        print("[MIGRATE] Done. Backfilled recruiter tags from external_id.")
+
+    # Fix company names that are actually descriptions (> 50 chars of prose)
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "UPDATE offers SET company = 'Non renseigné' "
+            "WHERE length(company) > 50"
+        ))
+        if result.rowcount > 0:
+            print(f"[MIGRATE] Fixed {result.rowcount} offers with description as company name.")
 
 
 def get_db():
