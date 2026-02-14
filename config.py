@@ -98,12 +98,26 @@ FILTERS = {
     "duration": "24 months",
 }
 
-# Target companies receive bonus relevance score
+# Target companies receive bonus relevance score (+30)
+# Matching is case-insensitive and partial (e.g. "Orange" matches "ORANGE BUSINESS SERVICES")
 TARGET_COMPANIES = [
-    "Thales", "Safran", "Capgemini", "Sopra Steria", "Atos", "Eviden",
-    "Orange", "Airbus", "CGI", "Alten", "Bouygues Telecom", "SFR",
-    "Société Générale", "BNP Paribas", "AXA", "Engie", "EDF",
-    "Dassault", "Naval Group", "SNCF", "RATP", "Renault", "PSA",
+    # ESN & Intégrateurs (Infra/Cloud/Réseau)
+    "Claranet", "Linkbynet", "Cheops Technology", "Oxalide", "Saitis",
+    "Axians", "Spie Infoservices", "I-Tracing",
+    "Capgemini", "Sopra Steria", "Atos", "CGI", "Accenture", "Devoteam",
+    "SII", "Neurones", "Econocom", "Inetum", "Aubay",
+    "Alten", "Altran", "Scalian",
+    # Opérateurs & Cloud Providers
+    "Scaleway", "Iliad", "OVHcloud", "Jaguar Network", "Free Pro",
+    "Hub One", "3DS Outscale", "Equinix",
+    "Bouygues Telecom", "SFR Business", "Orange", "SFR",
+    # Grands Groupes (DSI fortes contraintes Infra/Système)
+    "Air France-KLM", "CMA CGM", "Natixis", "BPCE",
+    "Veolia", "Schneider Electric", "Air Liquide", "Vinci",
+    "Thales", "Airbus", "Dassault Systèmes",
+    "EDF", "Engie", "TotalEnergies", "SNCF", "RATP", "La Poste", "GEPSA",
+    # Banques & Assurances
+    "BNP Paribas", "Société Générale", "Crédit Agricole", "AXA",
 ]
 
 # Company Career Sites

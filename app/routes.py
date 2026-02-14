@@ -11,6 +11,8 @@ from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
 from app.models import Offer, Tracking
+from app.services.filter_engine import normalize_text
+from config import TARGET_COMPANIES
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
@@ -47,12 +49,23 @@ def dashboard():
         # Collect unique sources for filter dropdown
         sources = sorted(set(o.source for o in offers))
 
+        # Mark target company offers
+        targets_norm = [normalize_text(c) for c in TARGET_COMPANIES]
+        target_ids = set()
+        for o in offers:
+            co = normalize_text(o.company or "")
+            for t in targets_norm:
+                if t in co:
+                    target_ids.add(o.id)
+                    break
+
         return render_template(
             'dashboard.html',
             offers=offers,
             stats=stats,
             sources=sources,
             statuses=VALID_STATUSES,
+            target_ids=target_ids,
         )
     finally:
         db.close()

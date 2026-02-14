@@ -43,7 +43,7 @@ class FilterEngine:
     def __init__(self):
         self.keywords = [kw.lower() for kw in KEYWORDS]
         self.filters = FILTERS
-        self.target_companies = [c.lower() for c in TARGET_COMPANIES]
+        self.target_companies = [normalize_text(c) for c in TARGET_COMPANIES]
 
         # Departments that are part of Ile-de-France
         self.idf_departments = set(FILTERS.get("departments", []))
@@ -190,7 +190,7 @@ class FilterEngine:
         Scoring criteria:
             - Keyword matches in title: +15 per keyword (max 45)
             - Keyword matches in description: +5 per keyword (max 20)
-            - Target company match: +25
+            - Target company match: +30 (partial, case/accent insensitive)
             - Has description: +5
             - Has posted date: +5
         """
@@ -218,10 +218,11 @@ class FilterEngine:
         desc_matches = (desc_matches + 1) // 2
         score += min(desc_matches * 5, 20)
 
-        # Target company bonus
+        # Target company bonus (partial, accent-insensitive)
+        company_norm = normalize_text(offer.get("company") or "")
         for target in self.target_companies:
-            if target in company:
-                score += 25
+            if target in company_norm:
+                score += 30
                 break
 
         # Completeness bonuses
