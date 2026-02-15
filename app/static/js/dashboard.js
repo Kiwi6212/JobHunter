@@ -193,7 +193,7 @@
   var filterCompany = document.getElementById("filter-company");
   var filterSearch = document.getElementById("filter-search");
   var showRecruiters = document.getElementById("show-recruiters");
-  var targetOnly = document.getElementById("target-only");
+  var showAllOffers = document.getElementById("show-all-offers");
   var visibleCount = document.getElementById("visible-count");
   var pageInfo = document.getElementById("page-info");
   var pageNext = document.getElementById("page-next");
@@ -205,7 +205,7 @@
     var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
     var search = filterSearch ? filterSearch.value.toLowerCase().trim() : "";
     var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
-    var onlyTarget = targetOnly ? targetOnly.checked : false;
+    var showAll = showAllOffers ? showAllOffers.checked : false;
 
     filteredRows = [];
     for (var i = 0; i < allRows.length; i++) {
@@ -214,11 +214,8 @@
 
       // Hide recruiters unless toggle is checked
       if (!includeRecruiters && row.dataset.offerType === "recruiter") show = false;
-      // Show only target companies with relevant score when target filter is on
-      if (show && onlyTarget) {
-        var score = parseFloat(row.dataset.score) || 0;
-        if (row.dataset.target !== "1" || score < 25) show = false;
-      }
+      // By default show only target companies; show all when toggle is checked
+      if (show && !showAll && row.dataset.target !== "1") show = false;
       if (show && status && row.dataset.status !== status) show = false;
       if (show && source && row.dataset.source !== source) show = false;
       if (show && company && row.dataset.company.indexOf(company) === -1) show = false;
@@ -258,7 +255,7 @@
   if (filterCompany) filterCompany.addEventListener("input", applyFilters);
   if (filterSearch) filterSearch.addEventListener("input", applyFilters);
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
-  if (targetOnly) targetOnly.addEventListener("change", applyFilters);
+  if (showAllOffers) showAllOffers.addEventListener("change", applyFilters);
 
   if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); });
   if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); });
@@ -271,7 +268,7 @@
       if (filterCompany) filterCompany.value = "";
       if (filterSearch) filterSearch.value = "";
       if (showRecruiters) showRecruiters.checked = false;
-      if (targetOnly) targetOnly.checked = false;
+      if (showAllOffers) showAllOffers.checked = false;
       applyFilters();
     });
   }
