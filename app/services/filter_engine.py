@@ -101,13 +101,23 @@ class FilterEngine:
 
         return filtered
 
+    def _is_target_company(self, offer):
+        """Check if the offer is from a target company."""
+        company_norm = normalize_text(offer.get("company") or "")
+        return any(target in company_norm for target in self.target_companies)
+
     def _passes_filters(self, offer):
         """
         Check if an offer passes all configured filters.
 
+        Target company offers always pass (never rejected by keyword filter).
         Returns True if the offer should be kept, False if rejected.
         """
         source = offer.get("source", "")
+
+        # Target company offers always pass — never reject them
+        if self._is_target_company(offer):
+            return True
 
         # Sources pre-filtered by ROME codes skip keyword matching
         if source not in PREFILTERED_SOURCES:
