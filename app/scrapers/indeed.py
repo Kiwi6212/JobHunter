@@ -49,7 +49,7 @@ SEARCH_QUERIES = [
 LOCATION = "Île-de-France"
 
 # Max pages per query (10 results per page)
-MAX_PAGES = 3
+MAX_PAGES = 1
 
 # Max seconds to wait for Cloudflare challenge to resolve
 CLOUDFLARE_WAIT = 15
