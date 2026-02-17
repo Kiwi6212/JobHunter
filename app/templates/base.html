@@ -6,6 +6,13 @@
     <title>{% block title %}JobHunter{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
+    <script>
+    // Apply saved theme immediately (before first paint) to avoid flash
+    (function () {
+        var t = localStorage.getItem("jh-theme") || "light";
+        document.documentElement.setAttribute("data-theme", t);
+    })();
+    </script>
 </head>
 <body>
     <nav class="navbar">
@@ -15,9 +22,13 @@
                 <p class="tagline">Automated Job Search Assistant</p>
             </div>
             <ul class="nav-menu">
-                <li><a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a></li>
-                <li><a href="{{ url_for('main.stats') }}" class="nav-link">Statistics</a></li>
+                <li><a href="{{ url_for('main.dashboard') }}" class="nav-link" data-i18n="nav_dashboard">Dashboard</a></li>
+                <li><a href="{{ url_for('main.stats') }}" class="nav-link" data-i18n="nav_stats">Statistics</a></li>
             </ul>
+            <div class="nav-controls">
+                <button id="lang-toggle" class="nav-icon-btn" title="Toggle language">EN</button>
+                <button id="theme-toggle" class="nav-icon-btn" title="Toggle dark mode">🌙</button>
+            </div>
         </div>
     </nav>
 
@@ -27,9 +38,46 @@
 
     <footer>
         <div class="container">
-            <p>&copy; 2026 JobHunter | Built with Flask & Claude Code</p>
+            <p>&copy; 2026 JobHunter | Built with Flask &amp; Claude Code</p>
         </div>
     </footer>
+
+    <script>
+    // Theme & language toggle — runs on every page
+    (function () {
+        var themeBtn = document.getElementById("theme-toggle");
+        var langBtn  = document.getElementById("lang-toggle");
+
+        // ── Theme ────────────────────────────────────────────
+        var theme = localStorage.getItem("jh-theme") || "light";
+        if (themeBtn) themeBtn.textContent = theme === "dark" ? "☀" : "🌙";
+
+        if (themeBtn) {
+            themeBtn.addEventListener("click", function () {
+                theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+                document.documentElement.setAttribute("data-theme", theme);
+                localStorage.setItem("jh-theme", theme);
+                themeBtn.textContent = theme === "dark" ? "☀" : "🌙";
+            });
+        }
+
+        // ── Language ─────────────────────────────────────────
+        // Button text shows the OPPOSITE language (what you switch TO)
+        var lang = localStorage.getItem("jh-lang") || "fr";
+        if (langBtn) langBtn.textContent = lang === "fr" ? "EN" : "FR";
+
+        if (langBtn) {
+            langBtn.addEventListener("click", function () {
+                lang = localStorage.getItem("jh-lang") || "fr";
+                lang = lang === "fr" ? "en" : "fr";
+                localStorage.setItem("jh-lang", lang);
+                langBtn.textContent = lang === "fr" ? "EN" : "FR";
+                // Notify dashboard.js (if loaded) to re-apply translations
+                document.dispatchEvent(new CustomEvent("jh-lang-change", { detail: { lang: lang } }));
+            });
+        }
+    })();
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>

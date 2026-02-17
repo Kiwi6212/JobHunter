@@ -4,23 +4,23 @@
 
 {% block content %}
 <div class="dashboard-header">
-    <h2>Job Offers Dashboard</h2>
+    <h2 data-i18n="dashboard_title">Tableau de bord des offres</h2>
     <div class="stats-summary">
         <div class="stat-card">
             <span class="stat-number">{{ stats.total_offers }}</span>
-            <span class="stat-label">Total Offers</span>
+            <span class="stat-label" data-i18n="stat_total">Total offres</span>
         </div>
         <div class="stat-card">
             <span class="stat-number" id="stat-cv-sent">{{ stats.cv_sent }}</span>
-            <span class="stat-label">CV Sent</span>
+            <span class="stat-label" data-i18n="stat_cv">CV envoyés</span>
         </div>
         <div class="stat-card">
             <span class="stat-number" id="stat-follow-ups">{{ stats.follow_ups }}</span>
-            <span class="stat-label">Follow-ups</span>
+            <span class="stat-label" data-i18n="stat_followup">Relances</span>
         </div>
         <div class="stat-card">
             <span class="stat-number" id="stat-interviews">{{ stats.interviews }}</span>
-            <span class="stat-label">Interviews</span>
+            <span class="stat-label" data-i18n="stat_interviews">Entretiens</span>
         </div>
     </div>
 </div>
@@ -29,42 +29,48 @@
 <!-- Filters bar -->
 <div class="filters-bar">
     <div class="filter-group">
-        <label for="filter-status">Status</label>
+        <label for="filter-status" data-i18n="filter_status">Statut</label>
         <select id="filter-status">
-            <option value="">All</option>
+            <option value="" data-i18n="filter_all">Tous</option>
             {% for s in statuses %}
             <option value="{{ s }}">{{ s }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="filter-group">
-        <label for="filter-source">Source</label>
+        <label for="filter-source" data-i18n="filter_source">Source</label>
         <select id="filter-source">
-            <option value="">All</option>
+            <option value="" data-i18n="filter_all">Tous</option>
             {% for src in sources %}
             <option value="{{ src }}">{{ src }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="filter-group">
-        <label for="filter-company">Company</label>
-        <input type="text" id="filter-company" placeholder="Filter by company...">
+        <label for="filter-company" data-i18n="filter_company">Entreprise</label>
+        <input type="text" id="filter-company"
+               data-i18n-placeholder="filter_company_ph"
+               placeholder="Filtrer par entreprise...">
     </div>
     <div class="filter-group">
-        <label for="filter-search">Search</label>
-        <input type="text" id="filter-search" placeholder="Search title, company...">
+        <label for="filter-search" data-i18n="filter_search">Recherche</label>
+        <input type="text" id="filter-search"
+               data-i18n-placeholder="filter_search_ph"
+               placeholder="Rechercher titre, entreprise...">
     </div>
     <div class="filter-group filter-toggle">
         <label>
-            <input type="checkbox" id="show-all-offers"> Afficher toutes les offres
+            <input type="checkbox" id="show-all-offers">
+            <span data-i18n="filter_all_offers">Afficher toutes les offres</span>
         </label>
     </div>
     <div class="filter-group filter-toggle">
         <label>
-            <input type="checkbox" id="show-recruiters"> Afficher les recruteurs potentiels
+            <input type="checkbox" id="show-recruiters">
+            <span data-i18n="filter_recruiters">Afficher les recruteurs potentiels</span>
         </label>
     </div>
-    <button class="btn btn-secondary btn-small" id="filters-reset">Reset</button>
+    <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
 </div>
 
 <div class="table-container">
@@ -72,17 +78,17 @@
     <table class="offers-table" id="offers-table">
         <thead>
             <tr>
-                <th class="sortable" data-col="title">Title <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="company">Company <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="location">Location <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="source">Source <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="date">Posted <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="score">Score <span class="sort-icon"></span></th>
-                <th>Status</th>
-                <th>CV Sent</th>
-                <th>Follow-up</th>
-                <th>Notes</th>
-                <th>Link</th>
+                <th class="sortable" data-col="title"><span data-i18n="col_title">Titre</span> <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="company"><span data-i18n="col_company">Entreprise</span> <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="location"><span data-i18n="col_location">Lieu</span> <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="source"><span data-i18n="col_source">Source</span> <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="date"><span data-i18n="col_date">Publié</span> <span class="sort-icon"></span></th>
+                <th class="sortable" data-col="score"><span data-i18n="col_score">Score</span> <span class="sort-icon"></span></th>
+                <th data-i18n="col_status">Statut</th>
+                <th data-i18n="col_cv">CV envoyé</th>
+                <th data-i18n="col_followup">Relance</th>
+                <th data-i18n="col_notes">Notes</th>
+                <th data-i18n="col_link">Lien</th>
             </tr>
         </thead>
         <tbody>
@@ -130,7 +136,8 @@
                            placeholder="...">
                 </td>
                 <td>
-                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small" title="View original offer">View</a>
+                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
+                       data-i18n="btn_view" title="View original offer">Voir</a>
                 </td>
             </tr>
             {% endfor %}
@@ -138,7 +145,10 @@
     </table>
     </div>
     <div class="table-footer">
-        <span id="visible-count">{{ offers|length }}</span> / {{ offers|length }} offers
+        <span>
+            <span id="visible-count">{{ offers|length }}</span> / {{ offers|length }}
+            <span data-i18n="offers_count">offres</span>
+        </span>
         <span class="pagination-controls">
             <button class="btn btn-small" id="page-prev" disabled>&laquo; Prev</button>
             <span id="page-info">Page 1</span>
@@ -148,8 +158,8 @@
 </div>
 {% else %}
 <div class="empty-state">
-    <h3>No job offers found</h3>
-    <p>Run the scrapers to populate the dashboard with job offers.</p>
+    <h3 data-i18n="empty_title">Aucune offre trouvée</h3>
+    <p data-i18n="empty_text">Lancez les scrapers pour remplir le tableau de bord.</p>
     <code>python scripts/run_scrapers.py</code>
 </div>
 {% endif %}

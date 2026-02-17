@@ -6,16 +6,124 @@
 (function () {
   "use strict";
 
+  // ── Translations ────────────────────────────────────────────────────
+
+  var TRANSLATIONS = {
+    fr: {
+      nav_dashboard:      "Dashboard",
+      nav_stats:          "Statistiques",
+      dashboard_title:    "Tableau de bord des offres",
+      stat_total:         "Total offres",
+      stat_cv:            "CV envoyés",
+      stat_followup:      "Relances",
+      stat_interviews:    "Entretiens",
+      filter_status:      "Statut",
+      filter_source:      "Source",
+      filter_company:     "Entreprise",
+      filter_search:      "Recherche",
+      filter_all:         "Tous",
+      filter_company_ph:  "Filtrer par entreprise...",
+      filter_search_ph:   "Rechercher titre, entreprise...",
+      filter_all_offers:  "Afficher toutes les offres",
+      filter_recruiters:  "Afficher les recruteurs potentiels",
+      btn_reset:          "Réinitialiser",
+      col_title:          "Titre",
+      col_company:        "Entreprise",
+      col_location:       "Lieu",
+      col_source:         "Source",
+      col_date:           "Publié",
+      col_score:          "Score",
+      col_status:         "Statut",
+      col_cv:             "CV envoyé",
+      col_followup:       "Relance",
+      col_notes:          "Notes",
+      col_link:           "Lien",
+      btn_view:           "Voir",
+      offers_count:       "offres",
+      page_label:         "Page",
+      empty_title:        "Aucune offre trouvée",
+      empty_text:         "Lancez les scrapers pour remplir le tableau de bord.",
+    },
+    en: {
+      nav_dashboard:      "Dashboard",
+      nav_stats:          "Statistics",
+      dashboard_title:    "Job Offers Dashboard",
+      stat_total:         "Total Offers",
+      stat_cv:            "CV Sent",
+      stat_followup:      "Follow-ups",
+      stat_interviews:    "Interviews",
+      filter_status:      "Status",
+      filter_source:      "Source",
+      filter_company:     "Company",
+      filter_search:      "Search",
+      filter_all:         "All",
+      filter_company_ph:  "Filter by company...",
+      filter_search_ph:   "Search title, company...",
+      filter_all_offers:  "Show all offers",
+      filter_recruiters:  "Show potential recruiters",
+      btn_reset:          "Reset",
+      col_title:          "Title",
+      col_company:        "Company",
+      col_location:       "Location",
+      col_source:         "Source",
+      col_date:           "Posted",
+      col_score:          "Score",
+      col_status:         "Status",
+      col_cv:             "CV Sent",
+      col_followup:       "Follow-up",
+      col_notes:          "Notes",
+      col_link:           "Link",
+      btn_view:           "View",
+      offers_count:       "offers",
+      page_label:         "Page",
+      empty_title:        "No job offers found",
+      empty_text:         "Run the scrapers to populate the dashboard with job offers.",
+    }
+  };
+
+  var currentLang = localStorage.getItem("jh-lang") || "fr";
+
+  function applyLang(lang) {
+    var t = TRANSLATIONS[lang] || TRANSLATIONS.fr;
+    currentLang = lang;
+
+    // Update text content for all data-i18n elements
+    var els = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < els.length; i++) {
+      var key = els[i].getAttribute("data-i18n");
+      if (t[key] !== undefined) els[i].textContent = t[key];
+    }
+
+    // Update placeholder attributes
+    var pls = document.querySelectorAll("[data-i18n-placeholder]");
+    for (var j = 0; j < pls.length; j++) {
+      var pkey = pls[j].getAttribute("data-i18n-placeholder");
+      if (t[pkey] !== undefined) pls[j].placeholder = t[pkey];
+    }
+
+    // Re-render pagination label in current language
+    renderPage();
+  }
+
+  // Listen for language change events dispatched by base.html
+  document.addEventListener("jh-lang-change", function (e) {
+    applyLang(e.detail.lang);
+  });
+
+  // ── Guard: early return if no table (non-dashboard pages) ───────────
+
   var tbody = document.querySelector("#offers-table tbody");
-  if (!tbody) return;
+  if (!tbody) {
+    applyLang(currentLang);
+    return;
+  }
 
   // ── Stats counters (optimistic: update before AJAX) ────────────────
 
-  var statCvSent = document.getElementById("stat-cv-sent");
+  var statCvSent    = document.getElementById("stat-cv-sent");
   var statFollowUps = document.getElementById("stat-follow-ups");
   var statInterviews = document.getElementById("stat-interviews");
 
-  // Initialize counters from current DOM state
   var counts = { cv: 0, fu: 0, interviews: 0 };
 
   (function initCounts() {
@@ -34,8 +142,8 @@
   })();
 
   function renderStats() {
-    if (statCvSent) statCvSent.textContent = counts.cv;
-    if (statFollowUps) statFollowUps.textContent = counts.fu;
+    if (statCvSent)     statCvSent.textContent     = counts.cv;
+    if (statFollowUps)  statFollowUps.textContent  = counts.fu;
     if (statInterviews) statInterviews.textContent = counts.interviews;
   }
 
@@ -118,7 +226,6 @@
       var oldStatus = row.dataset.status;
       var newStatus = target.value;
 
-      // Update interview counter
       if (oldStatus === "Interview" && newStatus !== "Interview") counts.interviews--;
       if (oldStatus !== "Interview" && newStatus === "Interview") counts.interviews++;
       var t2 = performance.now();
@@ -128,7 +235,6 @@
       var t3 = performance.now();
       console.log("[DIAG] change: renderStats (" + (t3 - t2).toFixed(1) + "ms)");
 
-      // Update data attribute + color
       row.dataset.status = newStatus;
       target.className = "status-select status-color-" +
         newStatus.toLowerCase().replace(/ /g, "-");
@@ -142,11 +248,10 @@
 
     // Checkboxes (cv_sent, follow_up_done)
     if (target.classList.contains("tracking-checkbox")) {
-      var field = target.dataset.field;
+      var field   = target.dataset.field;
       var checked = target.checked;
 
-      // Update counter
-      if (field === "cv_sent") counts.cv += checked ? 1 : -1;
+      if (field === "cv_sent")       counts.cv += checked ? 1 : -1;
       if (field === "follow_up_done") counts.fu += checked ? 1 : -1;
       var t2b = performance.now();
       console.log("[DIAG] change: counter update (" + (t2b - t1).toFixed(1) + "ms)");
@@ -183,42 +288,42 @@
 
   // ── Filtering + Pagination ─────────────────────────────────────────
 
-  var PAGE_SIZE = 25;
-  var currentPage = 0;
+  var PAGE_SIZE    = 25;
+  var currentPage  = 0;
   var filteredRows = [];
-  var allRows = Array.from(tbody.querySelectorAll(".offer-row"));
+  var allRows      = Array.from(tbody.querySelectorAll(".offer-row"));
 
-  var filterStatus = document.getElementById("filter-status");
-  var filterSource = document.getElementById("filter-source");
+  var filterStatus  = document.getElementById("filter-status");
+  var filterSource  = document.getElementById("filter-source");
   var filterCompany = document.getElementById("filter-company");
-  var filterSearch = document.getElementById("filter-search");
+  var filterSearch  = document.getElementById("filter-search");
   var showRecruiters = document.getElementById("show-recruiters");
-  var showAllOffers = document.getElementById("show-all-offers");
-  var visibleCount = document.getElementById("visible-count");
-  var pageInfo = document.getElementById("page-info");
-  var pageNext = document.getElementById("page-next");
-  var pagePrev = document.getElementById("page-prev");
+  var showAllOffers  = document.getElementById("show-all-offers");
+  var visibleCount   = document.getElementById("visible-count");
+  var pageInfo       = document.getElementById("page-info");
+  var pageNext       = document.getElementById("page-next");
+  var pagePrev       = document.getElementById("page-prev");
 
   function applyFilters() {
-    var status = filterStatus ? filterStatus.value : "";
-    var source = filterSource ? filterSource.value : "";
+    var status  = filterStatus  ? filterStatus.value  : "";
+    var source  = filterSource  ? filterSource.value  : "";
     var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
-    var search = filterSearch ? filterSearch.value.toLowerCase().trim() : "";
+    var search  = filterSearch  ? filterSearch.value.toLowerCase().trim()  : "";
     var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
-    var showAll = showAllOffers ? showAllOffers.checked : false;
+    var showAll           = showAllOffers  ? showAllOffers.checked  : false;
 
     filteredRows = [];
     for (var i = 0; i < allRows.length; i++) {
-      var row = allRows[i];
+      var row  = allRows[i];
       var show = true;
 
       // Hide recruiters unless toggle is checked
       if (!includeRecruiters && row.dataset.offerType === "recruiter") show = false;
       // By default show only target companies; show all when toggle is checked
       if (show && !showAll && row.dataset.target !== "1") show = false;
-      if (show && status && row.dataset.status !== status) show = false;
-      if (show && source && row.dataset.source !== source) show = false;
-      if (show && company && row.dataset.company.indexOf(company) === -1) show = false;
+      if (show && status  && row.dataset.status !== status)                          show = false;
+      if (show && source  && row.dataset.source !== source)                          show = false;
+      if (show && company && row.dataset.company.indexOf(company) === -1)            show = false;
       if (show && search) {
         var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
         if (text.indexOf(search) === -1) show = false;
@@ -232,10 +337,11 @@
   }
 
   function renderPage() {
+    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
     var totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
     if (currentPage >= totalPages) currentPage = totalPages - 1;
     var start = currentPage * PAGE_SIZE;
-    var end = start + PAGE_SIZE;
+    var end   = start + PAGE_SIZE;
 
     for (var i = 0; i < allRows.length; i++) {
       allRows[i].style.display = "none";
@@ -245,17 +351,17 @@
     }
 
     if (visibleCount) visibleCount.textContent = filteredRows.length;
-    if (pageInfo) pageInfo.textContent = "Page " + (currentPage + 1) + " / " + totalPages;
+    if (pageInfo) pageInfo.textContent = t.page_label + " " + (currentPage + 1) + " / " + totalPages;
     if (pagePrev) pagePrev.disabled = currentPage === 0;
     if (pageNext) pageNext.disabled = currentPage >= totalPages - 1;
   }
 
-  if (filterStatus) filterStatus.addEventListener("change", applyFilters);
-  if (filterSource) filterSource.addEventListener("change", applyFilters);
-  if (filterCompany) filterCompany.addEventListener("input", applyFilters);
-  if (filterSearch) filterSearch.addEventListener("input", applyFilters);
+  if (filterStatus)  filterStatus.addEventListener("change", applyFilters);
+  if (filterSource)  filterSource.addEventListener("change", applyFilters);
+  if (filterCompany) filterCompany.addEventListener("input",  applyFilters);
+  if (filterSearch)  filterSearch.addEventListener("input",   applyFilters);
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
-  if (showAllOffers) showAllOffers.addEventListener("change", applyFilters);
+  if (showAllOffers)  showAllOffers.addEventListener("change",  applyFilters);
 
   if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); });
   if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); });
@@ -263,18 +369,15 @@
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
     resetBtn.addEventListener("click", function () {
-      if (filterStatus) filterStatus.value = "";
-      if (filterSource) filterSource.value = "";
+      if (filterStatus)  filterStatus.value  = "";
+      if (filterSource)  filterSource.value  = "";
       if (filterCompany) filterCompany.value = "";
-      if (filterSearch) filterSearch.value = "";
+      if (filterSearch)  filterSearch.value  = "";
       if (showRecruiters) showRecruiters.checked = false;
-      if (showAllOffers) showAllOffers.checked = false;
+      if (showAllOffers)  showAllOffers.checked  = false;
       applyFilters();
     });
   }
-
-  // Initial render: show first page
-  applyFilters();
 
   // ── Column sorting ─────────────────────────────────────────────────
 
@@ -320,7 +423,11 @@
       tbody.appendChild(allRows[i]);
     }
 
-    // Re-filter to rebuild filteredRows in new sort order, then re-render page
     applyFilters();
   }
+
+  // ── Initial render ─────────────────────────────────────────────────
+  applyFilters();
+  applyLang(currentLang);
+
 })();
