@@ -223,14 +223,32 @@ def stats():
             bucket = min(int(s // 10), 9)
             score_buckets[bucket] += 1
 
+        # CV match score distribution (only when a CV has been uploaded)
+        has_cv = CV_TEXT_PATH.exists()
+        cv_score_buckets = [0] * 10
+        if has_cv:
+            cv_rows = db.query(Offer.cv_match_score).filter(
+                Offer.cv_match_score.isnot(None)
+            ).all()
+            for (score,) in cv_rows:
+                s = float(score or 0)
+                bucket = min(int(s // 10), 9)
+                cv_score_buckets[bucket] += 1
+
         chart_data = {
-            'sources':   source_counts,
-            'companies': top_companies,
-            'scores':    score_buckets,
-            'statuses':  status_counts,
+            'sources':         source_counts,
+            'companies':       top_companies,
+            'scores':          score_buckets,
+            'statuses':        status_counts,
+            'cv_scores':       cv_score_buckets,
         }
 
-        return render_template('stats.html', stats=stats_data, chart_data=chart_data)
+        return render_template(
+            'stats.html',
+            stats=stats_data,
+            chart_data=chart_data,
+            has_cv=has_cv,
+        )
     finally:
         db.close()
 
