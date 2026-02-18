@@ -3,8 +3,10 @@ Flask routes for JobHunter dashboard.
 Handles all web interface endpoints and API endpoints for AJAX updates.
 """
 
+import io
 import time
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify
 from sqlalchemy import func
@@ -13,7 +15,7 @@ from sqlalchemy.orm import joinedload
 from app.database import SessionLocal
 from app.models import Offer, Tracking
 from app.services.filter_engine import normalize_text
-from config import TARGET_COMPANIES
+from config import TARGET_COMPANIES, DATA_DIR
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
@@ -22,6 +24,10 @@ VALID_STATUSES = [
     'New', 'Applied', 'Followed up', 'Interview',
     'Accepted', 'Rejected', 'No response',
 ]
+
+# CV storage paths
+CV_DIR = DATA_DIR / "cv"
+CV_TEXT_PATH = CV_DIR / "cv_text.txt"
 
 
 @bp.route('/')
@@ -60,6 +66,8 @@ def dashboard():
                     target_ids.add(o.id)
                     break
 
+        has_cv = CV_TEXT_PATH.exists()
+
         return render_template(
             'dashboard.html',
             offers=offers,
@@ -67,6 +75,7 @@ def dashboard():
             sources=sources,
             statuses=VALID_STATUSES,
             target_ids=target_ids,
+            has_cv=has_cv,
         )
     finally:
         db.close()
@@ -224,3 +233,99 @@ def stats():
         return render_template('stats.html', stats=stats_data, chart_data=chart_data)
     finally:
         db.close()
+
+
+def _run_cv_matching():
+    """
+    Run TF-IDF matching between the stored CV and all offers,
+    then persist cv_match_score on each Offer row.
+    Returns the number of offers scored.
+    """
+    from app.services.cv_matcher import CVMatcher
+
+    if not CV_TEXT_PATH.exists():
+        return 0
+
+    cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
+    db = SessionLocal()
+    try:
+        offers = db.query(Offer).all()
+        if not offers:
+            return 0
+
+        matcher = CVMatcher(cv_text)
+        scores = matcher.score_offers(offers)
+
+        for offer in offers:
+            offer.cv_match_score = scores.get(offer.id)
+
+        db.commit()
+        return len(scores)
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+
+@bp.route('/api/cv/upload', methods=['POST'])
+def cv_upload():
+    """
+    Accept a PDF or plain-text CV file, extract text, save to disk,
+    then run TF-IDF matching against all stored offers.
+    """
+    if 'cv' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['cv']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    filename = file.filename.lower()
+    raw = file.read()
+
+    # Extract text
+    if filename.endswith('.pdf'):
+        try:
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(raw))
+            cv_text = "\n".join(
+                page.extract_text() or "" for page in reader.pages
+            )
+        except ImportError:
+            return jsonify({'error': 'PyPDF2 not installed. pip install PyPDF2'}), 500
+        except Exception as e:
+            return jsonify({'error': f'PDF parse error: {e}'}), 400
+    else:
+        # Assume plain text (UTF-8)
+        try:
+            cv_text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            cv_text = raw.decode('latin-1', errors='replace')
+
+    if not cv_text.strip():
+        return jsonify({'error': 'Could not extract text from CV'}), 400
+
+    # Save to disk
+    CV_DIR.mkdir(parents=True, exist_ok=True)
+    CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
+
+    # Run matching
+    try:
+        scored = _run_cv_matching()
+        return jsonify({'ok': True, 'scored': scored})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/api/cv/rematch', methods=['POST'])
+def cv_rematch():
+    """Re-run TF-IDF matching using the already-stored CV text."""
+    if not CV_TEXT_PATH.exists():
+        return jsonify({'error': 'No CV uploaded yet'}), 404
+
+    try:
+        scored = _run_cv_matching()
+        return jsonify({'ok': True, 'scored': scored})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

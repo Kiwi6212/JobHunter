@@ -67,6 +67,12 @@
       empty_text:         "Lancez les scrapers pour remplir le tableau de bord.",
       btn_export_csv:     "Exporter CSV",
       stat_targets:       "Offres cibles",
+      btn_import_cv:      "Importer CV",
+      btn_rematch_cv:     "Recalculer",
+      col_cv_match:       "Match CV",
+      cv_uploading:       "Chargement…",
+      cv_success:         "CV importé, scores calculés.",
+      cv_error:           "Erreur : ",
     },
     en: {
       nav_dashboard:      "Dashboard",
@@ -104,6 +110,12 @@
       empty_text:         "Run the scrapers to populate the dashboard with job offers.",
       btn_export_csv:     "Export CSV",
       stat_targets:       "Target offers",
+      btn_import_cv:      "Import CV",
+      btn_rematch_cv:     "Recalculate",
+      col_cv_match:       "CV Match",
+      cv_uploading:       "Uploading…",
+      cv_success:         "CV imported, scores calculated.",
+      cv_error:           "Error: ",
     }
   };
 
@@ -455,6 +467,11 @@
         vb = parseFloat(b.dataset.score) || 0;
         return asc ? va - vb : vb - va;
       }
+      if (col === "cv_score") {
+        va = parseFloat(a.dataset.cvScore) || 0;
+        vb = parseFloat(b.dataset.cvScore) || 0;
+        return asc ? va - vb : vb - va;
+      }
       va = a.dataset[col] || "";
       vb = b.dataset[col] || "";
       if (va < vb) return asc ? -1 : 1;
@@ -531,6 +548,64 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
+  }
+
+  // ── CV upload & rematch ───────────────────────────────────────────
+
+  var cvFileInput   = document.getElementById("cv-file-input");
+  var cvStatusMsg   = document.getElementById("cv-upload-status");
+  var btnRematchCv  = document.getElementById("btn-rematch-cv");
+
+  function cvSetStatus(msg, isError) {
+    if (!cvStatusMsg) return;
+    cvStatusMsg.textContent = msg;
+    cvStatusMsg.style.color = isError ? "var(--accent-red, #ef4444)" : "var(--accent-green, #22c55e)";
+  }
+
+  function handleCvUpload(file) {
+    if (!file) return;
+    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+    cvSetStatus(t.cv_uploading, false);
+
+    var formData = new FormData();
+    formData.append("cv", file);
+
+    fetch("/api/cv/upload", { method: "POST", body: formData })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          cvSetStatus(t.cv_success, false);
+          setTimeout(function () { location.reload(); }, 1200);
+        } else {
+          cvSetStatus(t.cv_error + (data.error || "unknown"), true);
+        }
+      })
+      .catch(function (err) { cvSetStatus(t.cv_error + err, true); });
+  }
+
+  if (cvFileInput) {
+    cvFileInput.addEventListener("change", function () {
+      handleCvUpload(this.files[0]);
+      this.value = "";
+    });
+  }
+
+  if (btnRematchCv) {
+    btnRematchCv.addEventListener("click", function () {
+      var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+      cvSetStatus(t.cv_uploading, false);
+      fetch("/api/cv/rematch", { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            cvSetStatus(t.cv_success, false);
+            setTimeout(function () { location.reload(); }, 1200);
+          } else {
+            cvSetStatus(t.cv_error + (data.error || "unknown"), true);
+          }
+        })
+        .catch(function (err) { cvSetStatus(t.cv_error + err, true); });
+    });
   }
 
   // ── Initial render ─────────────────────────────────────────────────

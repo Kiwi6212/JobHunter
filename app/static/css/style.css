@@ -512,7 +512,38 @@ body {
     opacity: 0.85;
 }
 
-/* Status Badges (used in stats / detail pages) */
+/* ── CV Match badges ─────────────────────────────────────── */
+.cv-match-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    min-width: 2.8rem;
+    text-align: center;
+}
+.cv-match-high { background-color: #dcfce7; color: #166534; }
+.cv-match-mid  { background-color: #fef9c3; color: #854d0e; }
+.cv-match-low  { background-color: #f1f5f9; color: #64748b; }
+
+[data-theme="dark"] .cv-match-high { background-color: #14532d; color: #86efac; }
+[data-theme="dark"] .cv-match-mid  { background-color: #713f12; color: #fde68a; }
+[data-theme="dark"] .cv-match-low  { background-color: #1e293b; color: #94a3b8; }
+
+/* ── CV actions (import/rematch bar) ────────────────────── */
+.cv-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.cv-status-msg {
+    font-size: 0.82rem;
+    font-style: italic;
+}
+
+/* ── Status Badges (used in stats / detail pages) ───────── */
 .status-badge {
     display: inline-block;
     padding: 0.35rem 0.9rem;

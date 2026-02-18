@@ -69,6 +69,14 @@ def _migrate_columns():
             ))
         print("[MIGRATE] Done. Backfilled recruiter tags from external_id.")
 
+    if "cv_match_score" not in existing:
+        print("[MIGRATE] Adding cv_match_score column to offers table...")
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE offers ADD COLUMN cv_match_score FLOAT"
+            ))
+        print("[MIGRATE] Done.")
+
     # Fix company names that are actually descriptions (> 50 chars of prose)
     with engine.begin() as conn:
         result = conn.execute(text(

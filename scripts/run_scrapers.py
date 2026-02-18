@@ -25,6 +25,7 @@ from app.scrapers.workday import WorkdayScraper
 from app.scrapers.lever import LeverScraper
 from app.scrapers.talentbrew import TalentBrewScraper
 from app.scrapers.phenom import PhenomScraper
+from app.scrapers.place_emploi_public import PlaceEmploiPublicScraper
 from app.services.filter_engine import FilterEngine
 from config import LOG_LEVEL
 
@@ -130,6 +131,7 @@ def main():
         LeverScraper(),
         TalentBrewScraper(),
         PhenomScraper(),
+        PlaceEmploiPublicScraper(),
         # FranceTravailScraper(),  # TODO: Add when API keys available
     ]
 

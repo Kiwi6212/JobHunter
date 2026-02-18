@@ -118,6 +118,10 @@ TARGET_COMPANIES = [
     "EDF", "Engie", "TotalEnergies", "SNCF", "RATP", "La Poste",
     # Banques & Assurances
     "BNP Paribas", "Société Générale", "Crédit Agricole", "AXA",
+    "Banque de France",
+    # Secteur public & organismes gouvernementaux
+    "ANSSI", "DINUM", "DGSI", "Ministère des Armées", "Ministère de l'Intérieur",
+    "CNES", "CEA", "CNRS", "AP-HP",
 ]
 
 # Company Career Sites

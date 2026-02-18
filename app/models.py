@@ -39,6 +39,7 @@ class Offer(Base):
 
     # Scoring
     relevance_score = Column(Float, nullable=True, default=0.0)
+    cv_match_score = Column(Float, nullable=True, default=None)  # TF-IDF cosine sim × 100
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

@@ -76,6 +76,16 @@
     </div>
     <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
     <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
+    <div class="cv-actions">
+        <label class="btn btn-secondary btn-small" id="btn-import-cv" data-i18n="btn_import_cv">
+            Importer CV
+            <input type="file" id="cv-file-input" accept=".pdf,.txt" style="display:none">
+        </label>
+        {% if has_cv %}
+        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
+        {% endif %}
+        <span id="cv-upload-status" class="cv-status-msg"></span>
+    </div>
 </div>
 
 <div class="table-container">
@@ -93,6 +103,7 @@
                 <th data-i18n="col_cv">CV envoyé</th>
                 <th data-i18n="col_followup">Relance</th>
                 <th data-i18n="col_notes">Notes</th>
+                {% if has_cv %}<th class="sortable" data-col="cv_score"><span data-i18n="col_cv_match">Match CV</span> <span class="sort-icon"></span></th>{% endif %}
                 <th data-i18n="col_link">Lien</th>
             </tr>
         </thead>
@@ -107,6 +118,7 @@
                 data-location="{{ (offer.location or '')|lower }}"
                 data-date="{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else '' }}"
                 data-score="{{ offer.relevance_score or 0 }}"
+                data-cv-score="{{ '%.1f' % offer.cv_match_score if offer.cv_match_score is not none else '' }}"
                 data-offer-type="{{ offer.offer_type or 'job' }}"
                 data-target="{{ '1' if offer.id in target_ids else '0' }}">
                 <td class="col-title">
@@ -140,6 +152,18 @@
                            value="{{ offer.tracking.notes or '' if offer.tracking else '' }}"
                            placeholder="...">
                 </td>
+                {% if has_cv %}
+                <td class="col-cv-score">
+                    {% if offer.cv_match_score is not none %}
+                    {% set score = offer.cv_match_score %}
+                    <span class="cv-match-badge {% if score >= 70 %}cv-match-high{% elif score >= 40 %}cv-match-mid{% else %}cv-match-low{% endif %}">
+                        {{ '%.0f' % score }}%
+                    </span>
+                    {% else %}
+                    <span class="cv-match-badge cv-match-low">—</span>
+                    {% endif %}
+                </td>
+                {% endif %}
                 <td>
                     <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
