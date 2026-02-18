@@ -8,6 +8,28 @@
 
   // ── Translations ────────────────────────────────────────────────────
 
+  // Status value → display label map (values stay in English for DB)
+  var STATUS_LABELS = {
+    fr: {
+      "New":         "Nouveau",
+      "Applied":     "Candidature envoyée",
+      "Followed up": "Relancé",
+      "Interview":   "Entretien",
+      "Accepted":    "Accepté",
+      "Rejected":    "Refusé",
+      "No response": "Sans réponse",
+    },
+    en: {
+      "New":         "New",
+      "Applied":     "Applied",
+      "Followed up": "Followed up",
+      "Interview":   "Interview",
+      "Accepted":    "Accepted",
+      "Rejected":    "Rejected",
+      "No response": "No response",
+    }
+  };
+
   var TRANSLATIONS = {
     fr: {
       nav_dashboard:      "Dashboard",
@@ -101,8 +123,26 @@
       if (t[pkey] !== undefined) pls[j].placeholder = t[pkey];
     }
 
+    // Translate status select options (value stays English, label changes)
+    translateStatusSelects(lang);
+
     // Re-render pagination label in current language
     renderPage();
+  }
+
+  function translateStatusSelects(lang) {
+    var labels = STATUS_LABELS[lang] || STATUS_LABELS.en;
+    // Covers the filter dropdown (#filter-status) and all per-row status selects
+    var selects = document.querySelectorAll('[data-field="status"], #filter-status');
+    for (var i = 0; i < selects.length; i++) {
+      var opts = selects[i].options;
+      for (var j = 0; j < opts.length; j++) {
+        var val = opts[j].value;
+        if (val && labels[val] !== undefined) {
+          opts[j].textContent = labels[val];
+        }
+      }
+    }
   }
 
   // Listen for language change events dispatched by base.html
