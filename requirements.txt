@@ -14,6 +14,7 @@ undetected-chromedriver>=3.5.0
 
 # Task Scheduling
 APScheduler>=3.10.0
+schedule>=1.2.0
 
 # AI Integration
 anthropic>=0.30.0
