@@ -478,6 +478,40 @@ body {
     color: #1e40af;
 }
 
+.badge-smartrecruiters {
+    background-color: #fee2e2;
+    color: #ef4444;
+}
+
+.badge-workday {
+    background-color: #eef2ff;
+    color: #6366f1;
+}
+
+.badge-lever {
+    background-color: #fdf2f8;
+    color: #ec4899;
+}
+
+.badge-talentbrew {
+    background-color: #f0fdfa;
+    color: #14b8a6;
+}
+
+.badge-phenom {
+    background-color: #fff7ed;
+    color: #f97316;
+}
+
+/* Target company star badge */
+.target-badge {
+    font-size: 0.72rem;
+    vertical-align: middle;
+    margin-left: 4px;
+    cursor: default;
+    opacity: 0.85;
+}
+
 /* Status Badges (used in stats / detail pages) */
 .status-badge {
     display: inline-block;

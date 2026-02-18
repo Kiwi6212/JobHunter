@@ -22,6 +22,10 @@
             <span class="stat-number" id="stat-interviews">{{ stats.interviews }}</span>
             <span class="stat-label" data-i18n="stat_interviews">Entretiens</span>
         </div>
+        <div class="stat-card">
+            <span class="stat-number">{{ target_ids|length }}</span>
+            <span class="stat-label" data-i18n="stat_targets">Offres cibles</span>
+        </div>
     </div>
 </div>
 
@@ -108,7 +112,7 @@
                 <td class="col-title">
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>
                 </td>
-                <td class="col-company">{{ offer.company }}</td>
+                <td class="col-company">{{ offer.company }}{% if offer.id in target_ids %}<span class="target-badge" title="Entreprise cible">⭐</span>{% endif %}</td>
                 <td class="col-location">{{ offer.location or 'N/A' }}</td>
                 <td><span class="badge badge-{{ offer.source }}">{{ offer.source }}</span></td>
                 <td class="col-date">{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>

@@ -51,48 +51,48 @@
 
 {% block content %}
 <div class="stats-page">
-    <h2>Application Statistics</h2>
+    <h2 data-i18n="page_title">Statistiques de candidature</h2>
 
     <div class="stats-grid">
         <div class="stat-card large">
             <span class="stat-number">{{ stats.total_offers }}</span>
-            <span class="stat-label">Total Offers Found</span>
+            <span class="stat-label" data-i18n="stat_total">Total offres trouvées</span>
         </div>
         <div class="stat-card large">
             <span class="stat-number">{{ stats.tracked }}</span>
-            <span class="stat-label">Offers Tracked</span>
+            <span class="stat-label" data-i18n="stat_tracked">Offres suivies</span>
         </div>
         <div class="stat-card large">
             <span class="stat-number">{{ stats.cv_sent }}</span>
-            <span class="stat-label">CVs Sent</span>
+            <span class="stat-label" data-i18n="stat_cv">CV envoyés</span>
         </div>
         <div class="stat-card large">
             <span class="stat-number">{{ stats.follow_ups }}</span>
-            <span class="stat-label">Follow-ups Done</span>
+            <span class="stat-label" data-i18n="stat_followup">Relances effectuées</span>
         </div>
     </div>
 
     <div class="charts-grid">
         <div class="chart-card">
-            <h3>Offres par source</h3>
+            <h3 data-i18n="chart_source">Offres par source</h3>
             <div class="chart-wrapper">
                 <canvas id="chart-source"></canvas>
             </div>
         </div>
         <div class="chart-card">
-            <h3>Statuts de candidature</h3>
+            <h3 data-i18n="chart_status">Statuts de candidature</h3>
             <div class="chart-wrapper">
                 <canvas id="chart-status"></canvas>
             </div>
         </div>
         <div class="chart-card">
-            <h3>Top 10 entreprises</h3>
+            <h3 data-i18n="chart_companies">Top 10 entreprises</h3>
             <div class="chart-wrapper tall">
                 <canvas id="chart-companies"></canvas>
             </div>
         </div>
         <div class="chart-card">
-            <h3>Répartition des scores de pertinence</h3>
+            <h3 data-i18n="chart_scores">Répartition des scores de pertinence</h3>
             <div class="chart-wrapper">
                 <canvas id="chart-scores"></canvas>
             </div>
@@ -326,6 +326,49 @@
             if (m.attributeName === "data-theme") buildCharts();
         });
     }).observe(document.documentElement, { attributes: true });
+
+    // ── Stats page translations ─────────────────────────────────────
+    var STATS_T = {
+        fr: {
+            page_title:     "Statistiques de candidature",
+            stat_total:     "Total offres trouvées",
+            stat_tracked:   "Offres suivies",
+            stat_cv:        "CV envoyés",
+            stat_followup:  "Relances effectuées",
+            chart_source:   "Offres par source",
+            chart_status:   "Statuts de candidature",
+            chart_companies:"Top 10 entreprises",
+            chart_scores:   "Répartition des scores de pertinence",
+        },
+        en: {
+            page_title:     "Application Statistics",
+            stat_total:     "Total Offers Found",
+            stat_tracked:   "Offers Tracked",
+            stat_cv:        "CVs Sent",
+            stat_followup:  "Follow-ups Done",
+            chart_source:   "Offers by source",
+            chart_status:   "Application statuses",
+            chart_companies:"Top 10 companies",
+            chart_scores:   "Relevance score distribution",
+        }
+    };
+
+    function applyStatsLang(lang) {
+        var t = STATS_T[lang] || STATS_T.fr;
+        var els = document.querySelectorAll("[data-i18n]");
+        for (var i = 0; i < els.length; i++) {
+            var key = els[i].getAttribute("data-i18n");
+            if (t[key] !== undefined) els[i].textContent = t[key];
+        }
+    }
+
+    // Apply saved language on load
+    applyStatsLang(localStorage.getItem("jh-lang") || "fr");
+
+    // React to language toggle from navbar
+    document.addEventListener("jh-lang-change", function (e) {
+        applyStatsLang(e.detail.lang);
+    });
 
 })();
 </script>

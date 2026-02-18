@@ -66,6 +66,7 @@
       empty_title:        "Aucune offre trouvée",
       empty_text:         "Lancez les scrapers pour remplir le tableau de bord.",
       btn_export_csv:     "Exporter CSV",
+      stat_targets:       "Offres cibles",
     },
     en: {
       nav_dashboard:      "Dashboard",
@@ -102,6 +103,7 @@
       empty_title:        "No job offers found",
       empty_text:         "Run the scrapers to populate the dashboard with job offers.",
       btn_export_csv:     "Export CSV",
+      stat_targets:       "Target offers",
     }
   };
 
