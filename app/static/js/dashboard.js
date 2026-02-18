@@ -554,7 +554,15 @@
 
   var cvFileInput   = document.getElementById("cv-file-input");
   var cvStatusMsg   = document.getElementById("cv-upload-status");
+  var btnImportCv   = document.getElementById("btn-import-cv");
   var btnRematchCv  = document.getElementById("btn-rematch-cv");
+
+  // Wire the Import CV button to open the hidden file picker
+  if (btnImportCv && cvFileInput) {
+    btnImportCv.addEventListener("click", function () {
+      cvFileInput.click();
+    });
+  }
 
   function cvSetStatus(msg, isError) {
     if (!cvStatusMsg) return;
