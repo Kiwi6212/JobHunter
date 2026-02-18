@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 
 from flask import Blueprint, render_template, request, jsonify
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
@@ -185,6 +186,41 @@ def stats():
             'status_counts': status_counts,
         }
 
-        return render_template('stats.html', stats=stats_data)
+        # ── Chart data ────────────────────────────────────────────────
+        # Offers per source
+        source_rows = (
+            db.query(Offer.source, func.count(Offer.id))
+            .group_by(Offer.source)
+            .order_by(func.count(Offer.id).desc())
+            .all()
+        )
+        source_counts = {s: c for s, c in source_rows if s}
+
+        # Top 10 companies by offer count
+        company_rows = (
+            db.query(Offer.company, func.count(Offer.id))
+            .group_by(Offer.company)
+            .order_by(func.count(Offer.id).desc())
+            .limit(10)
+            .all()
+        )
+        top_companies = {c: n for c, n in company_rows if c}
+
+        # Score distribution in 10 equal buckets (0–10, 10–20, …, 90–100)
+        score_rows = db.query(Offer.relevance_score).all()
+        score_buckets = [0] * 10
+        for (score,) in score_rows:
+            s = float(score or 0)
+            bucket = min(int(s // 10), 9)
+            score_buckets[bucket] += 1
+
+        chart_data = {
+            'sources':   source_counts,
+            'companies': top_companies,
+            'scores':    score_buckets,
+            'statuses':  status_counts,
+        }
+
+        return render_template('stats.html', stats=stats_data, chart_data=chart_data)
     finally:
         db.close()

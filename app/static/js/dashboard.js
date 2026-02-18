@@ -65,6 +65,7 @@
       page_label:         "Page",
       empty_title:        "Aucune offre trouvée",
       empty_text:         "Lancez les scrapers pour remplir le tableau de bord.",
+      btn_export_csv:     "Exporter CSV",
     },
     en: {
       nav_dashboard:      "Dashboard",
@@ -100,6 +101,7 @@
       page_label:         "Page",
       empty_title:        "No job offers found",
       empty_text:         "Run the scrapers to populate the dashboard with job offers.",
+      btn_export_csv:     "Export CSV",
     }
   };
 
@@ -464,6 +466,69 @@
     }
 
     applyFilters();
+  }
+
+  // ── CSV Export ─────────────────────────────────────────────────────
+
+  var exportBtn = document.getElementById("export-csv");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", exportCSV);
+  }
+
+  function exportCSV() {
+    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+    var labels = STATUS_LABELS[currentLang] || STATUS_LABELS.en;
+
+    // CSV headers in current UI language
+    var headers = [
+      t.col_title, t.col_company, t.col_location, t.col_source,
+      t.col_date, t.col_score, t.col_status, t.col_cv, t.col_followup,
+      t.col_notes, "URL"
+    ];
+
+    var rows = [headers];
+
+    // Export ALL filtered rows (not just current page)
+    for (var i = 0; i < filteredRows.length; i++) {
+      var row = filteredRows[i];
+      var statusVal = row.dataset.status;
+
+      rows.push([
+        row.querySelector(".offer-title").textContent.trim(),
+        row.querySelector(".col-company").textContent.trim(),
+        row.querySelector(".col-location").textContent.trim(),
+        row.dataset.source,
+        row.dataset.date,
+        row.dataset.score,
+        labels[statusVal] || statusVal,
+        row.querySelector('[data-field="cv_sent"]').checked ? "1" : "0",
+        row.querySelector('[data-field="follow_up_done"]').checked ? "1" : "0",
+        row.querySelector(".notes-input").value,
+        row.querySelector(".btn-view").href,
+      ]);
+    }
+
+    // Build CSV with proper quoting
+    var csv = rows.map(function (r) {
+      return r.map(function (cell) {
+        var s = String(cell === null || cell === undefined ? "" : cell);
+        if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+          s = '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      }).join(",");
+    }).join("\n");
+
+    // BOM + download trigger (BOM ensures correct UTF-8 in Excel)
+    var blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    var blobUrl = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = "jobhunter-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
   }
 
   // ── Initial render ─────────────────────────────────────────────────
