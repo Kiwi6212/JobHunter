@@ -142,6 +142,25 @@ class ClaudeCVMatcher:
                 )
                 for offer in batch:
                     scores[offer.id] = 0.0
+            except anthropic.BadRequestError as e:
+                logger.error(f"[cv_matcher_claude] 400 error in batch {idx + 1}: {e}")
+                raise RuntimeError(f"Erreur API Claude (400) : {e}") from e
+            except anthropic.APIStatusError as e:
+                msg = str(e).lower()
+                if "credit balance is too low" in msg or e.status_code in (400, 402):
+                    logger.error(
+                        f"[cv_matcher_claude] Fatal API error (status {e.status_code}), "
+                        "stopping early."
+                    )
+                    raise RuntimeError(
+                        f"Crédit Anthropic insuffisant ou erreur fatale "
+                        f"(HTTP {e.status_code}) : {e}"
+                    ) from e
+                logger.error(
+                    f"[cv_matcher_claude] API error in batch {idx + 1}: {e}"
+                )
+                for offer in batch:
+                    scores[offer.id] = 0.0
             except Exception as e:
                 logger.error(
                     f"[cv_matcher_claude] API error in batch {idx + 1}: {e}"
