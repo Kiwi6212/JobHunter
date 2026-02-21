@@ -126,7 +126,7 @@
                 </td>
                 <td class="col-company">{{ offer.company }}{% if offer.id in target_ids %}<span class="target-badge" title="Entreprise cible">⭐</span>{% endif %}</td>
                 <td class="col-location">{{ offer.location or 'N/A' }}</td>
-                <td><span class="badge badge-{{ offer.source }}">{{ offer.source }}</span></td>
+                <td class="col-source"><span class="badge badge-{{ offer.source }}">{{ offer.source }}</span></td>
                 <td class="col-date">{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>
                 <td class="col-score">{{ '%.0f' % (offer.relevance_score or 0) }}</td>
                 <td>
