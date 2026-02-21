@@ -50,7 +50,7 @@ class APIKeys:
 
     # Anthropic
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 
 # Scraping Configuration

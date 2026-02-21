@@ -253,14 +253,16 @@ def stats():
         db.close()
 
 
-def _run_cv_matching():
+def _run_cv_matching(method='tfidf'):
     """
-    Run TF-IDF matching between the stored CV and all offers,
+    Run CV matching between the stored CV and all offers,
     then persist cv_match_score on each Offer row.
+
+    Args:
+        method: 'tfidf' (default, fast) or 'claude' (AI-powered, slower)
+
     Returns the number of offers scored.
     """
-    from app.services.cv_matcher import CVMatcher
-
     if not CV_TEXT_PATH.exists():
         return 0
 
@@ -271,7 +273,13 @@ def _run_cv_matching():
         if not offers:
             return 0
 
-        matcher = CVMatcher(cv_text)
+        if method == 'claude':
+            from app.services.cv_matcher_claude import ClaudeCVMatcher
+            matcher = ClaudeCVMatcher(cv_text)
+        else:
+            from app.services.cv_matcher import CVMatcher
+            matcher = CVMatcher(cv_text)
+
         scores = matcher.score_offers(offers)
 
         for offer in offers:
@@ -290,7 +298,8 @@ def _run_cv_matching():
 def cv_upload():
     """
     Accept a PDF or plain-text CV file, extract text, save to disk,
-    then run TF-IDF matching against all stored offers.
+    then run CV matching against all stored offers.
+    Query param: ?method=tfidf (default) or ?method=claude
     """
     if 'cv' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
@@ -328,22 +337,33 @@ def cv_upload():
     CV_DIR.mkdir(parents=True, exist_ok=True)
     CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
 
+    method = request.args.get('method', 'tfidf')
+    if method not in ('tfidf', 'claude'):
+        method = 'tfidf'
+
     # Run matching
     try:
-        scored = _run_cv_matching()
-        return jsonify({'ok': True, 'scored': scored})
+        scored = _run_cv_matching(method=method)
+        return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
 def cv_rematch():
-    """Re-run TF-IDF matching using the already-stored CV text."""
+    """
+    Re-run CV matching using the already-stored CV text.
+    Query param: ?method=tfidf (default) or ?method=claude
+    """
     if not CV_TEXT_PATH.exists():
         return jsonify({'error': 'No CV uploaded yet'}), 404
 
+    method = request.args.get('method', 'tfidf')
+    if method not in ('tfidf', 'claude'):
+        method = 'tfidf'
+
     try:
-        scored = _run_cv_matching()
-        return jsonify({'ok': True, 'scored': scored})
+        scored = _run_cv_matching(method=method)
+        return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

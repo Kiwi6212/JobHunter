@@ -69,9 +69,12 @@
       stat_targets:       "Offres cibles",
       btn_import_cv:      "Importer CV",
       btn_rematch_cv:     "Recalculer",
+      btn_rematch_claude: "Match IA",
       col_cv_match:       "Match CV",
       cv_uploading:       "Chargement…",
+      cv_ai_loading:      "Analyse IA en cours…",
       cv_success:         "CV importé, scores calculés.",
+      cv_ai_success:      "Scores IA calculés.",
       cv_error:           "Erreur : ",
     },
     en: {
@@ -112,9 +115,12 @@
       stat_targets:       "Target offers",
       btn_import_cv:      "Import CV",
       btn_rematch_cv:     "Recalculate",
+      btn_rematch_claude: "AI Match",
       col_cv_match:       "CV Match",
       cv_uploading:       "Uploading…",
+      cv_ai_loading:      "AI analysis in progress…",
       cv_success:         "CV imported, scores calculated.",
+      cv_ai_success:      "AI scores calculated.",
       cv_error:           "Error: ",
     }
   };
@@ -552,10 +558,12 @@
 
   // ── CV upload & rematch ───────────────────────────────────────────
 
-  var cvFileInput   = document.getElementById("cv-file-input");
-  var cvStatusMsg   = document.getElementById("cv-upload-status");
-  var btnImportCv   = document.getElementById("btn-import-cv");
-  var btnRematchCv  = document.getElementById("btn-rematch-cv");
+  var cvFileInput      = document.getElementById("cv-file-input");
+  var cvStatusMsg      = document.getElementById("cv-upload-status");
+  var cvSpinner        = document.getElementById("cv-spinner");
+  var btnImportCv      = document.getElementById("btn-import-cv");
+  var btnRematchCv     = document.getElementById("btn-rematch-cv");
+  var btnRematchClaude = document.getElementById("btn-rematch-claude");
 
   // Wire the Import CV button to open the hidden file picker
   if (btnImportCv && cvFileInput) {
@@ -613,6 +621,33 @@
           }
         })
         .catch(function (err) { cvSetStatus(t.cv_error + err, true); });
+    });
+  }
+
+  if (btnRematchClaude) {
+    btnRematchClaude.addEventListener("click", function () {
+      var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+      cvSetStatus("", false);
+      if (cvSpinner) cvSpinner.style.display = "inline";
+      btnRematchClaude.disabled = true;
+
+      fetch("/api/cv/rematch?method=claude", { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (cvSpinner) cvSpinner.style.display = "none";
+          btnRematchClaude.disabled = false;
+          if (data.ok) {
+            cvSetStatus(t.cv_ai_success, false);
+            setTimeout(function () { location.reload(); }, 1200);
+          } else {
+            cvSetStatus(t.cv_error + (data.error || "unknown"), true);
+          }
+        })
+        .catch(function (err) {
+          if (cvSpinner) cvSpinner.style.display = "none";
+          btnRematchClaude.disabled = false;
+          cvSetStatus(t.cv_error + err, true);
+        });
     });
   }
 

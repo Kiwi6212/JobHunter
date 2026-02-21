@@ -81,6 +81,8 @@
         <input type="file" id="cv-file-input" accept=".pdf,.txt" style="display:none">
         {% if has_cv %}
         <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
+        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>
+        <span id="cv-spinner" style="display:none; margin-left:6px; font-size:0.85em; color:var(--text-muted, #888);" data-i18n="cv_ai_loading">IA en cours…</span>
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
     </div>
