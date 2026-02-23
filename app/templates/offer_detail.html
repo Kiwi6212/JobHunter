@@ -8,30 +8,31 @@
         <h2>{{ offer.title }}</h2>
         <div class="offer-meta">
             <span class="company">{{ offer.company }}</span>
-            <span class="location">{{ offer.location or 'Location not specified' }}</span>
+            <span class="location">{{ offer.location or 'Lieu non précisé' }}</span>
             <span class="badge badge-{{ offer.source }}">{{ offer.source }}</span>
         </div>
     </div>
 
     <div class="offer-content">
+        <!-- ── Détails de l'offre ────────────────────────────────── -->
         <div class="offer-section">
-            <h3>Job Details</h3>
+            <h3>Détails de l'offre</h3>
             <table class="detail-table">
                 <tr>
-                    <th>Contract Type:</th>
+                    <th>Type de contrat :</th>
                     <td>{{ offer.contract_type or 'N/A' }}</td>
                 </tr>
                 <tr>
-                    <th>Posted Date:</th>
-                    <td>{{ offer.posted_date.strftime('%Y-%m-%d %H:%M') if offer.posted_date else 'N/A' }}</td>
+                    <th>Date de publication :</th>
+                    <td>{{ offer.posted_date.strftime('%d/%m/%Y %H:%M') if offer.posted_date else 'N/A' }}</td>
                 </tr>
                 <tr>
-                    <th>Found Date:</th>
-                    <td>{{ offer.found_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <th>Date de découverte :</th>
+                    <td>{{ offer.found_date.strftime('%d/%m/%Y %H:%M') }}</td>
                 </tr>
                 <tr>
-                    <th>Relevance Score:</th>
-                    <td>{{ offer.relevance_score }}</td>
+                    <th>Score de pertinence :</th>
+                    <td>{{ '%.0f' % (offer.relevance_score or 0) }}</td>
                 </tr>
                 {% if offer.cv_match_score is not none %}
                 <tr>
@@ -47,49 +48,249 @@
             </table>
         </div>
 
+        <!-- ── Description ──────────────────────────────────────── -->
         <div class="offer-section">
             <h3>Description</h3>
-            <div class="description">
-                {{ offer.description or 'No description available' }}
-            </div>
+            <div class="description">{{ offer.description or 'Aucune description disponible.' }}</div>
         </div>
 
-        {% if offer.tracking %}
+        <!-- ── Suivi de candidature (formulaire éditable) ──────── -->
         <div class="offer-section">
-            <h3>Tracking Information</h3>
+            <h3>Suivi de candidature</h3>
             <table class="detail-table">
                 <tr>
-                    <th>Status:</th>
-                    <td><span class="status-badge status-{{ offer.tracking.status.lower().replace(' ', '-') }}">{{ offer.tracking.status }}</span></td>
+                    <th>Statut :</th>
+                    <td>
+                        {% set cur_status = offer.tracking.status if offer.tracking else 'New' %}
+                        <select id="t-status"
+                                class="status-select status-color-{{ cur_status.lower().replace(' ', '-') }}"
+                                {{ 'disabled' if role == 'viewer' }}>
+                            {% for s in ['New', 'Applied', 'Followed up', 'Interview', 'Accepted', 'Rejected', 'No response'] %}
+                            <option value="{{ s }}" {{ 'selected' if cur_status == s }}>{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
                 </tr>
                 <tr>
-                    <th>CV Sent:</th>
-                    <td>{{ 'Yes' if offer.tracking.cv_sent else 'No' }}</td>
+                    <th>CV envoyé :</th>
+                    <td>
+                        <input type="checkbox" id="t-cv-sent"
+                               {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}
+                               {{ 'disabled' if role == 'viewer' }}>
+                        {% if offer.tracking and offer.tracking.date_sent %}
+                        <span class="date-label">{{ offer.tracking.date_sent.strftime('%d/%m/%Y') }}</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 <tr>
-                    <th>Follow-up Done:</th>
-                    <td>{{ 'Yes' if offer.tracking.follow_up_done else 'No' }}</td>
+                    <th>Relance faite :</th>
+                    <td>
+                        <input type="checkbox" id="t-follow-up"
+                               {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}
+                               {{ 'disabled' if role == 'viewer' }}>
+                        {% if offer.tracking and offer.tracking.follow_up_date %}
+                        <span class="date-label">{{ offer.tracking.follow_up_date.strftime('%d/%m/%Y') }}</span>
+                        {% endif %}
+                    </td>
                 </tr>
-                {% if offer.tracking.date_sent %}
                 <tr>
-                    <th>Date Sent:</th>
-                    <td>{{ offer.tracking.date_sent.strftime('%Y-%m-%d') }}</td>
+                    <th>Notes :</th>
+                    <td>
+                        <textarea id="t-notes" class="notes-textarea" rows="3"
+                                  placeholder="Notes libres…"
+                                  {{ 'disabled' if role == 'viewer' }}>{{ offer.tracking.notes or '' if offer.tracking else '' }}</textarea>
+                    </td>
                 </tr>
-                {% endif %}
-                {% if offer.tracking.notes %}
-                <tr>
-                    <th>Notes:</th>
-                    <td>{{ offer.tracking.notes }}</td>
-                </tr>
-                {% endif %}
             </table>
+            {% if role == 'admin' %}
+            <div class="tracking-actions">
+                <button type="button" id="btn-save-tracking" class="btn btn-primary">Sauvegarder</button>
+                <span id="tracking-save-msg" class="save-msg"></span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ── Générer une lettre de motivation (admin only) ─────── -->
+        {% if role == 'admin' %}
+        <div class="offer-section">
+            <h3>Générer une lettre de motivation</h3>
+            <div class="cover-letter-form">
+                <div class="cover-letter-controls">
+                    <select id="letter-template" class="form-select">
+                        <option value="">— Aucun modèle (générer depuis zéro) —</option>
+                        {% for f in doc_files %}
+                        <option value="{{ f }}">{{ f }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="letter-format" class="form-select">
+                        <option value="txt">.txt</option>
+                        <option value="docx">.docx</option>
+                    </select>
+                    <button id="btn-gen-letter" class="btn btn-primary">Générer</button>
+                    {% if not doc_files %}
+                    <a href="{{ url_for('main.documents') }}" class="btn btn-secondary">Importer un modèle</a>
+                    {% endif %}
+                </div>
+                <span id="letter-status" class="save-msg" style="display:block;margin-top:0.5rem;"></span>
+                <div id="letter-result" style="display:none;margin-top:1rem;">
+                    <textarea id="letter-text" class="notes-textarea letter-output" rows="16" readonly></textarea>
+                    <div class="tracking-actions" style="margin-top:0.75rem;">
+                        <button id="btn-dl-letter" class="btn btn-secondary">Télécharger</button>
+                    </div>
+                </div>
+            </div>
         </div>
         {% endif %}
 
+        <!-- ── Actions ──────────────────────────────────────────── -->
         <div class="offer-actions">
-            <a href="{{ offer.url }}" target="_blank" class="btn btn-primary">View Original Offer</a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            <a href="{{ offer.url }}" target="_blank" class="btn btn-primary">Voir l'offre originale</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Retour au dashboard</a>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    "use strict";
+
+    // ── Tracking save ──────────────────────────────────────────────────
+    var btnSave = document.getElementById("btn-save-tracking");
+    if (btnSave) {
+        // Live color update on status change
+        var statusSel = document.getElementById("t-status");
+        if (statusSel) {
+            statusSel.addEventListener("change", function () {
+                this.className = "status-select status-color-" +
+                    this.value.toLowerCase().replace(/ /g, "-");
+            });
+        }
+
+        btnSave.addEventListener("click", function () {
+            var msg = document.getElementById("tracking-save-msg");
+            btnSave.disabled = true;
+            fetch("/api/tracking/{{ offer.id }}", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    status:         statusSel ? statusSel.value : "New",
+                    cv_sent:        document.getElementById("t-cv-sent").checked,
+                    follow_up_done: document.getElementById("t-follow-up").checked,
+                    notes:          document.getElementById("t-notes").value,
+                }),
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                btnSave.disabled = false;
+                if (res.ok) {
+                    msg.textContent = "Sauvegardé !";
+                    msg.className = "save-msg save-msg--ok";
+                } else {
+                    msg.textContent = "Erreur : " + (res.error || "unknown");
+                    msg.className = "save-msg save-msg--err";
+                }
+                setTimeout(function () {
+                    msg.textContent = "";
+                    msg.className = "save-msg";
+                }, 3000);
+            })
+            .catch(function () {
+                btnSave.disabled = false;
+                var m = document.getElementById("tracking-save-msg");
+                m.textContent = "Erreur réseau";
+                m.className = "save-msg save-msg--err";
+            });
+        });
+    }
+
+    // ── Cover letter generation ────────────────────────────────────────
+    var btnGen = document.getElementById("btn-gen-letter");
+    if (btnGen) {
+        var letterText    = document.getElementById("letter-text");
+        var letterResult  = document.getElementById("letter-result");
+        var letterStatus  = document.getElementById("letter-status");
+        var btnDl         = document.getElementById("btn-dl-letter");
+        var letterFormat  = document.getElementById("letter-format");
+        var letterTpl     = document.getElementById("letter-template");
+        var savedFilename = "lettre_motivation.txt";
+
+        btnGen.addEventListener("click", function () {
+            var tpl    = letterTpl    ? letterTpl.value    : "";
+            var format = letterFormat ? letterFormat.value : "txt";
+            btnGen.disabled = true;
+            letterStatus.textContent = "Génération en cours…";
+            letterStatus.className = "save-msg";
+            letterResult.style.display = "none";
+
+            fetch("/api/cover-letter/{{ offer.id }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ template_filename: tpl, format: format }),
+            })
+            .then(function (r) {
+                // Detect binary response (docx)
+                var ct = r.headers.get("Content-Type") || "";
+                if (ct.indexOf("application/vnd") !== -1 ||
+                    ct.indexOf("application/octet") !== -1) {
+                    var cd = r.headers.get("Content-Disposition") || "";
+                    var m  = cd.match(/filename="?([^";\n]+)"?/);
+                    var fn = m ? m[1] : "lettre_motivation.docx";
+                    return r.blob().then(function (blob) {
+                        var url = URL.createObjectURL(blob);
+                        var a   = document.createElement("a");
+                        a.href = url; a.download = fn;
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        return null; // handled
+                    });
+                }
+                return r.json();
+            })
+            .then(function (res) {
+                btnGen.disabled = false;
+                if (res === null) {
+                    // Binary download already triggered
+                    letterStatus.textContent = "Fichier téléchargé !";
+                    letterStatus.className = "save-msg save-msg--ok";
+                    return;
+                }
+                if (res.ok) {
+                    letterStatus.textContent = "Lettre générée !";
+                    letterStatus.className = "save-msg save-msg--ok";
+                    letterText.value = res.text;
+                    savedFilename = res.filename || "lettre_motivation.txt";
+                    letterResult.style.display = "";
+                } else {
+                    letterStatus.textContent = "Erreur : " + (res.error || "unknown");
+                    letterStatus.className = "save-msg save-msg--err";
+                }
+                setTimeout(function () {
+                    letterStatus.textContent = "";
+                    letterStatus.className = "save-msg";
+                }, 4000);
+            })
+            .catch(function () {
+                btnGen.disabled = false;
+                letterStatus.textContent = "Erreur réseau";
+                letterStatus.className = "save-msg save-msg--err";
+            });
+        });
+
+        if (btnDl) {
+            btnDl.addEventListener("click", function () {
+                var blob = new Blob([letterText.value], { type: "text/plain;charset=utf-8" });
+                var url  = URL.createObjectURL(blob);
+                var a    = document.createElement("a");
+                a.href = url; a.download = savedFilename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+    }
+})();
+</script>
 {% endblock %}

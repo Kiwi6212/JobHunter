@@ -8,9 +8,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+
+from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
 from app.models import Offer, Tracking
@@ -59,6 +61,9 @@ VALID_STATUSES = [
 # CV storage paths
 CV_DIR = DATA_DIR / "cv"
 CV_TEXT_PATH = CV_DIR / "cv_text.txt"
+
+# Document storage path
+DOCS_DIR = DATA_DIR / "documents"
 
 
 @bp.route('/')
@@ -203,7 +208,10 @@ def offer_detail(offer_id):
         offer = db.query(Offer).filter(Offer.id == offer_id).first()
         if not offer:
             return "Offer not found", 404
+        DOCS_DIR.mkdir(parents=True, exist_ok=True)
+        doc_files = sorted(f.name for f in DOCS_DIR.iterdir() if f.is_file())
         return render_template('offer_detail.html', offer=offer,
+                               doc_files=doc_files,
                                role=get_current_role(),
                                username=session.get("username"))
     finally:
@@ -410,3 +418,172 @@ def cv_rematch():
         return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ── Document management ───────────────────────────────────────────────────────
+
+@bp.route('/documents')
+@login_required
+def documents():
+    """Document library: list uploaded files (CV, cover letters, etc.)."""
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(f.name for f in DOCS_DIR.iterdir() if f.is_file())
+    return render_template('documents.html', files=files,
+                           role=get_current_role(),
+                           username=session.get("username"))
+
+
+@bp.route('/api/documents/upload', methods=['POST'])
+@admin_required
+def document_upload():
+    """Upload a document file (PDF, TXT, DOCX)."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+    filename = secure_filename(file.filename)
+    if not filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    file.save(str(DOCS_DIR / filename))
+    return jsonify({'ok': True, 'filename': filename})
+
+
+@bp.route('/api/documents/<filename>', methods=['GET'])
+@login_required
+def document_download(filename):
+    """Download an uploaded document."""
+    filepath = DOCS_DIR / secure_filename(filename)
+    if not filepath.exists():
+        return "Fichier introuvable", 404
+    return send_file(str(filepath), as_attachment=True,
+                     download_name=filepath.name)
+
+
+@bp.route('/api/documents/<filename>', methods=['DELETE'])
+@admin_required
+def document_delete(filename):
+    """Delete an uploaded document."""
+    filepath = DOCS_DIR / secure_filename(filename)
+    if not filepath.exists():
+        return jsonify({'error': 'Fichier introuvable'}), 404
+    filepath.unlink()
+    return jsonify({'ok': True})
+
+
+# ── Cover letter generation ───────────────────────────────────────────────────
+
+@bp.route('/api/cover-letter/<int:offer_id>', methods=['POST'])
+@admin_required
+def generate_cover_letter(offer_id):
+    """
+    Generate a tailored cover letter for an offer using Claude.
+    Body JSON: { template_filename: str|"", format: "txt"|"docx" }
+    Returns JSON { ok, text, filename } for txt, or binary for docx.
+    """
+    from config import APIKeys
+
+    db = SessionLocal()
+    try:
+        offer = db.query(Offer).filter(Offer.id == offer_id).first()
+        if not offer:
+            return jsonify({'error': 'Offre introuvable'}), 404
+
+        data = request.get_json() or {}
+        template_filename = data.get('template_filename', '').strip()
+        output_format = data.get('format', 'txt')
+        if output_format not in ('txt', 'docx'):
+            output_format = 'txt'
+
+        # Read cover letter template (if provided)
+        template_text = ""
+        if template_filename:
+            tpl_path = DOCS_DIR / secure_filename(template_filename)
+            if tpl_path.exists():
+                ext = tpl_path.suffix.lower()
+                if ext == '.pdf':
+                    try:
+                        import PyPDF2
+                        reader = PyPDF2.PdfReader(str(tpl_path))
+                        template_text = "\n".join(
+                            p.extract_text() or "" for p in reader.pages
+                        )
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        template_text = tpl_path.read_text(encoding='utf-8')
+                    except UnicodeDecodeError:
+                        template_text = tpl_path.read_text(
+                            encoding='latin-1', errors='replace'
+                        )
+
+        # Build prompt
+        if template_text.strip():
+            intro = (
+                "Adapte cette lettre de motivation existante à la nouvelle offre :\n\n"
+                "---\n" + template_text.strip() + "\n---\n\n"
+            )
+        else:
+            intro = "Rédige une lettre de motivation professionnelle.\n\n"
+
+        prompt = (
+            intro
+            + "Offre ciblée :\n"
+            + f"- Poste : {offer.title}\n"
+            + f"- Entreprise : {offer.company}\n"
+            + f"- Description : {(offer.description or '')[:2000]}\n\n"
+            + "Instructions :\n"
+            + "- Personnalise l'introduction en mentionnant l'entreprise et le poste\n"
+            + "- Mets en avant les compétences les plus pertinentes pour ce rôle\n"
+            + "- Ton professionnel et enthousiaste, 3 à 4 paragraphes\n"
+            + "- Réponds UNIQUEMENT avec la lettre, sans titre ni commentaires"
+        )
+
+        if not APIKeys.ANTHROPIC_API_KEY:
+            return jsonify({'error': 'ANTHROPIC_API_KEY non configurée dans .env'}), 503
+
+        from anthropic import Anthropic
+        client = Anthropic(api_key=APIKeys.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model=APIKeys.ANTHROPIC_MODEL,
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        letter_text = message.content[0].text
+
+        # Sanitize company name for filename
+        company_safe = "".join(
+            c if c.isalnum() or c in " _-" else "_"
+            for c in offer.company
+        ).strip().replace(" ", "_")
+
+        # Return binary .docx if python-docx is available
+        if output_format == 'docx':
+            try:
+                from docx import Document as DocxDocument
+                doc = DocxDocument()
+                for para in letter_text.split('\n\n'):
+                    if para.strip():
+                        doc.add_paragraph(para.strip())
+                buf = io.BytesIO()
+                doc.save(buf)
+                buf.seek(0)
+                dl_name = f"lettre_{company_safe}.docx"
+                mime = (
+                    "application/vnd.openxmlformats-officedocument"
+                    ".wordprocessingml.document"
+                )
+                return send_file(buf, as_attachment=True,
+                                 download_name=dl_name, mimetype=mime)
+            except ImportError:
+                pass  # fall through to txt
+
+        filename = f"lettre_{company_safe}.txt"
+        return jsonify({'ok': True, 'text': letter_text, 'filename': filename})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
