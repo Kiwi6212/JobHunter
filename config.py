@@ -23,6 +23,18 @@ class Config:
     DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     ENV = os.getenv("FLASK_ENV", "production")
 
+    # Auth — two roles: admin (full access) and viewer (read-only)
+    USERS = {
+        os.getenv("ADMIN_USERNAME", "mathias"): {
+            "password": os.getenv("ADMIN_PASSWORD", "change_me_admin"),
+            "role": "admin",
+        },
+        os.getenv("VIEWER_USERNAME", "invite"): {
+            "password": os.getenv("VIEWER_PASSWORD", "change_me_viewer"),
+            "role": "viewer",
+        },
+    }
+
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "jobhunter.db"))
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH}"

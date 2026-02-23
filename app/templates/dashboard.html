@@ -75,7 +75,10 @@
         </label>
     </div>
     <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
+    {% if role == 'admin' %}
     <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
+    {% endif %}
+    {% if role == 'admin' %}
     <div class="cv-actions">
         <button class="btn btn-secondary btn-small" id="btn-import-cv" data-i18n="btn_import_cv">Importer CV</button>
         <input type="file" id="cv-file-input" accept=".pdf,.txt" style="display:none">
@@ -86,6 +89,7 @@
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
     </div>
+    {% endif %}
 </div>
 
 <div class="table-container">
@@ -131,7 +135,8 @@
                 <td class="col-score">{{ '%.0f' % (offer.relevance_score or 0) }}</td>
                 <td>
                     <select class="status-select status-color-{{ (offer.tracking.status if offer.tracking else 'New').lower().replace(' ', '-') }}"
-                            data-field="status">
+                            data-field="status"
+                            {{ 'disabled class="viewer-disabled"' if role == 'viewer' }}>
                         {% for s in statuses %}
                         <option value="{{ s }}" {{ 'selected' if (offer.tracking and offer.tracking.status == s) or (not offer.tracking and s == 'New') }}>{{ s }}</option>
                         {% endfor %}
@@ -139,18 +144,21 @@
                 </td>
                 <td class="col-checkbox">
                     <input type="checkbox" class="tracking-checkbox" data-field="cv_sent"
-                           {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}>
+                           {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}
+                           {{ 'disabled' if role == 'viewer' }}>
                     <span class="date-label">{{ offer.tracking.date_sent.strftime('%m/%d') if offer.tracking and offer.tracking.date_sent else '' }}</span>
                 </td>
                 <td class="col-checkbox">
                     <input type="checkbox" class="tracking-checkbox" data-field="follow_up_done"
-                           {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}>
+                           {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}
+                           {{ 'disabled' if role == 'viewer' }}>
                     <span class="date-label">{{ offer.tracking.follow_up_date.strftime('%m/%d') if offer.tracking and offer.tracking.follow_up_date else '' }}</span>
                 </td>
                 <td class="col-notes">
                     <input type="text" class="notes-input" data-field="notes"
                            value="{{ offer.tracking.notes or '' if offer.tracking else '' }}"
-                           placeholder="...">
+                           placeholder="..."
+                           {{ 'disabled' if role == 'viewer' }}>
                 </td>
                 {% if has_cv %}
                 <td class="col-cv-score">
@@ -165,8 +173,12 @@
                 </td>
                 {% endif %}
                 <td>
+                    {% if role == 'admin' %}
                     <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
+                    {% else %}
+                    <span class="btn btn-small btn-view-locked" title="Accès réservé à l'admin">Voir</span>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

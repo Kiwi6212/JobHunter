@@ -8,17 +8,48 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
 from app.models import Offer, Tracking
+from app.auth import login_required, admin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
+
+
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page. Redirects to dashboard if already authenticated."""
+    if session.get("username"):
+        return redirect(url_for("main.dashboard"))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        role = check_credentials(username, password)
+        if role:
+            session["username"] = username
+            session["role"] = role
+            next_url = request.args.get("next") or url_for("main.dashboard")
+            return redirect(next_url)
+        error = "Identifiant ou mot de passe incorrect."
+
+    return render_template("login.html", error=error)
+
+
+@bp.route('/logout')
+def logout():
+    """Clear session and redirect to login."""
+    session.clear()
+    return redirect(url_for("main.login"))
 
 VALID_STATUSES = [
     'New', 'Applied', 'Followed up', 'Interview',
@@ -32,6 +63,7 @@ CV_TEXT_PATH = CV_DIR / "cv_text.txt"
 
 @bp.route('/')
 @bp.route('/dashboard')
+@login_required
 def dashboard():
     """
     Main dashboard view.
@@ -76,12 +108,15 @@ def dashboard():
             statuses=VALID_STATUSES,
             target_ids=target_ids,
             has_cv=has_cv,
+            role=get_current_role(),
+            username=session.get("username"),
         )
     finally:
         db.close()
 
 
 @bp.route('/api/tracking/<int:offer_id>', methods=['PUT'])
+@admin_required
 def update_tracking(offer_id):
     """
     AJAX endpoint to update tracking data for an offer.
@@ -160,19 +195,23 @@ def update_tracking(offer_id):
 
 
 @bp.route('/offer/<int:offer_id>')
+@admin_required
 def offer_detail(offer_id):
-    """Detailed view of a single job offer."""
+    """Detailed view of a single job offer. Admin only."""
     db = SessionLocal()
     try:
         offer = db.query(Offer).filter(Offer.id == offer_id).first()
         if not offer:
             return "Offer not found", 404
-        return render_template('offer_detail.html', offer=offer)
+        return render_template('offer_detail.html', offer=offer,
+                               role=get_current_role(),
+                               username=session.get("username"))
     finally:
         db.close()
 
 
 @bp.route('/stats')
+@login_required
 def stats():
     """Statistics page with detailed metrics."""
     db = SessionLocal()
@@ -248,6 +287,8 @@ def stats():
             stats=stats_data,
             chart_data=chart_data,
             has_cv=has_cv,
+            role=get_current_role(),
+            username=session.get("username"),
         )
     finally:
         db.close()
@@ -295,6 +336,7 @@ def _run_cv_matching(method='tfidf'):
 
 
 @bp.route('/api/cv/upload', methods=['POST'])
+@admin_required
 def cv_upload():
     """
     Accept a PDF or plain-text CV file, extract text, save to disk,
@@ -350,6 +392,7 @@ def cv_upload():
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
+@admin_required
 def cv_rematch():
     """
     Re-run CV matching using the already-stored CV text.

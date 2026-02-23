@@ -136,6 +136,73 @@ body {
     border-color: var(--primary-color);
 }
 
+/* ── Auth UI ─────────────────────────────────────────────── */
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.nav-user-badge {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 20px;
+    border: 1px solid transparent;
+}
+
+.nav-user-badge--admin {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+
+.nav-user-badge--viewer {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+
+.nav-user-role {
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.btn-logout {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.3rem 0.65rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-logout:hover {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+}
+
+/* Disabled controls for viewer role */
+.viewer-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.btn-view-locked {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+    background: var(--border-color) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
 /* Dashboard Header */
 .dashboard-header {
     margin-bottom: 2rem;
