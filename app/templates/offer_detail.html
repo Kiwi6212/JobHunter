@@ -33,6 +33,17 @@
                     <th>Relevance Score:</th>
                     <td>{{ offer.relevance_score }}</td>
                 </tr>
+                {% if offer.cv_match_score is not none %}
+                <tr>
+                    <th>Match CV :</th>
+                    <td>
+                        {% set score = offer.cv_match_score %}
+                        <span class="cv-match-badge {% if score >= 70 %}cv-match-high{% elif score >= 40 %}cv-match-mid{% else %}cv-match-low{% endif %}">
+                            {{ '%.0f' % score }}%
+                        </span>
+                    </td>
+                </tr>
+                {% endif %}
             </table>
         </div>
 
