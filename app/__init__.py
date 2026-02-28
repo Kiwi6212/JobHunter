@@ -5,7 +5,11 @@ Initializes the Flask app with configuration and registers blueprints.
 
 from flask import Flask
 from flask_cors import CORS
+from flask_bcrypt import Bcrypt
 from config import Config
+
+# Module-level bcrypt instance (initialized with app in create_app)
+bcrypt = Bcrypt()
 
 
 def create_app(config_class=Config):
@@ -24,6 +28,9 @@ def create_app(config_class=Config):
 
     # Enable CORS
     CORS(app)
+
+    # Initialize extensions
+    bcrypt.init_app(app)
 
     # Import and register routes
     from app import routes

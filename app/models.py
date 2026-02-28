@@ -5,7 +5,7 @@ Defines the structure for offers and tracking tables.
 
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey
+    Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -45,8 +45,13 @@ class Offer(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationship
+    # Domain (for multi-user filtering)
+    domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
+    domain = relationship("Domain", back_populates="offers")
+
+    # Relationships
     tracking = relationship("Tracking", back_populates="offer", uselist=False, cascade="all, delete-orphan")
+    user_offers = relationship("UserOffer", back_populates="offer", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Offer(id={self.id}, title='{self.title}', company='{self.company}')>"
@@ -90,3 +95,69 @@ class Tracking(Base):
 
     def __repr__(self):
         return f"<Tracking(id={self.id}, offer_id={self.offer_id}, status='{self.status}')>"
+
+
+class Domain(Base):
+    """Job search domain / specialty (e.g. Sysadmin, Développement)."""
+
+    __tablename__ = "domains"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    description = Column(String(255), nullable=True)
+
+    users = relationship("User", back_populates="domain")
+    offers = relationship("Offer", back_populates="domain")
+
+    def __repr__(self):
+        return f"<Domain(id={self.id}, name='{self.name}')>"
+
+
+class User(Base):
+    """Application user with DB-backed credentials and optional domain scope."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(100), nullable=False, unique=True)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="user")  # admin, user, viewer
+    domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    domain = relationship("Domain", back_populates="users")
+    user_offers = relationship("UserOffer", back_populates="user", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
+
+
+class UserOffer(Base):
+    """Per-user tracking of a job offer (replaces Tracking for DB users)."""
+
+    __tablename__ = "user_offers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    offer_id = Column(Integer, ForeignKey("offers.id", ondelete="CASCADE"), nullable=False)
+
+    # Same tracking fields as Tracking
+    status = Column(String(50), nullable=False, default="New")
+    cv_sent = Column(Boolean, nullable=False, default=False)
+    follow_up_done = Column(Boolean, nullable=False, default=False)
+    date_sent = Column(DateTime, nullable=True)
+    follow_up_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="user_offers")
+    offer = relationship("Offer", back_populates="user_offers")
+
+    __table_args__ = (UniqueConstraint("user_id", "offer_id"),)
+
+    def __repr__(self):
+        return f"<UserOffer(user_id={self.user_id}, offer_id={self.offer_id}, status='{self.status}')>"

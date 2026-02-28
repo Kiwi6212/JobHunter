@@ -67,10 +67,31 @@ def admin_required(f):
 
 def check_credentials(username, password):
     """
-    Validate username/password against config.
-    Returns the role string ('admin' or 'viewer') or None if invalid.
+    Validate username/password.
+    Checks DB users first (bcrypt), then falls back to Config.USERS (plaintext).
+
+    Returns:
+        (role, user_id, domain_id) on success, or (None, None, None) on failure.
+        user_id is None for config (legacy) users.
     """
-    user = Config.USERS.get(username)
-    if user and user["password"] == password:
-        return user["role"]
-    return None
+    # --- DB users (bcrypt) ---
+    try:
+        from app.database import SessionLocal
+        from app.models import User
+        from app import bcrypt
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.username == username).first()
+            if user and bcrypt.check_password_hash(user.password_hash, password):
+                return user.role, user.id, user.domain_id
+        finally:
+            db.close()
+    except Exception:
+        pass  # DB not ready yet — fall through to config
+
+    # --- Config (legacy) users ---
+    cfg_user = Config.USERS.get(username)
+    if cfg_user and cfg_user["password"] == password:
+        return cfg_user["role"], None, None
+
+    return None, None, None

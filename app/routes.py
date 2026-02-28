@@ -15,7 +15,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
-from app.models import Offer, Tracking
+from app.models import Offer, Tracking, Domain, User, UserOffer
 from app.auth import login_required, admin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
@@ -36,10 +36,12 @@ def login():
     if request.method == 'POST':
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        role = check_credentials(username, password)
+        role, user_id, domain_id = check_credentials(username, password)
         if role:
             session["username"] = username
             session["role"] = role
+            session["user_id"] = user_id      # None for config (legacy) users
+            session["domain_id"] = domain_id  # None for admin / config users
             next_url = request.args.get("next") or url_for("main.dashboard")
             return redirect(next_url)
         error = "Identifiant ou mot de passe incorrect."
@@ -52,6 +54,55 @@ def logout():
     """Clear session and redirect to login."""
     session.clear()
     return redirect(url_for("main.login"))
+
+
+@bp.route('/register', methods=['GET', 'POST'])
+def register():
+    """Self-registration: create a new user account linked to a domain."""
+    if session.get("username"):
+        return redirect(url_for("main.dashboard"))
+
+    db = SessionLocal()
+    try:
+        domains = db.query(Domain).order_by(Domain.name).all()
+        errors = []
+
+        if request.method == 'POST':
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            confirm = request.form.get("confirm_password", "")
+            domain_id_raw = request.form.get("domain_id", "").strip()
+
+            if not username:
+                errors.append("Nom d'utilisateur requis.")
+            if not password:
+                errors.append("Mot de passe requis.")
+            if password and password != confirm:
+                errors.append("Les mots de passe ne correspondent pas.")
+            if not domain_id_raw:
+                errors.append("Veuillez choisir un domaine.")
+
+            if not errors:
+                existing = db.query(User).filter(User.username == username).first()
+                if existing:
+                    errors.append("Ce nom d'utilisateur est déjà pris.")
+                else:
+                    from app import bcrypt
+                    pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+                    new_user = User(
+                        username=username,
+                        password_hash=pw_hash,
+                        role="user",
+                        domain_id=int(domain_id_raw),
+                    )
+                    db.add(new_user)
+                    db.commit()
+                    return redirect(url_for("main.login"))
+
+        return render_template("register.html", domains=domains, errors=errors)
+    finally:
+        db.close()
+
 
 VALID_STATUSES = [
     'New', 'Applied', 'Followed up', 'Interview',
@@ -75,13 +126,39 @@ def dashboard():
     Displays all job offers with their tracking status in an interactive table.
     """
     db = SessionLocal()
+    user_id = session.get("user_id")
+    domain_id = session.get("domain_id")
     try:
-        offers = db.query(Offer).options(joinedload(Offer.tracking)).all()
+        # Filter offers by domain if the user has one
+        query = db.query(Offer)
+        if domain_id:
+            query = query.filter(Offer.domain_id == domain_id)
+
+        # Build user_offers_map: offer_id -> tracking object
+        if user_id is None:
+            # Config/legacy user (admin): load via Offer.tracking relationship
+            offers = query.options(joinedload(Offer.tracking)).all()
+            user_offers_map = {o.id: o.tracking for o in offers if o.tracking}
+        else:
+            # DB user: load UserOffer rows for this user
+            offers = query.all()
+            offer_ids = [o.id for o in offers]
+            if offer_ids:
+                user_offer_rows = db.query(UserOffer).filter(
+                    UserOffer.user_id == user_id,
+                    UserOffer.offer_id.in_(offer_ids),
+                ).all()
+            else:
+                user_offer_rows = []
+            user_offers_map = {uo.offer_id: uo for uo in user_offer_rows}
 
         total_offers = len(offers)
-        cv_sent_count = db.query(Tracking).filter(Tracking.cv_sent == True).count()
-        follow_up_count = db.query(Tracking).filter(Tracking.follow_up_done == True).count()
-        interview_count = db.query(Tracking).filter(Tracking.status == 'Interview').count()
+
+        # Stats — same fields regardless of tracking backend
+        uo_values = list(user_offers_map.values())
+        cv_sent_count = sum(1 for uo in uo_values if uo.cv_sent)
+        follow_up_count = sum(1 for uo in uo_values if uo.follow_up_done)
+        interview_count = sum(1 for uo in uo_values if uo.status == 'Interview')
 
         stats = {
             'total_offers': total_offers,
@@ -109,6 +186,7 @@ def dashboard():
         return render_template(
             'dashboard.html',
             offers=offers,
+            user_offers_map=user_offers_map,
             stats=stats,
             sources=sources,
             statuses=VALID_STATUSES,
@@ -123,27 +201,43 @@ def dashboard():
 
 
 @bp.route('/api/tracking/<int:offer_id>', methods=['PUT'])
-@admin_required
+@login_required
 def update_tracking(offer_id):
     """
     AJAX endpoint to update tracking data for an offer.
     Accepts JSON with any combination of: status, cv_sent, follow_up_done,
     date_sent, follow_up_date, notes.
+    DB users use UserOffer; config/legacy admin uses Tracking.
     """
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
     t_start = time.perf_counter()
     db = SessionLocal()
+    user_id = session.get("user_id")
     try:
         t_q0 = time.perf_counter()
-        tracking = db.query(Tracking).filter(Tracking.offer_id == offer_id).first()
+        if user_id is not None:
+            tracking = db.query(UserOffer).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.offer_id == offer_id,
+            ).first()
+            if not tracking:
+                offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+                if not offer_exists:
+                    return jsonify({'error': 'Offer not found'}), 404
+                tracking = UserOffer(user_id=user_id, offer_id=offer_id, status='New')
+                db.add(tracking)
+        else:
+            tracking = db.query(Tracking).filter(Tracking.offer_id == offer_id).first()
+            if not tracking:
+                offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+                if not offer_exists:
+                    return jsonify({'error': 'Offer not found'}), 404
+                tracking = Tracking(offer_id=offer_id, status='New')
+                db.add(tracking)
         t_q1 = time.perf_counter()
         print(f"[DIAG] query tracking: {(t_q1 - t_q0) * 1000:.1f}ms")
-
-        if not tracking:
-            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
-            if not offer_exists:
-                return jsonify({'error': 'Offer not found'}), 404
-            tracking = Tracking(offer_id=offer_id, status='New')
-            db.add(tracking)
 
         data = request.get_json()
 
@@ -202,17 +296,31 @@ def update_tracking(offer_id):
 
 
 @bp.route('/offer/<int:offer_id>')
-@admin_required
+@login_required
 def offer_detail(offer_id):
-    """Detailed view of a single job offer. Admin only."""
+    """Detailed view of a single job offer."""
     db = SessionLocal()
+    user_id = session.get("user_id")
     try:
-        offer = db.query(Offer).filter(Offer.id == offer_id).first()
+        offer = db.query(Offer).options(joinedload(Offer.tracking)).filter(
+            Offer.id == offer_id
+        ).first()
         if not offer:
             return "Offer not found", 404
+
+        # Resolve per-user tracking object
+        if user_id is not None:
+            user_offer = db.query(UserOffer).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.offer_id == offer_id,
+            ).first()
+        else:
+            user_offer = offer.tracking  # config admin uses Tracking
+
         DOCS_DIR.mkdir(parents=True, exist_ok=True)
         doc_files = sorted(f.name for f in DOCS_DIR.iterdir() if f.is_file())
         return render_template('offer_detail.html', offer=offer,
+                               user_offer=user_offer,
                                doc_files=doc_files,
                                role=get_current_role(),
                                username=session.get("username"))
@@ -225,15 +333,32 @@ def offer_detail(offer_id):
 def stats():
     """Statistics page with detailed metrics."""
     db = SessionLocal()
+    user_id = session.get("user_id")
+    domain_id = session.get("domain_id")
     try:
-        total_offers = db.query(Offer).count()
-        tracked_offers = db.query(Tracking).count()
-        cv_sent = db.query(Tracking).filter(Tracking.cv_sent == True).count()
-        follow_ups = db.query(Tracking).filter(Tracking.follow_up_done == True).count()
+        offer_query = db.query(Offer)
+        if domain_id:
+            offer_query = offer_query.filter(Offer.domain_id == domain_id)
+        total_offers = offer_query.count()
+
+        def _uo():
+            """Base query for the current user's tracking rows."""
+            if user_id is not None:
+                return db.query(UserOffer).filter(UserOffer.user_id == user_id)
+            return db.query(Tracking)
+
+        tracked_offers = _uo().count()
+        cv_sent = _uo().filter(
+            (UserOffer.cv_sent if user_id is not None else Tracking.cv_sent) == True
+        ).count()
+        follow_ups = _uo().filter(
+            (UserOffer.follow_up_done if user_id is not None else Tracking.follow_up_done) == True
+        ).count()
 
         status_counts = {}
+        status_col = UserOffer.status if user_id is not None else Tracking.status
         for status in VALID_STATUSES:
-            count = db.query(Tracking).filter(Tracking.status == status).count()
+            count = _uo().filter(status_col == status).count()
             status_counts[status] = count
 
         stats_data = {
@@ -245,18 +370,18 @@ def stats():
         }
 
         # ── Chart data ────────────────────────────────────────────────
-        # Offers per source
+        # Offers per source (scoped by domain)
         source_rows = (
-            db.query(Offer.source, func.count(Offer.id))
+            offer_query.with_entities(Offer.source, func.count(Offer.id))
             .group_by(Offer.source)
             .order_by(func.count(Offer.id).desc())
             .all()
         )
         source_counts = {s: c for s, c in source_rows if s}
 
-        # Top 10 companies by offer count
+        # Top 10 companies by offer count (scoped by domain)
         company_rows = (
-            db.query(Offer.company, func.count(Offer.id))
+            offer_query.with_entities(Offer.company, func.count(Offer.id))
             .group_by(Offer.company)
             .order_by(func.count(Offer.id).desc())
             .limit(10)
@@ -265,7 +390,7 @@ def stats():
         top_companies = {c: n for c, n in company_rows if c}
 
         # Score distribution in 10 equal buckets (0–10, 10–20, …, 90–100)
-        score_rows = db.query(Offer.relevance_score).all()
+        score_rows = offer_query.with_entities(Offer.relevance_score).all()
         score_buckets = [0] * 10
         for (score,) in score_rows:
             s = float(score or 0)
@@ -276,7 +401,7 @@ def stats():
         has_cv = CV_TEXT_PATH.exists()
         cv_score_buckets = [0] * 10
         if has_cv:
-            cv_rows = db.query(Offer.cv_match_score).filter(
+            cv_rows = offer_query.with_entities(Offer.cv_match_score).filter(
                 Offer.cv_match_score.isnot(None)
             ).all()
             for (score,) in cv_rows:

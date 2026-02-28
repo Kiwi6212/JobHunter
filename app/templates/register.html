@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion — JobHunter</title>
+    <title>Inscription — JobHunter</title>
     <script>
         (function () {
             var t = localStorage.getItem("jh-theme") || "light";
@@ -25,7 +25,7 @@
             border-radius: 12px;
             padding: 2.5rem 2rem;
             width: 100%;
-            max-width: 380px;
+            max-width: 420px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.08);
         }
         .login-logo {
@@ -51,7 +51,8 @@
             color: var(--text-primary);
             font-size: 0.9rem;
         }
-        .login-field input {
+        .login-field input,
+        .login-field select {
             width: 100%;
             padding: 0.65rem 0.85rem;
             border: 1px solid var(--border-color);
@@ -62,7 +63,8 @@
             transition: border-color 0.2s;
             box-sizing: border-box;
         }
-        .login-field input:focus {
+        .login-field input:focus,
+        .login-field select:focus {
             outline: none;
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
@@ -75,6 +77,10 @@
             padding: 0.65rem 0.85rem;
             font-size: 0.9rem;
             margin-bottom: 1.25rem;
+        }
+        .login-error ul {
+            margin: 0;
+            padding-left: 1.2rem;
         }
         .login-submit {
             width: 100%;
@@ -91,6 +97,19 @@
         .login-submit:hover {
             background: #1d4ed8;
         }
+        .login-footer {
+            text-align: center;
+            margin-top: 1.25rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+        .login-footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -98,29 +117,51 @@
     <div class="login-card">
         <div class="login-logo">
             <h1>JobHunter</h1>
-            <p>Connexion requise</p>
+            <p>Créer un compte</p>
         </div>
 
-        {% if error %}
-        <div class="login-error">{{ error }}</div>
+        {% if errors %}
+        <div class="login-error">
+            <ul>
+                {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+            </ul>
+        </div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('main.login', next=request.args.get('next', '')) }}">
+        <form method="POST" action="{{ url_for('main.register') }}">
             <div class="login-field">
                 <label for="username">Identifiant</label>
                 <input type="text" id="username" name="username"
+                       value="{{ request.form.get('username', '') }}"
                        autocomplete="username" autofocus required>
             </div>
             <div class="login-field">
                 <label for="password">Mot de passe</label>
                 <input type="password" id="password" name="password"
-                       autocomplete="current-password" required>
+                       autocomplete="new-password" required>
             </div>
-            <button type="submit" class="login-submit">Se connecter</button>
+            <div class="login-field">
+                <label for="confirm_password">Confirmer le mot de passe</label>
+                <input type="password" id="confirm_password" name="confirm_password"
+                       autocomplete="new-password" required>
+            </div>
+            <div class="login-field">
+                <label for="domain_id">Domaine de recherche</label>
+                <select id="domain_id" name="domain_id" required>
+                    <option value="">— Choisissez votre domaine —</option>
+                    {% for d in domains %}
+                    <option value="{{ d.id }}"
+                        {{ 'selected' if request.form.get('domain_id') == d.id|string }}>
+                        {{ d.name }}{% if d.description %} — {{ d.description }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="login-submit">Créer mon compte</button>
         </form>
-        <div style="text-align:center;margin-top:1.25rem;font-size:0.88rem;color:var(--text-secondary);">
-            Pas encore de compte ? <a href="{{ url_for('main.register') }}"
-                style="color:var(--primary-color);text-decoration:none;">S'inscrire</a>
+
+        <div class="login-footer">
+            Déjà inscrit ? <a href="{{ url_for('main.login') }}">Se connecter</a>
         </div>
     </div>
 </div>

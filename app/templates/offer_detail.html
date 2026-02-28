@@ -61,7 +61,7 @@
                 <tr>
                     <th>Statut :</th>
                     <td>
-                        {% set cur_status = offer.tracking.status if offer.tracking else 'New' %}
+                        {% set cur_status = user_offer.status if user_offer else 'New' %}
                         <select id="t-status"
                                 class="status-select status-color-{{ cur_status.lower().replace(' ', '-') }}"
                                 {{ 'disabled' if role == 'viewer' }}>
@@ -75,10 +75,10 @@
                     <th>CV envoyé :</th>
                     <td>
                         <input type="checkbox" id="t-cv-sent"
-                               {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}
+                               {{ 'checked' if user_offer and user_offer.cv_sent }}
                                {{ 'disabled' if role == 'viewer' }}>
-                        {% if offer.tracking and offer.tracking.date_sent %}
-                        <span class="date-label">{{ offer.tracking.date_sent.strftime('%d/%m/%Y') }}</span>
+                        {% if user_offer and user_offer.date_sent %}
+                        <span class="date-label">{{ user_offer.date_sent.strftime('%d/%m/%Y') }}</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -86,10 +86,10 @@
                     <th>Relance faite :</th>
                     <td>
                         <input type="checkbox" id="t-follow-up"
-                               {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}
+                               {{ 'checked' if user_offer and user_offer.follow_up_done }}
                                {{ 'disabled' if role == 'viewer' }}>
-                        {% if offer.tracking and offer.tracking.follow_up_date %}
-                        <span class="date-label">{{ offer.tracking.follow_up_date.strftime('%d/%m/%Y') }}</span>
+                        {% if user_offer and user_offer.follow_up_date %}
+                        <span class="date-label">{{ user_offer.follow_up_date.strftime('%d/%m/%Y') }}</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -98,11 +98,11 @@
                     <td>
                         <textarea id="t-notes" class="notes-textarea" rows="3"
                                   placeholder="Notes libres…"
-                                  {{ 'disabled' if role == 'viewer' }}>{{ offer.tracking.notes or '' if offer.tracking else '' }}</textarea>
+                                  {{ 'disabled' if role == 'viewer' }}>{{ user_offer.notes or '' if user_offer else '' }}</textarea>
                     </td>
                 </tr>
             </table>
-            {% if role == 'admin' %}
+            {% if role != 'viewer' %}
             <div class="tracking-actions">
                 <button type="button" id="btn-save-tracking" class="btn btn-primary">Sauvegarder</button>
                 <span id="tracking-save-msg" class="save-msg"></span>

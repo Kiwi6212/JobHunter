@@ -77,6 +77,14 @@ def _migrate_columns():
             ))
         print("[MIGRATE] Done.")
 
+    if "domain_id" not in existing:
+        print("[MIGRATE] Adding domain_id column to offers table...")
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE offers ADD COLUMN domain_id INTEGER REFERENCES domains(id)"
+            ))
+        print("[MIGRATE] Done.")
+
     # Fix company names that are actually descriptions (> 50 chars of prose)
     with engine.begin() as conn:
         result = conn.execute(text(

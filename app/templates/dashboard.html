@@ -113,12 +113,13 @@
         </thead>
         <tbody>
             {% for offer in offers %}
+            {% set uo = user_offers_map.get(offer.id) %}
             <tr class="offer-row"
                 data-offer-id="{{ offer.id }}"
                 data-title="{{ offer.title|lower }}"
                 data-company="{{ offer.company|lower }}"
                 data-source="{{ offer.source }}"
-                data-status="{{ offer.tracking.status if offer.tracking else 'New' }}"
+                data-status="{{ uo.status if uo else 'New' }}"
                 data-location="{{ (offer.location or '')|lower }}"
                 data-date="{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else '' }}"
                 data-score="{{ offer.relevance_score or 0 }}"
@@ -134,29 +135,29 @@
                 <td class="col-date">{{ offer.posted_date.strftime('%Y-%m-%d') if offer.posted_date else 'N/A' }}</td>
                 <td class="col-score">{{ '%.0f' % (offer.relevance_score or 0) }}</td>
                 <td>
-                    <select class="status-select status-color-{{ (offer.tracking.status if offer.tracking else 'New').lower().replace(' ', '-') }}"
+                    <select class="status-select status-color-{{ (uo.status if uo else 'New').lower().replace(' ', '-') }}"
                             data-field="status"
                             {{ 'disabled class="viewer-disabled"' if role == 'viewer' }}>
                         {% for s in statuses %}
-                        <option value="{{ s }}" {{ 'selected' if (offer.tracking and offer.tracking.status == s) or (not offer.tracking and s == 'New') }}>{{ s }}</option>
+                        <option value="{{ s }}" {{ 'selected' if (uo and uo.status == s) or (not uo and s == 'New') }}>{{ s }}</option>
                         {% endfor %}
                     </select>
                 </td>
                 <td class="col-checkbox">
                     <input type="checkbox" class="tracking-checkbox" data-field="cv_sent"
-                           {{ 'checked' if offer.tracking and offer.tracking.cv_sent }}
+                           {{ 'checked' if uo and uo.cv_sent }}
                            {{ 'disabled' if role == 'viewer' }}>
-                    <span class="date-label">{{ offer.tracking.date_sent.strftime('%m/%d') if offer.tracking and offer.tracking.date_sent else '' }}</span>
+                    <span class="date-label">{{ uo.date_sent.strftime('%m/%d') if uo and uo.date_sent else '' }}</span>
                 </td>
                 <td class="col-checkbox">
                     <input type="checkbox" class="tracking-checkbox" data-field="follow_up_done"
-                           {{ 'checked' if offer.tracking and offer.tracking.follow_up_done }}
+                           {{ 'checked' if uo and uo.follow_up_done }}
                            {{ 'disabled' if role == 'viewer' }}>
-                    <span class="date-label">{{ offer.tracking.follow_up_date.strftime('%m/%d') if offer.tracking and offer.tracking.follow_up_date else '' }}</span>
+                    <span class="date-label">{{ uo.follow_up_date.strftime('%m/%d') if uo and uo.follow_up_date else '' }}</span>
                 </td>
                 <td class="col-notes">
                     <input type="text" class="notes-input" data-field="notes"
-                           value="{{ offer.tracking.notes or '' if offer.tracking else '' }}"
+                           value="{{ uo.notes or '' if uo else '' }}"
                            placeholder="..."
                            {{ 'disabled' if role == 'viewer' }}>
                 </td>
@@ -173,11 +174,11 @@
                 </td>
                 {% endif %}
                 <td>
-                    {% if role == 'admin' %}
+                    {% if role != 'viewer' %}
                     <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
                     {% else %}
-                    <span class="btn btn-small btn-view-locked" title="Accès réservé à l'admin">Voir</span>
+                    <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>
                     {% endif %}
                 </td>
             </tr>
