@@ -464,6 +464,26 @@ body {
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
+/* NEW badge for recent offers (< 24 h) */
+.badge-new {
+    display: inline-block;
+    background-color: #16a34a;
+    color: #ffffff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.04em;
+    margin-left: 5px;
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .badge-new {
+    background-color: #15803d;
+    color: #f0fdf4;
+}
+
 /* Badges */
 .badge {
     display: inline-block;

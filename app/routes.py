@@ -5,7 +5,7 @@ Handles all web interface endpoints and API endpoints for AJAX updates.
 
 import io
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Blueprint, render_template, request, jsonify
@@ -67,6 +67,7 @@ def dashboard():
                     break
 
         has_cv = CV_TEXT_PATH.exists()
+        cutoff_new = datetime.utcnow() - timedelta(hours=24)
 
         return render_template(
             'dashboard.html',
@@ -76,6 +77,7 @@ def dashboard():
             statuses=VALID_STATUSES,
             target_ids=target_ids,
             has_cv=has_cv,
+            cutoff_new=cutoff_new,
         )
     finally:
         db.close()

@@ -26,6 +26,7 @@ from app.scrapers.lever import LeverScraper
 from app.scrapers.talentbrew import TalentBrewScraper
 from app.scrapers.phenom import PhenomScraper
 from app.scrapers.place_emploi_public import PlaceEmploiPublicScraper
+from app.scrapers.france_travail import FranceTravailScraper
 from app.services.filter_engine import FilterEngine
 from config import LOG_LEVEL
 
@@ -123,6 +124,7 @@ def main():
 
     # Initialize scrapers
     scrapers = [
+        FranceTravailScraper(),
         LaBonneAlternanceScraper(),
         WTTJScraper(),
         IndeedScraper(),
@@ -132,7 +134,6 @@ def main():
         TalentBrewScraper(),
         PhenomScraper(),
         PlaceEmploiPublicScraper(),
-        # FranceTravailScraper(),  # TODO: Add when API keys available
     ]
 
     # Collect from all sources

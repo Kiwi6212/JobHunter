@@ -122,7 +122,7 @@
                 data-offer-type="{{ offer.offer_type or 'job' }}"
                 data-target="{{ '1' if offer.id in target_ids else '0' }}">
                 <td class="col-title">
-                    <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>
+                    <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>{% if offer.found_date and offer.found_date >= cutoff_new %}<span class="badge-new">NEW</span>{% endif %}
                 </td>
                 <td class="col-company">{{ offer.company }}{% if offer.id in target_ids %}<span class="target-badge" title="Entreprise cible">⭐</span>{% endif %}</td>
                 <td class="col-location">{{ offer.location or 'N/A' }}</td>
