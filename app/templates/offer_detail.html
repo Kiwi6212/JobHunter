@@ -110,8 +110,8 @@
             {% endif %}
         </div>
 
-        <!-- ── Générer une lettre de motivation (admin only) ─────── -->
-        {% if role == 'admin' %}
+        <!-- ── Générer une lettre de motivation ─────────────────── -->
+        {% if role != 'viewer' %}
         <div class="offer-section">
             <h3>Générer une lettre de motivation</h3>
             <div class="cover-letter-form">

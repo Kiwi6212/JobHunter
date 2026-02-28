@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
 from app.models import Offer, Tracking, Domain, User, UserOffer
-from app.auth import login_required, admin_required, check_credentials, get_current_role
+from app.auth import login_required, admin_required, superadmin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
 
@@ -711,6 +711,48 @@ def generate_cover_letter(offer_id):
         return jsonify({'ok': True, 'text': letter_text, 'filename': filename})
 
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── Admin panel ───────────────────────────────────────────────────────────────
+
+@bp.route('/admin')
+@superadmin_required
+def admin_page():
+    """Admin panel: list all registered users with management actions."""
+    db = SessionLocal()
+    try:
+        users = db.query(User).order_by(User.created_at.desc()).all()
+        domains = {d.id: d.name for d in db.query(Domain).all()}
+        return render_template(
+            'admin.html',
+            users=users,
+            domains=domains,
+            role=get_current_role(),
+            username=session.get("username"),
+        )
+    finally:
+        db.close()
+
+
+@bp.route('/api/admin/users/<int:user_id>/toggle', methods=['POST'])
+@superadmin_required
+def admin_toggle_user(user_id):
+    """Enable or disable a user account."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        if user.username == session.get("username"):
+            return jsonify({'error': 'Impossible de désactiver votre propre compte'}), 400
+        user.is_active = not user.is_active
+        db.commit()
+        return jsonify({'ok': True, 'is_active': user.is_active})
+    except Exception as e:
+        db.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()

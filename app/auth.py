@@ -1,7 +1,7 @@
 """
-Simple session-based authentication for JobHunter.
-Two roles: admin (full access) and viewer (read-only).
-Credentials are loaded from .env via config.py.
+Session-based authentication for JobHunter.
+Roles: admin (full access + admin panel), user (write access, domain-scoped),
+       viewer (read-only).
 """
 
 from functools import wraps
@@ -48,8 +48,28 @@ def login_required(f):
 
 def admin_required(f):
     """
-    Decorator that blocks viewer-role users from write endpoints.
+    Decorator that blocks viewer-role (read-only) users from write endpoints.
+    Both 'admin' and 'user' roles are allowed through.
     Returns 403 JSON for AJAX, or redirects to dashboard for HTML.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("username"):
+            if request.is_json or request.headers.get("Accept") == "application/json":
+                return jsonify({"error": "Authentication required"}), 401
+            return redirect(url_for("main.login", next=request.path))
+        if session.get("role") == "viewer":
+            if request.is_json or request.headers.get("Accept") == "application/json":
+                return jsonify({"error": "Accès en lecture seule"}), 403
+            return redirect(url_for("main.dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def superadmin_required(f):
+    """
+    Decorator that requires the 'admin' role specifically.
+    Used for the admin panel and user management endpoints.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -83,6 +103,8 @@ def check_credentials(username, password):
         try:
             user = db.query(User).filter(User.username == username).first()
             if user and bcrypt.check_password_hash(user.password_hash, password):
+                if not user.is_active:
+                    return None, None, None  # Account disabled
                 return user.role, user.id, user.domain_id
         finally:
             db.close()

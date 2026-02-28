@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Administration — JobHunter{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Administration des comptes</h2>
+    <p style="color:var(--text-secondary);margin-top:0.25rem;">
+        {{ users|length }} compte{{ 's' if users|length != 1 else '' }} enregistré{{ 's' if users|length != 1 else '' }}
+    </p>
+</div>
+
+<div class="table-container" style="margin-top:1.5rem;">
+    <div class="table-scroll">
+    <table class="offers-table" id="admin-users-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Identifiant</th>
+                <th>Domaine</th>
+                <th>Rôle</th>
+                <th>Inscription</th>
+                <th>Statut</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr id="user-row-{{ u.id }}" class="{{ '' if u.is_active else 'row-disabled' }}">
+                <td style="color:var(--text-secondary);font-size:0.85em;">{{ u.id }}</td>
+                <td><strong>{{ u.username }}</strong></td>
+                <td>{{ domains.get(u.domain_id, '—') if u.domain_id else '<em style="color:var(--text-secondary)">Tous</em>' | safe }}</td>
+                <td>
+                    <span class="nav-user-badge nav-user-badge--{{ u.role }}" style="font-size:0.82em;padding:0.2rem 0.55rem;">
+                        {% if u.role == 'admin' %}admin
+                        {% elif u.role == 'viewer' %}lecture seule
+                        {% else %}utilisateur{% endif %}
+                    </span>
+                </td>
+                <td style="font-size:0.88em;color:var(--text-secondary);">
+                    {{ u.created_at.strftime('%d/%m/%Y %H:%M') }}
+                </td>
+                <td>
+                    <span id="status-badge-{{ u.id }}" class="badge-status {{ 'badge-active' if u.is_active else 'badge-inactive' }}">
+                        {{ 'Actif' if u.is_active else 'Désactivé' }}
+                    </span>
+                </td>
+                <td>
+                    {% if u.username != username %}
+                    <button class="btn btn-small {{ 'btn-danger' if u.is_active else 'btn-secondary' }}"
+                            id="btn-toggle-{{ u.id }}"
+                            onclick="toggleUser({{ u.id }}, this)">
+                        {{ 'Désactiver' if u.is_active else 'Réactiver' }}
+                    </button>
+                    {% else %}
+                    <span style="font-size:0.82em;color:var(--text-secondary);">(vous)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div id="admin-msg" style="margin-top:1rem;font-size:0.9rem;min-height:1.5em;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleUser(userId, btn) {
+    btn.disabled = true;
+    fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            btn.disabled = false;
+            if (!res.ok) {
+                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
+                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
+                return;
+            }
+            var isActive = res.is_active;
+            var row = document.getElementById("user-row-" + userId);
+            var badge = document.getElementById("status-badge-" + userId);
+
+            if (isActive) {
+                row.classList.remove("row-disabled");
+                badge.textContent = "Actif";
+                badge.className = "badge-status badge-active";
+                btn.textContent = "Désactiver";
+                btn.className = "btn btn-small btn-danger";
+            } else {
+                row.classList.add("row-disabled");
+                badge.textContent = "Désactivé";
+                badge.className = "badge-status badge-inactive";
+                btn.textContent = "Réactiver";
+                btn.className = "btn btn-small btn-secondary";
+            }
+
+            var msg = document.getElementById("admin-msg");
+            msg.textContent = isActive ? "Compte réactivé." : "Compte désactivé.";
+            msg.style.color = isActive ? "var(--success-color, #16a34a)" : "var(--text-secondary)";
+            setTimeout(function() { msg.textContent = ""; }, 3000);
+        })
+        .catch(function() {
+            btn.disabled = false;
+            document.getElementById("admin-msg").textContent = "Erreur réseau.";
+        });
+}
+</script>
+
+<style>
+.row-disabled td {
+    opacity: 0.45;
+}
+.badge-status {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.82em;
+    font-weight: 600;
+}
+.badge-active {
+    background: #dcfce7;
+    color: #15803d;
+}
+.badge-inactive {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+[data-theme="dark"] .badge-active {
+    background: #166534;
+    color: #bbf7d0;
+}
+[data-theme="dark"] .badge-inactive {
+    background: #374151;
+    color: #9ca3af;
+}
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+}
+.btn-danger:hover {
+    background: #b91c1c;
+}
+#admin-users-table th {
+    white-space: nowrap;
+}
+</style>
+{% endblock %}

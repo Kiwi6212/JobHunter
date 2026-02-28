@@ -85,6 +85,17 @@ def _migrate_columns():
             ))
         print("[MIGRATE] Done.")
 
+    # Migrate users table
+    if "users" in insp.get_table_names():
+        user_cols = [c["name"] for c in insp.get_columns("users")]
+        if "is_active" not in user_cols:
+            print("[MIGRATE] Adding is_active column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"
+                ))
+            print("[MIGRATE] Done.")
+
     # Fix company names that are actually descriptions (> 50 chars of prose)
     with engine.begin() as conn:
         result = conn.execute(text(
