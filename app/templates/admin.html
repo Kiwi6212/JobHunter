@@ -21,6 +21,7 @@
                 <th>Rôle</th>
                 <th>Inscription</th>
                 <th>Statut</th>
+                <th>Documents</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -44,6 +45,14 @@
                     <span id="status-badge-{{ u.id }}" class="badge-status {{ 'badge-active' if u.is_active else 'badge-inactive' }}">
                         {{ 'Actif' if u.is_active else 'Désactivé' }}
                     </span>
+                </td>
+                <td>
+                    {% set ndocs = doc_counts.get(u.id, 0) %}
+                    <a href="{{ url_for('main.admin_user_documents', user_id=u.id) }}"
+                       class="btn btn-small btn-secondary"
+                       title="Voir les documents de {{ u.username }}">
+                        {{ ndocs }} fichier{{ 's' if ndocs != 1 else '' }}
+                    </a>
                 </td>
                 <td>
                     {% if u.username != username %}

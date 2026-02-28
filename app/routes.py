@@ -113,6 +113,28 @@ VALID_STATUSES = [
 CV_DIR = DATA_DIR / "cv"
 CV_TEXT_PATH = CV_DIR / "cv_text.txt"
 
+# ── Document upload validation ────────────────────────────────────────────────
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# Exact MIME types accepted per extension (whitelist)
+_ALLOWED_MIMES: dict[str, set[str]] = {
+    '.pdf':  {'application/pdf', 'application/octet-stream'},
+    '.docx': {
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/zip',
+        'application/octet-stream',
+    },
+    '.txt':  {'text/plain', 'application/octet-stream'},
+}
+
+# Always-rejected MIME types (execution risk / active content)
+_BLOCKED_MIMES = {
+    'text/html', 'application/xhtml+xml',
+    'application/x-msdownload', 'application/x-executable',
+    'application/x-sh', 'application/x-bat',
+}
+
+
 def _user_docs_dir():
     """Return the document directory scoped to the current user session."""
     user_id = session.get("user_id")
@@ -568,15 +590,46 @@ def documents():
 @bp.route('/api/documents/upload', methods=['POST'])
 @admin_required
 def document_upload():
-    """Upload a document file (PDF, TXT, DOCX)."""
+    """Upload a document file (PDF, TXT, DOCX) with strict validation."""
     if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+        return jsonify({'error': 'Aucun fichier fourni'}), 400
     file = request.files['file']
     if not file.filename:
-        return jsonify({'error': 'Empty filename'}), 400
+        return jsonify({'error': 'Nom de fichier vide'}), 400
+
+    # 1. Sanitize filename
     filename = secure_filename(file.filename)
     if not filename:
-        return jsonify({'error': 'Invalid filename'}), 400
+        return jsonify({'error': 'Nom de fichier invalide après sanitisation'}), 400
+
+    # 2. Extension check — must have exactly one recognised extension
+    p = Path(filename)
+    ext = p.suffix.lower()
+    if not ext:
+        return jsonify({'error': 'Le fichier doit avoir une extension (.pdf, .docx, .txt)'}), 400
+    if ext not in _ALLOWED_MIMES:
+        return jsonify({'error': f'Extension refusée : {ext}. Acceptés : .pdf, .docx, .txt'}), 400
+
+    # 3. Double-extension check (e.g. malware.exe.pdf)
+    stem_ext = Path(p.stem).suffix.lower()
+    if stem_ext:
+        return jsonify({'error': 'Double extension refusée (ex: fichier.exe.pdf)'}), 400
+
+    # 4. MIME type validation
+    content_type = (file.content_type or '').split(';')[0].strip().lower()
+    if content_type in _BLOCKED_MIMES:
+        return jsonify({'error': f'Type MIME refusé : {content_type}'}), 400
+    if content_type and content_type not in _ALLOWED_MIMES[ext]:
+        return jsonify({'error': f'Type MIME {content_type!r} incompatible avec {ext}'}), 400
+
+    # 5. Size check (read into memory to measure; limit stream)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > MAX_UPLOAD_SIZE:
+        mb = size / (1024 * 1024)
+        return jsonify({'error': f'Fichier trop volumineux ({mb:.1f} Mo). Max : 5 Mo'}), 400
+
     docs_dir = _user_docs_dir()
     docs_dir.mkdir(parents=True, exist_ok=True)
     file.save(str(docs_dir / filename))
@@ -732,10 +785,16 @@ def admin_page():
     try:
         users = db.query(User).order_by(User.created_at.desc()).all()
         domains = {d.id: d.name for d in db.query(Domain).all()}
+        # Count documents per user
+        doc_counts: dict[int, int] = {}
+        for u in users:
+            d = _admin_user_docs_dir(u.id)
+            doc_counts[u.id] = sum(1 for f in d.iterdir() if f.is_file()) if d.exists() else 0
         return render_template(
             'admin.html',
             users=users,
             domains=domains,
+            doc_counts=doc_counts,
             role=get_current_role(),
             username=session.get("username"),
         )
@@ -762,3 +821,53 @@ def admin_toggle_user(user_id):
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+
+# ── Admin: per-user document management ───────────────────────────────────────
+
+def _admin_user_docs_dir(user_id: int) -> Path:
+    """Return the document directory for a given user (admin access)."""
+    return DATA_DIR / "documents" / str(user_id)
+
+
+@bp.route('/admin/documents/<int:user_id>')
+@superadmin_required
+def admin_user_documents(user_id):
+    """Admin view: list and manage documents belonging to a specific user."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return "Utilisateur introuvable", 404
+        docs_dir = _admin_user_docs_dir(user_id)
+        files = sorted(f.name for f in docs_dir.iterdir() if f.is_file()) if docs_dir.exists() else []
+        return render_template(
+            'admin_user_docs.html',
+            target_user=user,
+            files=files,
+            role=get_current_role(),
+            username=session.get("username"),
+        )
+    finally:
+        db.close()
+
+
+@bp.route('/api/admin/documents/<int:user_id>/<filename>', methods=['GET'])
+@superadmin_required
+def admin_document_download(user_id, filename):
+    """Admin download of a specific user's document."""
+    filepath = _admin_user_docs_dir(user_id) / secure_filename(filename)
+    if not filepath.exists():
+        return "Fichier introuvable", 404
+    return send_file(str(filepath), as_attachment=True, download_name=filepath.name)
+
+
+@bp.route('/api/admin/documents/<int:user_id>/<filename>', methods=['DELETE'])
+@superadmin_required
+def admin_document_delete(user_id, filename):
+    """Admin delete of a specific user's document."""
+    filepath = _admin_user_docs_dir(user_id) / secure_filename(filename)
+    if not filepath.exists():
+        return jsonify({'error': 'Fichier introuvable'}), 404
+    filepath.unlink()
+    return jsonify({'ok': True})

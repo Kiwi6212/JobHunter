@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Documents de {{ target_user.username }} — Admin{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Documents de <strong>{{ target_user.username }}</strong></h2>
+    <p style="color:var(--text-secondary);margin-top:0.25rem;">
+        {{ files|length }} fichier{{ 's' if files|length != 1 else '' }}
+        &nbsp;·&nbsp;
+        <span id="user-status-label" class="badge-status {{ 'badge-active' if target_user.is_active else 'badge-inactive' }}">
+            {{ 'Actif' if target_user.is_active else 'Désactivé' }}
+        </span>
+    </p>
+</div>
+
+<div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1.5rem;">
+    <a href="{{ url_for('main.admin_page') }}" class="btn btn-secondary btn-small">&larr; Retour à l'admin</a>
+    {% if target_user.username != username %}
+    <button id="btn-ban"
+            class="btn btn-small {{ 'btn-danger' if target_user.is_active else 'btn-secondary' }}"
+            onclick="toggleUser({{ target_user.id }}, this)">
+        {{ 'Désactiver le compte' if target_user.is_active else 'Réactiver le compte' }}
+    </button>
+    {% endif %}
+    <span id="ban-msg" style="font-size:0.9rem;min-height:1.2em;"></span>
+</div>
+
+{% if files %}
+<div class="table-container">
+    <div class="table-scroll">
+    <table class="offers-table" id="docs-table">
+        <thead>
+            <tr>
+                <th>Fichier</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in files %}
+            <tr id="doc-row-{{ loop.index }}">
+                <td>{{ f }}</td>
+                <td style="display:flex;gap:0.5rem;">
+                    <a href="{{ url_for('main.admin_document_download', user_id=target_user.id, filename=f) }}"
+                       class="btn btn-small btn-secondary">Télécharger</a>
+                    <button class="btn btn-small btn-danger"
+                            onclick="deleteDoc({{ target_user.id }}, '{{ f }}', this, 'doc-row-{{ loop.index }}')">
+                        Supprimer
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3>Aucun document</h3>
+    <p>Cet utilisateur n'a encore uploadé aucun fichier.</p>
+</div>
+{% endif %}
+
+<div id="docs-msg" style="margin-top:1rem;font-size:0.9rem;min-height:1.5em;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showMsg(text, ok) {
+    var el = document.getElementById("docs-msg");
+    el.textContent = text;
+    el.style.color = ok ? "var(--success-color, #16a34a)" : "var(--danger-color, #dc2626)";
+    setTimeout(function() { el.textContent = ""; }, 3000);
+}
+
+function deleteDoc(userId, filename, btn, rowId) {
+    if (!confirm("Supprimer le fichier « " + filename + " » ?")) return;
+    btn.disabled = true;
+    fetch("/api/admin/documents/" + userId + "/" + encodeURIComponent(filename), { method: "DELETE" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.ok) {
+                var row = document.getElementById(rowId);
+                if (row) row.remove();
+                showMsg("Fichier supprimé.", true);
+            } else {
+                btn.disabled = false;
+                showMsg("Erreur : " + (res.error || "inconnue"), false);
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            showMsg("Erreur réseau.", false);
+        });
+}
+
+function toggleUser(userId, btn) {
+    btn.disabled = true;
+    fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            btn.disabled = false;
+            if (!res.ok) {
+                showMsg("Erreur : " + (res.error || "inconnue"), false);
+                return;
+            }
+            var isActive = res.is_active;
+            var label = document.getElementById("user-status-label");
+            if (label) {
+                label.textContent = isActive ? "Actif" : "Désactivé";
+                label.className = "badge-status " + (isActive ? "badge-active" : "badge-inactive");
+            }
+            btn.textContent = isActive ? "Désactiver le compte" : "Réactiver le compte";
+            btn.className = "btn btn-small " + (isActive ? "btn-danger" : "btn-secondary");
+            var banMsg = document.getElementById("ban-msg");
+            banMsg.textContent = isActive ? "Compte réactivé." : "Compte désactivé.";
+            banMsg.style.color = isActive ? "var(--success-color, #16a34a)" : "var(--text-secondary)";
+            setTimeout(function() { banMsg.textContent = ""; }, 3000);
+        })
+        .catch(function() {
+            btn.disabled = false;
+            showMsg("Erreur réseau.", false);
+        });
+}
+</script>
+
+<style>
+.badge-status {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.82em;
+    font-weight: 600;
+}
+.badge-active  { background: #dcfce7; color: #15803d; }
+.badge-inactive { background: #f3f4f6; color: #6b7280; }
+[data-theme="dark"] .badge-active  { background: #166534; color: #bbf7d0; }
+[data-theme="dark"] .badge-inactive { background: #374151; color: #9ca3af; }
+.btn-danger { background: #dc2626; color: #fff; border: none; }
+.btn-danger:hover { background: #b91c1c; }
+</style>
+{% endblock %}
