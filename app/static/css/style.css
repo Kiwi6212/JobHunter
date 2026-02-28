@@ -308,6 +308,7 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow);
     overflow: hidden;
+    overflow-x: auto;
 }
 
 .table-scroll {
@@ -349,24 +350,15 @@ body {
 }
 
 .col-title {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 350px;
 }
 
 .col-company {
-    max-width: 130px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 200px;
 }
 
 .col-location {
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 180px;
 }
 
 .col-source {
