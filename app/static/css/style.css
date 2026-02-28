@@ -136,6 +136,73 @@ body {
     border-color: var(--primary-color);
 }
 
+/* ── Auth UI ─────────────────────────────────────────────── */
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.nav-user-badge {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 20px;
+    border: 1px solid transparent;
+}
+
+.nav-user-badge--admin {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+
+.nav-user-badge--viewer {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+
+.nav-user-role {
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.btn-logout {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.3rem 0.65rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-logout:hover {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+}
+
+/* Disabled controls for viewer role */
+.viewer-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.btn-view-locked {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+    background: var(--border-color) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
 /* Dashboard Header */
 .dashboard-header {
     margin-bottom: 2rem;
@@ -792,6 +859,124 @@ body {
 .stats-table td {
     padding: 1rem;
     border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+/* ── Save message feedback ───────────────────────────────── */
+.save-msg {
+    font-size: 0.85rem;
+    font-style: italic;
+    transition: color 0.2s;
+}
+.save-msg--ok  { color: var(--success-color);  }
+.save-msg--err { color: var(--danger-color); }
+
+/* ── Tracking form (offer detail) ───────────────────────── */
+.notes-textarea {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    transition: border-color 0.2s, background-color 0.3s;
+}
+.notes-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+.notes-textarea:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.tracking-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+}
+
+/* ── Cover letter section ────────────────────────────────── */
+.cover-letter-form  { display: flex; flex-direction: column; gap: 0.5rem; }
+.cover-letter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+}
+.form-select {
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.letter-output {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    background-color: var(--bg-color);
+}
+
+/* ── Documents page ──────────────────────────────────────── */
+.documents-page .page-header {
+    margin-bottom: 1.5rem;
+}
+.documents-page .page-header h2 {
+    font-size: 2rem;
+    margin-bottom: 0.3rem;
+}
+.card-section {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+}
+.card-section h3 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+.upload-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.file-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.documents-table th { width: auto; }
+.doc-name { font-weight: 500; word-break: break-all; }
+.doc-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.empty-docs { color: var(--text-secondary); font-style: italic; }
+.text-muted { color: var(--text-secondary); font-size: 0.9rem; }
+
+/* Badge types for document list */
+.badge-pdf  { background-color: #fee2e2; color: #991b1b; }
+.badge-docx { background-color: #dbeafe; color: #1e40af; }
+.badge-txt  { background-color: #f1f5f9; color: #475569; }
+
+/* Danger button */
+.btn-danger { background-color: var(--danger-color); color: white; }
+.btn-danger:hover { background-color: #dc2626; }
+
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .notes-textarea {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
     color: var(--text-primary);
 }
 

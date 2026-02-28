@@ -396,6 +396,7 @@
 
     currentPage = 0;
     renderPage();
+    saveState();
   }
 
   function renderPage() {
@@ -425,8 +426,8 @@
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
   if (showAllOffers)  showAllOffers.addEventListener("change",  applyFilters);
 
-  if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); });
-  if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); });
+  if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); saveState(); });
+  if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); saveState(); });
 
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
@@ -437,6 +438,10 @@
       if (filterSearch)  filterSearch.value  = "";
       if (showRecruiters) showRecruiters.checked = false;
       if (showAllOffers)  showAllOffers.checked  = false;
+      currentSort.col = null;
+      currentSort.asc = true;
+      sortHeaders.forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
+      try { sessionStorage.removeItem(STATE_KEY); } catch (e) {}
       applyFilters();
     });
   }
@@ -491,6 +496,52 @@
     }
 
     applyFilters();
+  }
+
+  // ── State persistence (sessionStorage) ─────────────────────────────
+
+  var STATE_KEY = "jh-dash-state";
+
+  function saveState() {
+    try {
+      sessionStorage.setItem(STATE_KEY, JSON.stringify({
+        status:         filterStatus   ? filterStatus.value    : "",
+        source:         filterSource   ? filterSource.value    : "",
+        company:        filterCompany  ? filterCompany.value   : "",
+        search:         filterSearch   ? filterSearch.value    : "",
+        showRecruiters: showRecruiters ? showRecruiters.checked : false,
+        showAll:        showAllOffers  ? showAllOffers.checked  : false,
+        sortCol:        currentSort.col,
+        sortAsc:        currentSort.asc,
+        page:           currentPage,
+      }));
+    } catch (e) {}
+  }
+
+  function restoreState(state) {
+    if (!state) return false;
+    if (filterStatus  && state.status   !== undefined) filterStatus.value    = state.status;
+    if (filterSource  && state.source   !== undefined) filterSource.value    = state.source;
+    if (filterCompany && state.company  !== undefined) filterCompany.value   = state.company;
+    if (filterSearch  && state.search   !== undefined) filterSearch.value    = state.search;
+    if (showRecruiters && state.showRecruiters !== undefined) showRecruiters.checked = state.showRecruiters;
+    if (showAllOffers  && state.showAll        !== undefined) showAllOffers.checked  = state.showAll;
+    if (state.sortCol) {
+      currentSort.col = state.sortCol;
+      currentSort.asc = state.sortAsc !== false;
+      sortHeaders.forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
+      var activeHdr = document.querySelector('.sortable[data-col="' + state.sortCol + '"]');
+      if (activeHdr) activeHdr.classList.add(currentSort.asc ? "sort-asc" : "sort-desc");
+      sortTable(state.sortCol, currentSort.asc);
+    } else {
+      applyFilters();
+    }
+    if (state.page > 0) {
+      currentPage = state.page;
+      renderPage();
+      saveState();
+    }
+    return true;
   }
 
   // ── CSV Export ─────────────────────────────────────────────────────
@@ -652,7 +703,22 @@
   }
 
   // ── Initial render ─────────────────────────────────────────────────
-  applyFilters();
+  var tableEl = document.getElementById("offers-table");
+  var hasCv   = tableEl && tableEl.dataset.hasCv === "true";
+  var savedState = null;
+  try { savedState = JSON.parse(sessionStorage.getItem(STATE_KEY) || "null"); } catch (e) {}
+
+  if (savedState) {
+    restoreState(savedState);
+  } else if (hasCv) {
+    currentSort.col = "cv_score";
+    currentSort.asc = false;
+    var cvHdr = document.querySelector('.sortable[data-col="cv_score"]');
+    if (cvHdr) cvHdr.classList.add("sort-desc");
+    sortTable("cv_score", false);
+  } else {
+    applyFilters();
+  }
   applyLang(currentLang);
 
 })();

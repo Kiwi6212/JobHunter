@@ -24,10 +24,20 @@
             <ul class="nav-menu">
                 <li><a href="{{ url_for('main.dashboard') }}" class="nav-link" data-i18n="nav_dashboard">Dashboard</a></li>
                 <li><a href="{{ url_for('main.stats') }}" class="nav-link" data-i18n="nav_stats">Statistics</a></li>
+                <li><a href="{{ url_for('main.documents') }}" class="nav-link">Documents</a></li>
             </ul>
             <div class="nav-controls">
                 <button id="lang-toggle" class="nav-icon-btn" title="Toggle language">EN</button>
                 <button id="theme-toggle" class="nav-icon-btn" title="Toggle dark mode">🌙</button>
+                {% if session.username %}
+                <div class="nav-user">
+                    <span class="nav-user-badge nav-user-badge--{{ session.role }}">
+                        {{ session.username }}
+                        <span class="nav-user-role">{{ '(admin)' if session.role == 'admin' else '(lecture seule)' }}</span>
+                    </span>
+                    <a href="{{ url_for('main.logout') }}" class="btn-logout">Déconnexion</a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </nav>
