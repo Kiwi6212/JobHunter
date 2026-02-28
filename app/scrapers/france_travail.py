@@ -122,7 +122,7 @@ class FranceTravailScraper(BaseScraper):
             params = {
                 "codeROME": rome_code,
                 "departement": departement,
-                "typeContrat": "E",          # E = Apprentissage / Alternance
+                "natureContrat": "E1",       # E1 = Apprentissage
                 "range": f"{start}-{end}",
             }
 
