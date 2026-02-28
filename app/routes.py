@@ -113,8 +113,11 @@ VALID_STATUSES = [
 CV_DIR = DATA_DIR / "cv"
 CV_TEXT_PATH = CV_DIR / "cv_text.txt"
 
-# Document storage path
-DOCS_DIR = DATA_DIR / "documents"
+def _user_docs_dir():
+    """Return the document directory scoped to the current user session."""
+    user_id = session.get("user_id")
+    folder = str(user_id) if user_id is not None else "legacy_admin"
+    return DATA_DIR / "documents" / folder
 
 
 @bp.route('/')
@@ -317,8 +320,9 @@ def offer_detail(offer_id):
         else:
             user_offer = offer.tracking  # config admin uses Tracking
 
-        DOCS_DIR.mkdir(parents=True, exist_ok=True)
-        doc_files = sorted(f.name for f in DOCS_DIR.iterdir() if f.is_file())
+        docs_dir = _user_docs_dir()
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        doc_files = sorted(f.name for f in docs_dir.iterdir() if f.is_file())
         return render_template('offer_detail.html', offer=offer,
                                user_offer=user_offer,
                                doc_files=doc_files,
@@ -553,8 +557,9 @@ def cv_rematch():
 @login_required
 def documents():
     """Document library: list uploaded files (CV, cover letters, etc.)."""
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    files = sorted(f.name for f in DOCS_DIR.iterdir() if f.is_file())
+    docs_dir = _user_docs_dir()
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    files = sorted(f.name for f in docs_dir.iterdir() if f.is_file())
     return render_template('documents.html', files=files,
                            role=get_current_role(),
                            username=session.get("username"))
@@ -572,8 +577,9 @@ def document_upload():
     filename = secure_filename(file.filename)
     if not filename:
         return jsonify({'error': 'Invalid filename'}), 400
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    file.save(str(DOCS_DIR / filename))
+    docs_dir = _user_docs_dir()
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    file.save(str(docs_dir / filename))
     return jsonify({'ok': True, 'filename': filename})
 
 
@@ -581,7 +587,7 @@ def document_upload():
 @login_required
 def document_download(filename):
     """Download an uploaded document."""
-    filepath = DOCS_DIR / secure_filename(filename)
+    filepath = _user_docs_dir() / secure_filename(filename)
     if not filepath.exists():
         return "Fichier introuvable", 404
     return send_file(str(filepath), as_attachment=True,
@@ -592,7 +598,7 @@ def document_download(filename):
 @admin_required
 def document_delete(filename):
     """Delete an uploaded document."""
-    filepath = DOCS_DIR / secure_filename(filename)
+    filepath = _user_docs_dir() / secure_filename(filename)
     if not filepath.exists():
         return jsonify({'error': 'Fichier introuvable'}), 404
     filepath.unlink()
@@ -626,7 +632,7 @@ def generate_cover_letter(offer_id):
         # Read cover letter template (if provided)
         template_text = ""
         if template_filename:
-            tpl_path = DOCS_DIR / secure_filename(template_filename)
+            tpl_path = _user_docs_dir() / secure_filename(template_filename)
             if tpl_path.exists():
                 ext = tpl_path.suffix.lower()
                 if ext == '.pdf':
