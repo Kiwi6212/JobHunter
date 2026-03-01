@@ -131,7 +131,8 @@
         <tbody>
             {% for offer in offers %}
             {% set uo = user_offers_map.get(offer.id) %}
-            {% set cv_score_val = uo.cv_match_score if (uo and uo.cv_match_score is not none) else offer.cv_match_score %}
+            {% set _uo_cv = uo.cv_match_score if (uo and uo.__class__.__name__ == 'UserOffer') else none %}
+            {% set cv_score_val = _uo_cv if _uo_cv is not none else offer.cv_match_score %}
             <tr class="offer-row"
                 data-offer-id="{{ offer.id }}"
                 data-title="{{ offer.title|lower }}"
