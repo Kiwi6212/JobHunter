@@ -212,6 +212,31 @@
                 </p>
                 <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR code A2F"
                      width="180" height="180">
+                {% if totp_setup_secret %}
+                <div style="width:100%;max-width:380px;">
+                    <p class="totp-desc" style="margin-bottom:.4rem;">
+                        Impossible de scanner ? Entrez cette clé manuellement :
+                    </p>
+                    <div style="display:flex;gap:.4rem;align-items:center;">
+                        <input type="text" id="totp-secret-display"
+                               value="{{ totp_setup_secret }}" readonly
+                               style="flex:1;padding:.45rem .7rem;border:1px solid var(--border-color);
+                                      border-radius:8px;background:var(--bg-color);color:var(--text-primary);
+                                      font-size:.85rem;font-family:monospace;letter-spacing:.08em;
+                                      box-sizing:border-box;">
+                        <button type="button" id="copy-secret-btn"
+                                class="btn btn-small"
+                                onclick="(function(){
+                                    var el=document.getElementById('totp-secret-display');
+                                    navigator.clipboard.writeText(el.value).then(function(){
+                                        var b=document.getElementById('copy-secret-btn');
+                                        b.textContent='Copié !';
+                                        setTimeout(function(){b.textContent='Copier';},2000);
+                                    });
+                                })()">Copier</button>
+                    </div>
+                </div>
+                {% endif %}
                 <form method="POST" action="{{ url_for('main.account_confirm_2fa') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="qr-code-input">

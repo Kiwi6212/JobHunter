@@ -1064,6 +1064,7 @@ def account():
         has_db_user=has_db_user,
         totp_enabled=totp_enabled,
         qr_b64=qr_b64,
+        totp_setup_secret=session.get('_totp_setup_secret') if qr_b64 else None,
         role=get_current_role(),
         username=session.get('username'),
     )
