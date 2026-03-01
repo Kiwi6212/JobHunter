@@ -29,6 +29,9 @@
                 {% if session.role == 'admin' %}
                 <li><a href="{{ url_for('main.admin_page') }}" class="nav-link">Admin</a></li>
                 {% endif %}
+                {% if session.role and session.role != 'viewer' %}
+                <li><a href="{{ url_for('main.account') }}" class="nav-link">Mon compte</a></li>
+                {% endif %}
             </ul>
             <div class="nav-controls">
                 <button id="lang-toggle" class="nav-icon-btn" title="Toggle language">EN</button>

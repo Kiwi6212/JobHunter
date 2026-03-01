@@ -95,6 +95,20 @@ def _migrate_columns():
                     "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"
                 ))
             print("[MIGRATE] Done.")
+        if "totp_secret" not in user_cols:
+            print("[MIGRATE] Adding totp_secret column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64)"
+                ))
+            print("[MIGRATE] Done.")
+        if "totp_enabled" not in user_cols:
+            print("[MIGRATE] Adding totp_enabled column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
 
     # Migrate user_offers table
     if "user_offers" in insp.get_table_names():

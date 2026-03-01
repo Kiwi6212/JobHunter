@@ -125,6 +125,10 @@ class User(Base):
     domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
 
+    # Two-factor authentication (TOTP / Google Authenticator)
+    totp_secret = Column(String(64), nullable=True, default=None)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

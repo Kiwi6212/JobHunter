@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Mon compte — JobHunter{% endblock %}
+
+{% block extra_css %}
+<style>
+.account-page { max-width: 680px; margin: 2rem auto; }
+
+.account-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.8rem 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,.06));
+}
+.account-section h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.6rem;
+}
+
+.form-field { margin-bottom: 1rem; }
+.form-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.form-field input[type="password"],
+.form-field input[type="text"] {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: border-color .2s;
+}
+.form-field input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+
+.alert {
+    border-radius: 8px;
+    padding: 0.7rem 1rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+.alert-error   { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+.alert-success { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+.alert-info    { background:#eff6ff; color:#1e40af; border:1px solid #93c5fd; }
+
+[data-theme="dark"] .alert-error   { background:#3b0f0f; color:#fca5a5; border-color:#7f1d1d; }
+[data-theme="dark"] .alert-success { background:#052e16; color:#86efac; border-color:#14532d; }
+[data-theme="dark"] .alert-info    { background:#0c1a3b; color:#93c5fd; border-color:#1e3a8a; }
+
+.totp-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+}
+.totp-on  { background:#dcfce7; color:#166534; }
+.totp-off { background:#f1f5f9; color:#64748b; }
+[data-theme="dark"] .totp-on  { background:#052e16; color:#86efac; }
+[data-theme="dark"] .totp-off { background:#1e293b; color:#94a3b8; }
+
+.qr-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    margin: 1rem 0;
+}
+.qr-block img { border-radius: 6px; }
+.qr-code-input {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.qr-code-input input {
+    width: 140px;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    letter-spacing: 0.2em;
+    text-align: center;
+}
+.totp-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-align: center;
+    max-width: 380px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="account-page">
+    <h2 style="margin-bottom:1.5rem;">Mon compte</h2>
+
+    {% set err_param = request.args.get('err') %}
+    {% set ok_param  = request.args.get('ok') %}
+
+    {% if err_param == 'invalid_code' %}
+    <div class="alert alert-error">Code A2F invalide. Réessayez avec un nouveau code généré par votre application.</div>
+    {% endif %}
+    {% if ok_param == '2fa_enabled' %}
+    <div class="alert alert-success">✓ Authentification à deux facteurs activée avec succès.</div>
+    {% elif ok_param == '2fa_disabled' %}
+    <div class="alert alert-success">✓ Authentification à deux facteurs désactivée.</div>
+    {% endif %}
+
+    <!-- ── Section 1 : Changement de mot de passe ─────────── -->
+    <div class="account-section">
+        <h3>🔑 Changer le mot de passe</h3>
+
+        {% if not has_db_user %}
+        <div class="alert alert-info">Le changement de mot de passe n'est pas disponible pour les comptes administrateurs de configuration.</div>
+        {% else %}
+            {% if errors %}
+            {% for e in errors %}
+            <div class="alert alert-error">{{ e }}</div>
+            {% endfor %}
+            {% endif %}
+            {% if success %}
+            <div class="alert alert-success">✓ {{ success }}</div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('main.account') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="change_password">
+                <div class="form-field">
+                    <label for="current_password">Mot de passe actuel</label>
+                    <input type="password" id="current_password" name="current_password"
+                           autocomplete="current-password" required>
+                </div>
+                <div class="form-field">
+                    <label for="new_password">Nouveau mot de passe</label>
+                    <input type="password" id="new_password" name="new_password"
+                           autocomplete="new-password" minlength="8" maxlength="72" required>
+                </div>
+                <div class="form-field">
+                    <label for="confirm_password">Confirmer le nouveau mot de passe</label>
+                    <input type="password" id="confirm_password" name="confirm_password"
+                           autocomplete="new-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-small" style="margin-top:.4rem;">
+                    Changer le mot de passe
+                </button>
+            </form>
+        {% endif %}
+    </div>
+
+    <!-- ── Section 2 : Authentification à deux facteurs ──── -->
+    <div class="account-section">
+        <h3>🔐 Authentification à deux facteurs (A2F)</h3>
+
+        {% if not has_db_user %}
+        <div class="alert alert-info">L'A2F n'est pas disponible pour les comptes administrateurs de configuration.</div>
+        {% elif totp_enabled %}
+            <p style="margin-bottom:1rem;">
+                Statut : <span class="totp-status totp-on">✓ Activée</span>
+            </p>
+            <p style="font-size:.88rem;color:var(--text-secondary);margin-bottom:1.2rem;">
+                Pour désactiver l'A2F, saisissez un code généré par votre application d'authentification.
+            </p>
+            <form method="POST" action="{{ url_for('main.account_disable_2fa') }}"
+                  style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="totp_code" inputmode="numeric"
+                       pattern="[0-9]{6}" maxlength="6" placeholder="123456"
+                       style="width:120px;padding:.5rem .7rem;border:1px solid var(--border-color);
+                              border-radius:8px;background:var(--bg-color);color:var(--text-primary);
+                              font-size:1.1rem;letter-spacing:.2em;text-align:center;" required>
+                <button type="submit" class="btn btn-small" style="background:#dc2626;color:#fff;">
+                    Désactiver l'A2F
+                </button>
+            </form>
+        {% elif qr_b64 %}
+            <!-- QR code ready for scanning -->
+            <p style="margin-bottom:.5rem;">
+                Statut : <span class="totp-status totp-off">✗ Inactive</span>
+            </p>
+            <div class="qr-block">
+                <p class="totp-desc">
+                    Scannez ce QR code avec <strong>Google Authenticator</strong>, <strong>Authy</strong>
+                    ou toute autre application TOTP compatible.
+                </p>
+                <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR code A2F"
+                     width="180" height="180">
+                <form method="POST" action="{{ url_for('main.account_confirm_2fa') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="qr-code-input">
+                        <input type="text" name="totp_code" inputmode="numeric"
+                               pattern="[0-9]{6}" maxlength="6" placeholder="123456"
+                               autofocus required>
+                        <button type="submit" class="btn btn-primary btn-small">
+                            Confirmer et activer
+                        </button>
+                    </div>
+                </form>
+                <p class="totp-desc" style="font-size:.8rem;">
+                    Entrez le code à 6 chiffres affiché dans votre application pour confirmer l'activation.
+                </p>
+            </div>
+        {% else %}
+            <p style="margin-bottom:1rem;">
+                Statut : <span class="totp-status totp-off">✗ Inactive</span>
+            </p>
+            <p style="font-size:.88rem;color:var(--text-secondary);margin-bottom:1.2rem;">
+                Activez l'authentification à deux facteurs pour sécuriser votre compte avec Google Authenticator ou Authy.
+            </p>
+            <form method="POST" action="{{ url_for('main.account_setup_2fa') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-small">
+                    Activer l'A2F
+                </button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

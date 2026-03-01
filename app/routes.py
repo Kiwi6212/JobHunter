@@ -70,19 +70,65 @@ def login():
         password = request.form.get("password", "")
         role, user_id, domain_id = check_credentials(username, password)
         if role:
-            # Regenerate session to prevent session fixation
+            next_url = request.args.get("next", "")
+            if not _is_safe_redirect(next_url):
+                next_url = url_for("main.dashboard")
+            # Check if 2FA is required for this DB user
+            if user_id is not None:
+                db = SessionLocal()
+                try:
+                    _u = db.query(User).filter(User.id == user_id).first()
+                    if _u and _u.totp_enabled:
+                        session.clear()
+                        session["_2fa_uid"] = user_id
+                        session["_2fa_next"] = next_url
+                        return redirect(url_for("main.login_2fa"))
+                finally:
+                    db.close()
+            # No 2FA — complete login immediately
             session.clear()
             session["username"] = username
             session["role"] = role
             session["user_id"] = user_id      # None for config (legacy) users
             session["domain_id"] = domain_id  # None for admin / config users
-            next_url = request.args.get("next", "")
-            if not _is_safe_redirect(next_url):
-                next_url = url_for("main.dashboard")
             return redirect(next_url)
         error = "Identifiant ou mot de passe incorrect."
 
     return render_template("login.html", error=error)
+
+
+@bp.route('/login/2fa', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
+def login_2fa():
+    """Second step of login: verify TOTP code."""
+    uid = session.get("_2fa_uid")
+    if not uid:
+        return redirect(url_for("main.login"))
+
+    error = None
+    if request.method == 'POST':
+        import pyotp
+        code = request.form.get("totp_code", "").strip().replace(" ", "")
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == uid).first()
+            if user and user.totp_enabled and user.totp_secret:
+                totp = pyotp.TOTP(user.totp_secret)
+                if totp.verify(code, valid_window=1):
+                    next_url = session.pop("_2fa_next", None) or url_for("main.dashboard")
+                    session.clear()
+                    session["username"] = user.username
+                    session["role"] = user.role
+                    session["user_id"] = user.id
+                    session["domain_id"] = user.domain_id
+                    return redirect(next_url)
+                error = "Code A2F invalide. Vérifiez votre application et réessayez."
+            else:
+                return redirect(url_for("main.login"))
+        finally:
+            db.close()
+
+    return render_template("login_2fa.html", error=error)
 
 
 @bp.route('/logout')
@@ -929,6 +975,171 @@ def cv_matching_status():
         'progress_total':  task.get('progress_total', 0),
         'error':           task.get('error'),
     })
+
+
+# ── Account management (password change + TOTP 2FA) ───────────────────────────
+
+def _qr_code_b64(uri: str) -> str:
+    """Generate a base64-encoded PNG QR code for the given provisioning URI."""
+    import qrcode as _qrcode
+    import base64
+    qr = _qrcode.QRCode(box_size=5, border=2,
+                        error_correction=_qrcode.constants.ERROR_CORRECT_L)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+@bp.route('/account', methods=['GET', 'POST'])
+@login_required
+def account():
+    """Account page: password change and 2FA management."""
+    user_id = session.get('user_id')
+    errors = []
+    success = None
+
+    # Handle password change (POST with action=change_password)
+    if request.method == 'POST' and request.form.get('action') == 'change_password':
+        if user_id is None:
+            errors.append("Changement de mot de passe non disponible pour les comptes de configuration.")
+        else:
+            from app import bcrypt
+            current_pw = request.form.get('current_password', '')
+            new_pw = request.form.get('new_password', '')
+            confirm_pw = request.form.get('confirm_password', '')
+
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user or not bcrypt.check_password_hash(user.password_hash, current_pw):
+                    errors.append("Mot de passe actuel incorrect.")
+                elif len(new_pw) < 8:
+                    errors.append("Le nouveau mot de passe doit faire au moins 8 caractères.")
+                elif len(new_pw) > 72:
+                    errors.append("Le nouveau mot de passe ne peut pas dépasser 72 caractères.")
+                elif new_pw != confirm_pw:
+                    errors.append("Les nouveaux mots de passe ne correspondent pas.")
+                else:
+                    user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
+                    user.updated_at = datetime.utcnow()
+                    db.commit()
+                    success = "Mot de passe modifié avec succès."
+            finally:
+                db.close()
+
+    # Resolve current 2FA state
+    totp_enabled = False
+    has_db_user = user_id is not None
+    qr_b64 = None
+    qr_uri = None
+
+    if has_db_user:
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            totp_enabled = bool(user and user.totp_enabled)
+        finally:
+            db.close()
+
+    # Show QR code if a setup is in progress
+    if has_db_user and session.get('_totp_setup_secret') and not totp_enabled:
+        import pyotp
+        secret = session['_totp_setup_secret']
+        uri = pyotp.TOTP(secret).provisioning_uri(
+            name=session.get('username', ''), issuer_name='MyJobHunter'
+        )
+        try:
+            qr_b64 = _qr_code_b64(uri)
+            qr_uri = uri
+        except Exception:
+            qr_b64 = None
+
+    return render_template(
+        'account.html',
+        errors=errors,
+        success=success,
+        has_db_user=has_db_user,
+        totp_enabled=totp_enabled,
+        qr_b64=qr_b64,
+        role=get_current_role(),
+        username=session.get('username'),
+    )
+
+
+@bp.route('/account/setup-2fa', methods=['POST'])
+@login_required
+def account_setup_2fa():
+    """Generate a new TOTP secret and store it in session for confirmation."""
+    user_id = session.get('user_id')
+    if user_id is None:
+        return redirect(url_for('main.account'))
+    import pyotp
+    secret = pyotp.random_base32()
+    session['_totp_setup_secret'] = secret
+    return redirect(url_for('main.account'))
+
+
+@bp.route('/account/confirm-2fa', methods=['POST'])
+@login_required
+def account_confirm_2fa():
+    """Verify TOTP code and activate 2FA for the user."""
+    user_id = session.get('user_id')
+    secret = session.get('_totp_setup_secret')
+    if not user_id or not secret:
+        return redirect(url_for('main.account'))
+
+    import pyotp
+    code = request.form.get('totp_code', '').strip().replace(' ', '')
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(code, valid_window=1):
+        # Keep setup in session, show error via flash-like query param
+        return redirect(url_for('main.account') + '?err=invalid_code')
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.totp_secret = secret
+            user.totp_enabled = True
+            user.updated_at = datetime.utcnow()
+            db.commit()
+    finally:
+        db.close()
+
+    session.pop('_totp_setup_secret', None)
+    return redirect(url_for('main.account') + '?ok=2fa_enabled')
+
+
+@bp.route('/account/disable-2fa', methods=['POST'])
+@login_required
+def account_disable_2fa():
+    """Verify current TOTP code and disable 2FA for the user."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('main.account'))
+
+    import pyotp
+    code = request.form.get('totp_code', '').strip().replace(' ', '')
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.totp_enabled or not user.totp_secret:
+            return redirect(url_for('main.account'))
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code, valid_window=1):
+            return redirect(url_for('main.account') + '?err=invalid_code')
+        user.totp_secret = None
+        user.totp_enabled = False
+        user.updated_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+    return redirect(url_for('main.account') + '?ok=2fa_disabled')
 
 
 # ── Document management ───────────────────────────────────────────────────────
