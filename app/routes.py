@@ -489,25 +489,43 @@ def stats():
         db.close()
 
 
-def _run_cv_matching(method='tfidf'):
+def _run_cv_matching(method='tfidf', force=False, domain_id=None):
     """
-    Run CV matching between the stored CV and all offers,
-    then persist cv_match_score on each Offer row.
+    Run CV matching between the stored CV and offers, then persist
+    cv_match_score on each matched Offer row.
 
     Args:
-        method: 'tfidf' (default, fast) or 'claude' (AI-powered, slower)
+        method:    'tfidf' (default, fast local) or 'claude' (AI, slower)
+        force:     If True, re-score ALL offers in scope (ignores existing
+                   scores). If False (default), skip offers that already
+                   have a cv_match_score — only new/unscored offers are
+                   processed, making repeated calls fast.
+        domain_id: When set, restrict scoring to offers of that domain.
 
-    Returns the number of offers scored.
+    Returns:
+        (scored, skipped) — number of offers scored and number skipped
+        because they already had a score (only non-zero when force=False).
     """
     if not CV_TEXT_PATH.exists():
-        return 0
+        return 0, 0
 
     cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
     db = SessionLocal()
     try:
-        offers = db.query(Offer).all()
+        query = db.query(Offer)
+        if domain_id:
+            query = query.filter(Offer.domain_id == domain_id)
+
+        if not force:
+            # Count already-scored offers so we can report them
+            skipped = query.filter(Offer.cv_match_score.isnot(None)).count()
+            query = query.filter(Offer.cv_match_score.is_(None))
+        else:
+            skipped = 0
+
+        offers = query.all()
         if not offers:
-            return 0
+            return 0, skipped
 
         if method == 'claude':
             from app.services.cv_matcher_claude import ClaudeCVMatcher
@@ -522,7 +540,7 @@ def _run_cv_matching(method='tfidf'):
             offer.cv_match_score = scores.get(offer.id)
 
         db.commit()
-        return len(scores)
+        return len(scores), skipped
     except Exception as e:
         db.rollback()
         raise e
@@ -601,9 +619,13 @@ def cv_upload():
     if method not in ('tfidf', 'claude'):
         method = 'tfidf'
 
-    # Run matching
+    # Run matching — force=True because a new CV invalidates all existing scores
     try:
-        scored = _run_cv_matching(method=method)
+        scored, skipped = _run_cv_matching(
+            method=method,
+            force=True,
+            domain_id=session.get("domain_id"),
+        )
         return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
         return jsonify({'error': 'Erreur interne du serveur'}), 500
@@ -614,7 +636,11 @@ def cv_upload():
 def cv_rematch():
     """
     Re-run CV matching using the already-stored CV text.
-    Query param: ?method=tfidf (default) or ?method=claude
+
+    Query params:
+      method=tfidf|claude  — scoring engine (default: tfidf)
+      force=true           — re-score ALL offers, even those already scored
+                             (default: false — only score offers with no score yet)
     """
     if not CV_TEXT_PATH.exists():
         return jsonify({'error': 'No CV uploaded yet'}), 404
@@ -623,9 +649,15 @@ def cv_rematch():
     if method not in ('tfidf', 'claude'):
         method = 'tfidf'
 
+    force = request.args.get('force', 'false').lower() == 'true'
+
     try:
-        scored = _run_cv_matching(method=method)
-        return jsonify({'ok': True, 'scored': scored, 'method': method})
+        scored, skipped = _run_cv_matching(
+            method=method,
+            force=force,
+            domain_id=session.get("domain_id"),
+        )
+        return jsonify({'ok': True, 'scored': scored, 'skipped': skipped, 'method': method})
     except Exception as e:
         return jsonify({'error': 'Erreur interne du serveur'}), 500
 
