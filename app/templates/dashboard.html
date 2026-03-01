@@ -32,78 +32,84 @@
 {% if offers %}
 <!-- Filters bar -->
 <div class="filters-bar">
-    <div class="filter-group">
-        <label for="filter-status" data-i18n="filter_status">Statut</label>
-        <select id="filter-status">
-            <option value="" data-i18n="filter_all">Tous</option>
-            {% for s in statuses %}
-            <option value="{{ s }}">{{ s }}</option>
-            {% endfor %}
-        </select>
+    <!-- Row 1: select/text filters -->
+    <div class="filters-row">
+        <div class="filter-group">
+            <label for="filter-status" data-i18n="filter_status">Statut</label>
+            <select id="filter-status">
+                <option value="" data-i18n="filter_all">Tous</option>
+                {% for s in statuses %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filter-source" data-i18n="filter_source">Source</label>
+            <select id="filter-source">
+                <option value="" data-i18n="filter_all">Tous</option>
+                {% for src in sources %}
+                <option value="{{ src }}">{{ src }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if admin_domains %}
+        <div class="filter-group">
+            <label for="filter-domain" data-i18n="filter_domain">Domaine</label>
+            <select id="filter-domain">
+                <option value="" data-i18n="filter_all">Tous</option>
+                {% for d in admin_domains %}
+                <option value="{{ d.id }}">{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="filter-group">
+            <label for="filter-company" data-i18n="filter_company">Entreprise</label>
+            <input type="text" id="filter-company"
+                   data-i18n-placeholder="filter_company_ph"
+                   placeholder="Filtrer par entreprise...">
+        </div>
+        <div class="filter-group">
+            <label for="filter-search" data-i18n="filter_search">Recherche</label>
+            <input type="text" id="filter-search"
+                   data-i18n-placeholder="filter_search_ph"
+                   placeholder="Rechercher titre, entreprise...">
+        </div>
     </div>
-    <div class="filter-group">
-        <label for="filter-source" data-i18n="filter_source">Source</label>
-        <select id="filter-source">
-            <option value="" data-i18n="filter_all">Tous</option>
-            {% for src in sources %}
-            <option value="{{ src }}">{{ src }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    {% if admin_domains %}
-    <div class="filter-group">
-        <label for="filter-domain" data-i18n="filter_domain">Domaine</label>
-        <select id="filter-domain">
-            <option value="" data-i18n="filter_all">Tous</option>
-            {% for d in admin_domains %}
-            <option value="{{ d.id }}">{{ d.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    {% endif %}
-    <div class="filter-group">
-        <label for="filter-company" data-i18n="filter_company">Entreprise</label>
-        <input type="text" id="filter-company"
-               data-i18n-placeholder="filter_company_ph"
-               placeholder="Filtrer par entreprise...">
-    </div>
-    <div class="filter-group">
-        <label for="filter-search" data-i18n="filter_search">Recherche</label>
-        <input type="text" id="filter-search"
-               data-i18n-placeholder="filter_search_ph"
-               placeholder="Rechercher titre, entreprise...">
-    </div>
-    <div class="filter-group filter-toggle">
-        <label>
+    <!-- Row 2: toggle checkboxes -->
+    <div class="filters-row filters-row-toggles">
+        <label class="filter-toggle">
             <input type="checkbox" id="show-all-offers">
             <span data-i18n="filter_all_offers">Afficher toutes les offres</span>
         </label>
-    </div>
-    <div class="filter-group filter-toggle">
-        <label>
+        <label class="filter-toggle">
             <input type="checkbox" id="show-recruiters">
             <span data-i18n="filter_recruiters">Afficher les recruteurs potentiels</span>
         </label>
     </div>
-    <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
-    {% if role != 'viewer' %}
-    <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
-    {% endif %}
-    {% if role != 'viewer' %}
-    <div class="cv-actions">
+    <!-- Row 3: action buttons -->
+    <div class="filters-row filters-row-actions">
+        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
+        {% if role != 'viewer' %}
+        <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
         <button class="btn btn-secondary btn-small" id="btn-import-cv" data-i18n="btn_import_cv">Importer CV</button>
         <input type="file" id="cv-file-input" accept=".pdf,.txt" style="display:none">
         {% if has_cv %}
         <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
         <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>
         {% endif %}
+        {% endif %}
+    </div>
+    <!-- Status message + progress bar (full width, below buttons) -->
+    {% if role != 'viewer' %}
+    <div class="filters-row-progress">
         <span id="cv-upload-status" class="cv-status-msg"></span>
         {% if has_cv %}
-        <div id="cv-match-progress" style="display:none; margin-top:5px; width:100%;">
-            <div style="background:var(--border,#334); border-radius:3px; height:5px; overflow:hidden; margin-bottom:3px;">
-                <div id="cv-progress-fill" style="background:var(--accent-blue,#3b82f6); height:100%; width:0%; transition:width 0.5s ease;"></div>
+        <div id="cv-match-progress" style="display:none;">
+            <div class="cv-progress-track">
+                <div id="cv-progress-fill" class="cv-progress-fill"></div>
             </div>
-            <span id="cv-progress-text" style="font-size:0.78em; color:var(--text-muted,#888);"></span>
+            <span id="cv-progress-text" class="cv-progress-text"></span>
         </div>
         {% endif %}
     </div>
