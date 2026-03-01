@@ -106,6 +106,7 @@
         {% endif %}
 
         <form method="POST" action="{{ url_for('main.login', next=request.args.get('next', '')) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="login-field">
                 <label for="username">Identifiant</label>
                 <input type="text" id="username" name="username"

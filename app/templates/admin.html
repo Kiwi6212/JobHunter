@@ -30,7 +30,7 @@
             <tr id="user-row-{{ u.id }}" class="{{ '' if u.is_active else 'row-disabled' }}">
                 <td style="color:var(--text-secondary);font-size:0.85em;">{{ u.id }}</td>
                 <td><strong>{{ u.username }}</strong></td>
-                <td>{{ domains.get(u.domain_id, '—') if u.domain_id else '<em style="color:var(--text-secondary)">Tous</em>' | safe }}</td>
+                <td>{% if u.domain_id %}{{ domains.get(u.domain_id, '—') }}{% else %}<em style="color:var(--text-secondary)">Tous</em>{% endif %}</td>
                 <td>
                     <span class="nav-user-badge nav-user-badge--{{ u.role }}" style="font-size:0.82em;padding:0.2rem 0.55rem;">
                         {% if u.role == 'admin' %}admin

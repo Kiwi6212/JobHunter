@@ -4,6 +4,8 @@ Loads environment variables and defines search criteria.
 """
 
 import os
+import sys
+from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -19,9 +21,32 @@ CV_PATH = DATA_DIR / "cv.txt"
 class Config:
     """Flask application configuration."""
 
-    SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")
+    _raw_key = os.getenv("FLASK_SECRET_KEY", "")
+    if not _raw_key:
+        # Block startup with the insecure default key in non-debug mode
+        _fallback = "dev-secret-key-change-in-production"
+        _debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+        if not _debug_mode:
+            print(
+                "[SECURITY] FLASK_SECRET_KEY is not set. "
+                "Set it to a random 32-byte hex string before running in production.",
+                file=sys.stderr,
+            )
+        SECRET_KEY = _fallback
+    else:
+        SECRET_KEY = _raw_key
+
     DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     ENV = os.getenv("FLASK_ENV", "production")
+
+    # Session cookie hardening
+    SESSION_COOKIE_HTTPONLY = True           # JS cannot read the cookie
+    SESSION_COOKIE_SAMESITE = "Lax"         # CSRF mitigation for cross-site requests
+    SESSION_COOKIE_SECURE = False            # Set True when running behind HTTPS
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+
+    # CSRF (Flask-WTF)
+    WTF_CSRF_TIME_LIMIT = 3600              # Token valid for 1 hour
 
     # Auth — two roles: admin (full access) and viewer (read-only)
     USERS = {

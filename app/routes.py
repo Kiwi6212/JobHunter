@@ -7,6 +7,7 @@ import io
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse, urljoin
 
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
 from sqlalchemy import func
@@ -19,14 +20,25 @@ from app.models import Offer, Tracking, Domain, User, UserOffer
 from app.auth import login_required, admin_required, superadmin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
+from app import limiter
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
 
 
+def _is_safe_redirect(url: str) -> bool:
+    """Return True only if *url* is a relative path on the same host (no open redirect)."""
+    if not url:
+        return False
+    ref = urlparse(request.host_url)
+    test = urlparse(urljoin(request.host_url, url))
+    return test.scheme in ("http", "https") and ref.netloc == test.netloc
+
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("20 per minute")
 def login():
     """Login page. Redirects to dashboard if already authenticated."""
     if session.get("username"):
@@ -38,11 +50,15 @@ def login():
         password = request.form.get("password", "")
         role, user_id, domain_id = check_credentials(username, password)
         if role:
+            # Regenerate session to prevent session fixation
+            session.clear()
             session["username"] = username
             session["role"] = role
             session["user_id"] = user_id      # None for config (legacy) users
             session["domain_id"] = domain_id  # None for admin / config users
-            next_url = request.args.get("next") or url_for("main.dashboard")
+            next_url = request.args.get("next", "")
+            if not _is_safe_redirect(next_url):
+                next_url = url_for("main.dashboard")
             return redirect(next_url)
         error = "Identifiant ou mot de passe incorrect."
 
@@ -57,6 +73,7 @@ def logout():
 
 
 @bp.route('/register', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def register():
     """Self-registration: create a new user account linked to a domain."""
     if session.get("username"):
@@ -75,8 +92,14 @@ def register():
 
             if not username:
                 errors.append("Nom d'utilisateur requis.")
+            elif len(username) > 64:
+                errors.append("Nom d'utilisateur trop long (max 64 caractères).")
             if not password:
                 errors.append("Mot de passe requis.")
+            elif len(password) < 8:
+                errors.append("Mot de passe trop court (8 caractères minimum).")
+            elif len(password) > 72:
+                errors.append("Mot de passe trop long (72 caractères maximum).")
             if password and password != confirm:
                 errors.append("Les mots de passe ne correspondent pas.")
             if not domain_id_raw:
@@ -313,9 +336,9 @@ def update_tracking(offer_id):
             }
         })
 
-    except Exception as e:
+    except Exception:
         db.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
     finally:
         db.close()
 
@@ -326,12 +349,17 @@ def offer_detail(offer_id):
     """Detailed view of a single job offer."""
     db = SessionLocal()
     user_id = session.get("user_id")
+    domain_id = session.get("domain_id")
     try:
         offer = db.query(Offer).options(joinedload(Offer.tracking)).filter(
             Offer.id == offer_id
         ).first()
         if not offer:
             return "Offer not found", 404
+
+        # Domain authorization: domain-scoped users may only view offers in their domain
+        if domain_id and offer.domain_id and offer.domain_id != domain_id:
+            return "Accès refusé", 403
 
         # Resolve per-user tracking object
         if user_id is not None:
@@ -511,11 +539,34 @@ def cv_upload():
     if not file.filename:
         return jsonify({'error': 'Empty filename'}), 400
 
-    filename = file.filename.lower()
+    # Extension + MIME validation for CV uploads
+    _cv_allowed = {'.pdf', '.txt'}
+    _cv_mimes = {
+        '.pdf': {'application/pdf', 'application/octet-stream'},
+        '.txt': {'text/plain', 'application/octet-stream'},
+    }
+    sanitized_cv_name = secure_filename(file.filename)
+    if not sanitized_cv_name:
+        return jsonify({'error': 'Nom de fichier invalide'}), 400
+    cv_ext = Path(sanitized_cv_name).suffix.lower()
+    if cv_ext not in _cv_allowed:
+        return jsonify({'error': 'Seuls les fichiers .pdf et .txt sont acceptés pour le CV'}), 400
+    cv_ct = (file.content_type or '').split(';')[0].strip().lower()
+    if cv_ct and cv_ct not in _cv_mimes[cv_ext] and cv_ct not in _BLOCKED_MIMES:
+        return jsonify({'error': f'Type MIME {cv_ct!r} incompatible avec {cv_ext}'}), 400
+    if cv_ct in _BLOCKED_MIMES:
+        return jsonify({'error': f'Type MIME refusé : {cv_ct}'}), 400
+    # Size limit: 5 MB
+    file.seek(0, 2)
+    if file.tell() > MAX_UPLOAD_SIZE:
+        return jsonify({'error': 'Fichier trop volumineux (max 5 Mo)'}), 400
+    file.seek(0)
+
+    filename = sanitized_cv_name.lower()
     raw = file.read()
 
     # Extract text
-    if filename.endswith('.pdf'):
+    if cv_ext == '.pdf':
         try:
             import PyPDF2
             reader = PyPDF2.PdfReader(io.BytesIO(raw))
@@ -524,8 +575,8 @@ def cv_upload():
             )
         except ImportError:
             return jsonify({'error': 'PyPDF2 not installed. pip install PyPDF2'}), 500
-        except Exception as e:
-            return jsonify({'error': f'PDF parse error: {e}'}), 400
+        except Exception:
+            return jsonify({'error': 'Impossible de lire le fichier PDF'}), 400
     else:
         # Assume plain text (UTF-8)
         try:
@@ -549,7 +600,7 @@ def cv_upload():
         scored = _run_cv_matching(method=method)
         return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
@@ -570,7 +621,7 @@ def cv_rematch():
         scored = _run_cv_matching(method=method)
         return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
 
 
 # ── Document management ───────────────────────────────────────────────────────
@@ -770,7 +821,7 @@ def generate_cover_letter(offer_id):
         return jsonify({'ok': True, 'text': letter_text, 'filename': filename})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
     finally:
         db.close()
 
@@ -818,7 +869,7 @@ def admin_toggle_user(user_id):
         return jsonify({'ok': True, 'is_active': user.is_active})
     except Exception as e:
         db.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
     finally:
         db.close()
 
