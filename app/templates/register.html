@@ -158,6 +158,24 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="login-field">
+                <label for="security_question">Question de sécurité</label>
+                <select id="security_question" name="security_question" required>
+                    <option value="">— Choisissez une question —</option>
+                    {% for q in security_questions %}
+                    <option value="{{ q }}"
+                        {{ 'selected' if request.form.get('security_question') == q }}>
+                        {{ q }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="login-field">
+                <label for="security_answer">Réponse secrète</label>
+                <input type="text" id="security_answer" name="security_answer"
+                       autocomplete="off"
+                       placeholder="Votre réponse (insensible à la casse)" required>
+            </div>
             <button type="submit" class="login-submit">Créer mon compte</button>
         </form>
 

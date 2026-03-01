@@ -129,11 +129,16 @@ class User(Base):
     totp_secret = Column(String(64), nullable=True, default=None)
     totp_enabled = Column(Boolean, nullable=False, default=False)
 
+    # Account recovery via security question
+    security_question = Column(String(255), nullable=True, default=None)
+    security_answer_hash = Column(String(255), nullable=True, default=None)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     domain = relationship("Domain", back_populates="users")
     user_offers = relationship("UserOffer", back_populates="user", cascade="all, delete-orphan")
+    password_resets = relationship("PasswordReset", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
@@ -169,3 +174,20 @@ class UserOffer(Base):
 
     def __repr__(self):
         return f"<UserOffer(user_id={self.user_id}, offer_id={self.offer_id}, status='{self.status}')>"
+
+
+class PasswordReset(Base):
+    """Single-use, time-limited password reset tokens."""
+
+    __tablename__ = "password_resets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    used = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User", back_populates="password_resets")
+
+    def __repr__(self):
+        return f"<PasswordReset(user_id={self.user_id}, used={self.used})>"

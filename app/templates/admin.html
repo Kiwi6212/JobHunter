@@ -54,16 +54,21 @@
                         {{ ndocs }} fichier{{ 's' if ndocs != 1 else '' }}
                     </a>
                 </td>
-                <td>
+                <td style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;">
                     {% if u.username != username %}
                     <button class="btn btn-small {{ 'btn-danger' if u.is_active else 'btn-secondary' }}"
                             id="btn-toggle-{{ u.id }}"
                             onclick="toggleUser({{ u.id }}, this)">
                         {{ 'Désactiver' if u.is_active else 'Réactiver' }}
                     </button>
+                    <button class="btn btn-small btn-secondary"
+                            onclick="resetPassword({{ u.id }}, this)">
+                        Reset MDP
+                    </button>
                     {% else %}
                     <span style="font-size:0.82em;color:var(--text-secondary);">(vous)</span>
                     {% endif %}
+                    <span id="reset-link-{{ u.id }}" style="display:none;width:100%;margin-top:.3rem;"></span>
                 </td>
             </tr>
             {% endfor %}
@@ -77,6 +82,39 @@
 
 {% block extra_js %}
 <script>
+function resetPassword(userId, btn) {
+    if (!confirm("Générer un lien de réinitialisation pour cet utilisateur ?")) return;
+    btn.disabled = true;
+    fetch("/api/admin/users/" + userId + "/reset-password", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            btn.disabled = false;
+            if (!res.ok) {
+                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
+                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
+                return;
+            }
+            var box = document.getElementById("reset-link-" + userId);
+            box.style.display = "block";
+            box.innerHTML =
+                '<div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.4rem .6rem;font-size:.82rem;">' +
+                '<span style="color:var(--text-secondary);">Lien (valable 15 min) :</span><br>' +
+                '<div style="display:flex;gap:.3rem;align-items:center;margin-top:.25rem;">' +
+                '<input type="text" value="' + res.reset_url + '" readonly ' +
+                'style="flex:1;padding:.3rem .5rem;border:1px solid var(--border-color);border-radius:5px;' +
+                'background:var(--bg-color);color:var(--text-primary);font-size:.82rem;font-family:monospace;">' +
+                '<button class="btn btn-small btn-secondary" onclick="(function(b){' +
+                    'navigator.clipboard.writeText(\'' + res.reset_url + '\').then(function(){' +
+                    'b.textContent=\'Copié !\';setTimeout(function(){b.textContent=\'Copier\';},2000);})' +
+                '})(this)" type="button">Copier</button>' +
+                '</div></div>';
+        })
+        .catch(function() {
+            btn.disabled = false;
+            document.getElementById("admin-msg").textContent = "Erreur réseau.";
+        });
+}
+
 function toggleUser(userId, btn) {
     btn.disabled = true;
     fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })

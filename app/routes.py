@@ -31,7 +31,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
-from app.models import Offer, Tracking, Domain, User, UserOffer
+from app.models import Offer, Tracking, Domain, User, UserOffer, PasswordReset
 from app.auth import login_required, admin_required, superadmin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
@@ -39,6 +39,15 @@ from app import limiter
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
+
+# Predefined security questions for account recovery
+SECURITY_QUESTIONS = [
+    "Quel était le nom de votre premier animal de compagnie ?",
+    "Quelle est votre ville de naissance ?",
+    "Quel était le nom de votre meilleur ami d'enfance ?",
+    "Quel était le nom de votre école primaire ?",
+    "Quel est votre plat préféré ?",
+]
 
 # ── Async CV matching task registry (file-backed, multi-worker safe) ──────────
 # Tasks are stored in data/matching_tasks.json so all Gunicorn workers share state.
@@ -155,6 +164,8 @@ def register():
             password = request.form.get("password", "")
             confirm = request.form.get("confirm_password", "")
             domain_id_raw = request.form.get("domain_id", "").strip()
+            security_question = request.form.get("security_question", "").strip()
+            security_answer = request.form.get("security_answer", "").strip()
 
             if not username:
                 errors.append("Nom d'utilisateur requis.")
@@ -170,6 +181,10 @@ def register():
                 errors.append("Les mots de passe ne correspondent pas.")
             if not domain_id_raw:
                 errors.append("Veuillez choisir un domaine.")
+            if not security_question or security_question not in SECURITY_QUESTIONS:
+                errors.append("Veuillez choisir une question de sécurité.")
+            if not security_answer:
+                errors.append("La réponse à la question de sécurité est requise.")
 
             if not errors:
                 existing = db.query(User).filter(User.username == username).first()
@@ -178,17 +193,21 @@ def register():
                 else:
                     from app import bcrypt
                     pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+                    answer_hash = bcrypt.generate_password_hash(security_answer.lower()).decode("utf-8")
                     new_user = User(
                         username=username,
                         password_hash=pw_hash,
                         role="user",
                         domain_id=int(domain_id_raw),
+                        security_question=security_question,
+                        security_answer_hash=answer_hash,
                     )
                     db.add(new_user)
                     db.commit()
                     return redirect(url_for("main.login"))
 
-        return render_template("register.html", domains=domains, errors=errors)
+        return render_template("register.html", domains=domains, errors=errors,
+                               security_questions=SECURITY_QUESTIONS)
     finally:
         db.close()
 
@@ -1441,3 +1460,138 @@ def admin_document_delete(user_id, filename):
         return jsonify({'error': 'Fichier introuvable'}), 404
     filepath.unlink()
     return jsonify({'ok': True})
+
+
+# ── Password reset ─────────────────────────────────────────────────────────────
+
+@bp.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@superadmin_required
+def admin_reset_password(user_id):
+    """Generate a single-use 15-min password reset link for a user (admin only)."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'error': 'Utilisateur introuvable'}), 404
+        # Invalidate any existing unused tokens for this user
+        db.query(PasswordReset).filter(
+            PasswordReset.user_id == user_id,
+            PasswordReset.used == False
+        ).update({'used': True})
+        token = uuid.uuid4().hex
+        db.add(PasswordReset(user_id=user_id, token=token))
+        db.commit()
+        reset_url = url_for('main.reset_password', token=token, _external=True)
+        return jsonify({'ok': True, 'reset_url': reset_url})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne'}), 500
+    finally:
+        db.close()
+
+
+@bp.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
+def forgot_password():
+    """Account recovery via security question — displays reset link on screen."""
+    if request.method == 'GET':
+        return render_template('forgot_password.html', step='1',
+                               security_questions=SECURITY_QUESTIONS)
+
+    action = request.form.get('action', '')
+
+    if action == 'get_question':
+        username = request.form.get('username', '').strip()
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(
+                User.username == username, User.is_active == True
+            ).first()
+            if not user or not user.security_question:
+                return render_template(
+                    'forgot_password.html', step='1',
+                    error="Nom d'utilisateur introuvable ou question de sécurité non configurée.",
+                    security_questions=SECURITY_QUESTIONS,
+                )
+            return render_template('forgot_password.html', step='2',
+                                   username=username,
+                                   question=user.security_question)
+        finally:
+            db.close()
+
+    if action == 'verify_answer':
+        username = request.form.get('username', '').strip()
+        answer = request.form.get('answer', '').strip()
+        db = SessionLocal()
+        try:
+            from app import bcrypt
+            user = db.query(User).filter(
+                User.username == username, User.is_active == True
+            ).first()
+            if not user or not user.security_answer_hash:
+                return render_template('forgot_password.html', step='1',
+                                       error="Utilisateur introuvable.",
+                                       security_questions=SECURITY_QUESTIONS)
+            if not bcrypt.check_password_hash(user.security_answer_hash, answer.lower()):
+                return render_template('forgot_password.html', step='2',
+                                       username=username,
+                                       question=user.security_question,
+                                       error="Réponse incorrecte. Vérifiez votre réponse.")
+            # Generate token
+            db.query(PasswordReset).filter(
+                PasswordReset.user_id == user.id,
+                PasswordReset.used == False
+            ).update({'used': True})
+            token = uuid.uuid4().hex
+            db.add(PasswordReset(user_id=user.id, token=token))
+            db.commit()
+            reset_url = url_for('main.reset_password', token=token, _external=True)
+            return render_template('forgot_password.html', step='3', reset_url=reset_url)
+        finally:
+            db.close()
+
+    return render_template('forgot_password.html', step='1',
+                           security_questions=SECURITY_QUESTIONS)
+
+
+@bp.route('/reset/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
+def reset_password(token):
+    """Verify a password reset token and allow the user to set a new password."""
+    db = SessionLocal()
+    try:
+        reset = db.query(PasswordReset).filter(
+            PasswordReset.token == token,
+            PasswordReset.used == False,
+        ).first()
+        if not reset:
+            return render_template('reset_password.html',
+                                   error="Lien invalide ou déjà utilisé.")
+        if datetime.utcnow() - reset.created_at > timedelta(minutes=15):
+            reset.used = True
+            db.commit()
+            return render_template('reset_password.html',
+                                   error="Ce lien a expiré (validité 15 minutes). Recommencez la procédure.")
+
+        errors = []
+        if request.method == 'POST':
+            new_pw = request.form.get('new_password', '')
+            confirm = request.form.get('confirm_password', '')
+            if len(new_pw) < 8:
+                errors.append("Mot de passe trop court (8 caractères minimum).")
+            elif len(new_pw) > 72:
+                errors.append("Mot de passe trop long (72 caractères maximum).")
+            if new_pw != confirm:
+                errors.append("Les mots de passe ne correspondent pas.")
+            if not errors:
+                from app import bcrypt
+                user = db.query(User).filter(User.id == reset.user_id).first()
+                if user:
+                    user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
+                    user.updated_at = datetime.utcnow()
+                    reset.used = True
+                    db.commit()
+                    return redirect(url_for('main.login') + '?ok=password_reset')
+        return render_template('reset_password.html', token=token, errors=errors)
+    finally:
+        db.close()
