@@ -838,7 +838,7 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
 
 
 @bp.route('/api/cv/upload', methods=['POST'])
-@admin_required
+@login_required
 def cv_upload():
     """
     Accept a PDF or plain-text CV file, extract text, save to disk,
@@ -922,7 +922,7 @@ def cv_upload():
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
-@admin_required
+@login_required
 def cv_rematch():
     """
     Launch CV matching asynchronously in a background thread and return immediately.
@@ -1177,7 +1177,7 @@ def documents():
 
 
 @bp.route('/api/documents/upload', methods=['POST'])
-@admin_required
+@login_required
 def document_upload():
     """Upload a document file (PDF, TXT, DOCX) with strict validation."""
     if 'file' not in request.files:
@@ -1237,7 +1237,7 @@ def document_download(filename):
 
 
 @bp.route('/api/documents/<filename>', methods=['DELETE'])
-@admin_required
+@login_required
 def document_delete(filename):
     """Delete an uploaded document."""
     filepath = _user_docs_dir() / secure_filename(filename)
@@ -1250,7 +1250,7 @@ def document_delete(filename):
 # ── Cover letter generation ───────────────────────────────────────────────────
 
 @bp.route('/api/cover-letter/<int:offer_id>', methods=['POST'])
-@admin_required
+@login_required
 def generate_cover_letter(offer_id):
     """
     Generate a tailored cover letter for an offer using Claude.
