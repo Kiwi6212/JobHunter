@@ -96,6 +96,17 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+    # Migrate user_offers table
+    if "user_offers" in insp.get_table_names():
+        uo_cols = [c["name"] for c in insp.get_columns("user_offers")]
+        if "cv_match_score" not in uo_cols:
+            print("[MIGRATE] Adding cv_match_score column to user_offers table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE user_offers ADD COLUMN cv_match_score FLOAT"
+                ))
+            print("[MIGRATE] Done.")
+
     # Fix company names that are actually descriptions (> 50 chars of prose)
     with engine.begin() as conn:
         result = conn.execute(text(

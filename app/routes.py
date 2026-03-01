@@ -461,9 +461,21 @@ def stats():
         has_cv = CV_TEXT_PATH.exists()
         cv_score_buckets = [0] * 10
         if has_cv:
-            cv_rows = offer_query.with_entities(Offer.cv_match_score).filter(
-                Offer.cv_match_score.isnot(None)
-            ).all()
+            if user_id is not None:
+                # DB users: scores live in UserOffer.cv_match_score
+                cv_rows = (
+                    db.query(UserOffer.cv_match_score)
+                    .filter(
+                        UserOffer.user_id == user_id,
+                        UserOffer.cv_match_score.isnot(None),
+                    )
+                    .all()
+                )
+            else:
+                # Legacy admin: scores live in Offer.cv_match_score
+                cv_rows = offer_query.with_entities(Offer.cv_match_score).filter(
+                    Offer.cv_match_score.isnot(None)
+                ).all()
             for (score,) in cv_rows:
                 s = float(score or 0)
                 bucket = min(int(s // 10), 9)
@@ -489,22 +501,26 @@ def stats():
         db.close()
 
 
-def _run_cv_matching(method='tfidf', force=False, domain_id=None):
+def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
     """
-    Run CV matching between the stored CV and offers, then persist
-    cv_match_score on each matched Offer row.
+    Run CV matching between the stored CV and offers, then persist scores.
+
+    For DB users (user_id is set):
+        Scores are written to UserOffer.cv_match_score (per-user, upserted).
+        Incremental mode (force=False) skips offers already scored in UserOffer.
+
+    For config/legacy admin (user_id is None):
+        Scores are written to Offer.cv_match_score (shared column, legacy path).
 
     Args:
-        method:    'tfidf' (default, fast local) or 'claude' (AI, slower)
-        force:     If True, re-score ALL offers in scope (ignores existing
-                   scores). If False (default), skip offers that already
-                   have a cv_match_score — only new/unscored offers are
-                   processed, making repeated calls fast.
-        domain_id: When set, restrict scoring to offers of that domain.
+        method:    'tfidf' (fast, local) or 'claude' (AI-powered, slower)
+        force:     Re-score ALL offers in scope when True; skip already-scored
+                   when False (default — only processes new/unscored offers).
+        domain_id: Restrict to offers of this domain when set.
+        user_id:   DB user to write scores for; None → legacy Offer column.
 
     Returns:
-        (scored, skipped) — number of offers scored and number skipped
-        because they already had a score (only non-zero when force=False).
+        (scored, skipped) — counts of offers scored and skipped.
     """
     if not CV_TEXT_PATH.exists():
         return 0, 0
@@ -516,12 +532,28 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None):
         if domain_id:
             query = query.filter(Offer.domain_id == domain_id)
 
-        if not force:
-            # Count already-scored offers so we can report them
-            skipped = query.filter(Offer.cv_match_score.isnot(None)).count()
-            query = query.filter(Offer.cv_match_score.is_(None))
+        if user_id is not None:
+            # ── Per-user path: score into UserOffer.cv_match_score ──────
+            if not force:
+                already_scored_sq = (
+                    db.query(UserOffer.offer_id)
+                    .filter(
+                        UserOffer.user_id == user_id,
+                        UserOffer.cv_match_score.isnot(None),
+                    )
+                    .subquery()
+                )
+                skipped = query.filter(Offer.id.in_(already_scored_sq)).count()
+                query = query.filter(~Offer.id.in_(already_scored_sq))
+            else:
+                skipped = 0
         else:
-            skipped = 0
+            # ── Legacy path: score into Offer.cv_match_score ────────────
+            if not force:
+                skipped = query.filter(Offer.cv_match_score.isnot(None)).count()
+                query = query.filter(Offer.cv_match_score.is_(None))
+            else:
+                skipped = 0
 
         offers = query.all()
         if not offers:
@@ -536,8 +568,32 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None):
 
         scores = matcher.score_offers(offers)
 
-        for offer in offers:
-            offer.cv_match_score = scores.get(offer.id)
+        if user_id is not None:
+            # Batch-load existing UserOffer rows then upsert
+            offer_ids = list(scores.keys())
+            existing_uos = {
+                uo.offer_id: uo
+                for uo in db.query(UserOffer).filter(
+                    UserOffer.user_id == user_id,
+                    UserOffer.offer_id.in_(offer_ids),
+                ).all()
+            }
+            for offer_id, score in scores.items():
+                if offer_id in existing_uos:
+                    existing_uos[offer_id].cv_match_score = score
+                else:
+                    db.add(UserOffer(
+                        user_id=user_id,
+                        offer_id=offer_id,
+                        cv_match_score=score,
+                        status='New',
+                    ))
+        else:
+            # Legacy: write directly to Offer
+            offer_map = {o.id: o for o in offers}
+            for offer_id, score in scores.items():
+                if offer_id in offer_map:
+                    offer_map[offer_id].cv_match_score = score
 
         db.commit()
         return len(scores), skipped
@@ -625,6 +681,7 @@ def cv_upload():
             method=method,
             force=True,
             domain_id=session.get("domain_id"),
+            user_id=session.get("user_id"),
         )
         return jsonify({'ok': True, 'scored': scored, 'method': method})
     except Exception as e:
@@ -656,6 +713,7 @@ def cv_rematch():
             method=method,
             force=force,
             domain_id=session.get("domain_id"),
+            user_id=session.get("user_id"),
         )
         return jsonify({'ok': True, 'scored': scored, 'skipped': skipped, 'method': method})
     except Exception as e:

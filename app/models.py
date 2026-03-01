@@ -152,6 +152,9 @@ class UserOffer(Base):
     follow_up_date = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 
+    # Per-user CV match score (replaces Offer.cv_match_score for DB users)
+    cv_match_score = Column(Float, nullable=True, default=None)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
