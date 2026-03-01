@@ -262,28 +262,74 @@
         }
 
         /* ── Domains section ──────────────────────────────────── */
+        .domains-group-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
         .domains-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
         }
+        .domains-grid:last-child { margin-bottom: 0; }
         .domain-chip {
             background: var(--card);
             border: 1px solid var(--border);
             border-left: 4px solid var(--primary);
             border-radius: 8px;
-            padding: 1rem 1.1rem;
+            padding: 0.75rem 1rem;
             box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
         }
         .domain-chip-name {
-            font-size: 0.95rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+            font-weight: 600;
         }
         .domain-chip-desc {
             font-size: 0.8rem;
             color: var(--text-sub);
             line-height: 1.4;
+        }
+        .badge {
+            flex-shrink: 0;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .badge-available {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        @media (prefers-color-scheme: dark) {
+            .badge-available { background: #14532d; color: #86efac; }
+        }
+        .badge-soon {
+            background: #f1f5f9;
+            color: #94a3b8;
+        }
+        @media (prefers-color-scheme: dark) {
+            .badge-soon { background: #1e293b; color: #64748b; }
+        }
+        .domain-chip--soon {
+            border-left-color: var(--border);
+            opacity: 0.6;
+            box-shadow: none;
+        }
+        .domain-chip--soon .domain-chip-name {
+            color: var(--text-muted);
+            font-weight: 500;
         }
 
         /* ── CTA band ─────────────────────────────────────────── */
@@ -438,24 +484,50 @@
 </section>
 
 <!-- ── Domains ─────────────────────────────────────────────── -->
-{% if domains %}
 <section class="section section-alt">
     <div class="container">
-        <h2 class="section-title reveal">Domaines disponibles</h2>
+        <h2 class="section-title reveal">Domaines couverts</h2>
         <p class="section-sub reveal">Choisissez votre filière lors de l'inscription pour n'afficher que les offres qui vous correspondent</p>
+
+        {% if domains %}
+        <div class="domains-group-title reveal">
+            <span style="color:var(--primary)">●</span>
+            <span style="color:var(--text-sub);">Disponibles maintenant</span>
+        </div>
         <div class="domains-grid">
             {% for d in domains %}
             <div class="domain-chip reveal">
                 <div class="domain-chip-name">{{ d.name }}</div>
-                {% if d.description %}
-                <div class="domain-chip-desc">{{ d.description }}</div>
-                {% endif %}
+                <span class="badge badge-available">Disponible</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="domains-group-title reveal" style="margin-top:0.5rem;">
+            <span style="color:var(--text-muted)">●</span>
+            <span style="color:var(--text-muted);">Prochainement</span>
+        </div>
+        <div class="domains-grid">
+            {% for name in [
+                'Ressources Humaines', 'Finance / Comptabilité',
+                'Communication / Journalisme', 'Architecture / Urbanisme',
+                'Environnement / Énergie', 'Logistique / Supply Chain',
+                'Tourisme / Hôtellerie', 'Éducation / Formation',
+                'Droit', 'Commerce / Marketing',
+                'Santé', 'Arts / Design',
+                'Sciences / Recherche', 'Agriculture / Agroalimentaire',
+                'Transport / Automobile', 'Immobilier',
+                'Sport / Animation', 'Fonction publique'
+            ] %}
+            <div class="domain-chip domain-chip--soon reveal">
+                <div class="domain-chip-name">{{ name }}</div>
+                <span class="badge badge-soon">Bientôt</span>
             </div>
             {% endfor %}
         </div>
     </div>
 </section>
-{% endif %}
 
 <!-- ── CTA band ─────────────────────────────────────────────── -->
 <section class="cta-band">
