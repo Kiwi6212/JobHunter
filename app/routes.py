@@ -259,6 +259,27 @@ def _user_docs_dir():
 
 
 @bp.route('/')
+def landing():
+    """Public landing page. Redirects to dashboard if already authenticated."""
+    if session.get("username"):
+        return redirect(url_for("main.dashboard"))
+    db = SessionLocal()
+    try:
+        total_offers = db.query(func.count(Offer.id)).scalar() or 0
+        sources_count = db.query(func.count(func.distinct(Offer.source))).scalar() or 0
+        domains = db.query(Domain).order_by(Domain.name).all()
+        domains_count = len(domains)
+        return render_template(
+            'landing.html',
+            total_offers=total_offers,
+            sources_count=sources_count,
+            domains_count=domains_count,
+            domains=domains,
+        )
+    finally:
+        db.close()
+
+
 @bp.route('/dashboard')
 @login_required
 def dashboard():

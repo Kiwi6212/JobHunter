@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyJobHunter — Trouvez votre alternance en quelques clics</title>
+    <meta name="description" content="MyJobHunter agrège automatiquement des milliers d'offres d'alternance de 11 sources différentes, mises à jour chaque jour. Matching CV par IA, suivi des candidatures, lettres de motivation générées.">
+    <meta property="og:title" content="MyJobHunter — Trouvez votre alternance en quelques clics">
+    <meta property="og:description" content="Agrégateur d'offres d'alternance avec matching IA, suivi de candidatures et génération de lettres de motivation.">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── Reset & base ─────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --primary:      #2563EB;
+            --primary-dark: #1d4ed8;
+            --primary-light:#eff6ff;
+            --bg:           #ffffff;
+            --bg-alt:       #f8fafc;
+            --card:         #ffffff;
+            --border:       #e2e8f0;
+            --text:         #0f172a;
+            --text-sub:     #475569;
+            --text-muted:   #94a3b8;
+            --shadow:       0 4px 24px rgba(0,0,0,.08);
+            --shadow-sm:    0 2px 8px rgba(0,0,0,.06);
+            --radius:       12px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary:      #3b82f6;
+                --primary-dark: #2563eb;
+                --primary-light:#1e3a5f;
+                --bg:           #0f172a;
+                --bg-alt:       #1e293b;
+                --card:         #1e293b;
+                --border:       #334155;
+                --text:         #f1f5f9;
+                --text-sub:     #94a3b8;
+                --text-muted:   #64748b;
+                --shadow:       0 4px 24px rgba(0,0,0,.4);
+                --shadow-sm:    0 2px 8px rgba(0,0,0,.3);
+            }
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        img { max-width: 100%; }
+
+        /* ── Layout helpers ───────────────────────────────────── */
+        .container {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* ── Fade-in animation ────────────────────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 0.55s ease, transform 0.55s ease;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: none;
+        }
+
+        /* ── Nav ──────────────────────────────────────────────── */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255,255,255,.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        @media (prefers-color-scheme: dark) {
+            nav { background: rgba(15,23,42,.85); }
+        }
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+        }
+        .nav-logo {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+        .nav-actions { display: flex; gap: 0.6rem; align-items: center; }
+
+        /* ── Buttons ──────────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,.35); }
+        .btn-outline {
+            background: transparent;
+            color: var(--primary);
+            border: 1.5px solid var(--primary);
+        }
+        .btn-outline:hover { background: var(--primary-light); }
+        .btn-lg {
+            padding: 0.8rem 2rem;
+            font-size: 1rem;
+            border-radius: 10px;
+        }
+
+        /* ── Hero ─────────────────────────────────────────────── */
+        .hero {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #1e3a8a 100%);
+            padding: 5rem 0 6rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .hero-content { position: relative; z-index: 1; }
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+            margin-bottom: 1.2rem;
+            max-width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .hero p {
+            font-size: clamp(1rem, 2vw, 1.15rem);
+            color: rgba(255,255,255,.82);
+            max-width: 600px;
+            margin: 0 auto 2.4rem;
+        }
+        .hero-cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .hero .btn-primary {
+            background: #ffffff;
+            color: var(--primary);
+        }
+        .hero .btn-primary:hover { background: #f1f5f9; box-shadow: 0 4px 18px rgba(0,0,0,.2); }
+        .hero .btn-outline {
+            border-color: rgba(255,255,255,.6);
+            color: #ffffff;
+        }
+        .hero .btn-outline:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+        /* ── Stats ────────────────────────────────────────────── */
+        .stats-section {
+            background: var(--bg-alt);
+            padding: 3.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem 1.25rem;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+        }
+        .stat-number {
+            display: block;
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1;
+            margin-bottom: 0.4rem;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-sub);
+            font-weight: 500;
+        }
+
+        /* ── Section titles ───────────────────────────────────── */
+        .section { padding: 5rem 0; }
+        .section-alt { background: var(--bg-alt); }
+        .section-title {
+            font-size: clamp(1.4rem, 3vw, 2rem);
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 0.6rem;
+            letter-spacing: -0.3px;
+        }
+        .section-sub {
+            text-align: center;
+            color: var(--text-sub);
+            margin-bottom: 3rem;
+            font-size: 1rem;
+        }
+
+        /* ── Features grid ────────────────────────────────────── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+        .feature-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.6rem 1.4rem;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .feature-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+        .feature-icon {
+            font-size: 1.9rem;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+        .feature-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+        .feature-desc {
+            font-size: 0.875rem;
+            color: var(--text-sub);
+            line-height: 1.55;
+        }
+
+        /* ── Domains section ──────────────────────────────────── */
+        .domains-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .domain-chip {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            padding: 1rem 1.1rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .domain-chip-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        .domain-chip-desc {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            line-height: 1.4;
+        }
+
+        /* ── CTA band ─────────────────────────────────────────── */
+        .cta-band {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            padding: 4rem 0;
+            text-align: center;
+        }
+        .cta-band h2 {
+            font-size: clamp(1.4rem, 3vw, 2rem);
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 1rem;
+        }
+        .cta-band p {
+            color: rgba(255,255,255,.8);
+            margin-bottom: 2rem;
+            font-size: 1rem;
+        }
+        .cta-band .btn-primary {
+            background: #fff;
+            color: var(--primary);
+            font-size: 1rem;
+        }
+        .cta-band .btn-primary:hover { background: #f1f5f9; }
+
+        /* ── Footer ───────────────────────────────────────────── */
+        footer {
+            background: var(--bg-alt);
+            border-top: 1px solid var(--border);
+            padding: 2rem 0;
+            text-align: center;
+        }
+        .footer-inner {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+        .footer-copy {
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+        .footer-link {
+            font-size: 0.85rem;
+            color: var(--primary);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .footer-link:hover { text-decoration: underline; }
+
+        /* ── Responsive ───────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .hero { padding: 3.5rem 0 4.5rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .footer-inner { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────── -->
+<nav>
+    <div class="container">
+        <div class="nav-inner">
+            <span class="nav-logo">🎯 MyJobHunter</span>
+            <div class="nav-actions">
+                <a href="/login" class="btn btn-outline">Se connecter</a>
+                <a href="/register" class="btn btn-primary">Créer un compte</a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────── -->
+<section class="hero">
+    <div class="container hero-content">
+        <h1>Trouvez votre alternance<br>en quelques clics</h1>
+        <p>MyJobHunter agrège automatiquement des milliers d'offres d'alternance de 11 sources différentes, mises à jour chaque jour.</p>
+        <div class="hero-cta">
+            <a href="/register" class="btn btn-primary btn-lg">Créer un compte gratuit</a>
+            <a href="/login" class="btn btn-outline btn-lg">Se connecter</a>
+        </div>
+    </div>
+</section>
+
+<!-- ── Stats ──────────────────────────────────────────────── -->
+<section class="stats-section">
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card reveal">
+                <span class="stat-number">{{ "{:,}".format(total_offers).replace(",", " ") }}</span>
+                <span class="stat-label">Offres disponibles</span>
+            </div>
+            <div class="stat-card reveal">
+                <span class="stat-number">{{ sources_count }}</span>
+                <span class="stat-label">Sources scrapées</span>
+            </div>
+            <div class="stat-card reveal">
+                <span class="stat-number">{{ domains_count }}</span>
+                <span class="stat-label">Domaines couverts</span>
+            </div>
+            <div class="stat-card reveal">
+                <span class="stat-number">24h</span>
+                <span class="stat-label">Mise à jour quotidienne</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Features ───────────────────────────────────────────── -->
+<section class="section">
+    <div class="container">
+        <h2 class="section-title reveal">Tout ce dont vous avez besoin</h2>
+        <p class="section-sub reveal">Un outil complet pour votre recherche d'alternance</p>
+        <div class="features-grid">
+            <div class="feature-card reveal">
+                <span class="feature-icon">🔍</span>
+                <div class="feature-title">Agrégation automatique</div>
+                <div class="feature-desc">11 sources scrapées chaque jour — France Travail, La Bonne Alternance, LinkedIn, Indeed et bien d'autres. Aucune offre ne vous échappe.</div>
+            </div>
+            <div class="feature-card reveal">
+                <span class="feature-icon">🤖</span>
+                <div class="feature-title">Matching IA</div>
+                <div class="feature-desc">Importez votre CV et obtenez un score de compatibilité 0–100 % pour chaque offre, calculé par intelligence artificielle (Claude).</div>
+            </div>
+            <div class="feature-card reveal">
+                <span class="feature-icon">🗂️</span>
+                <div class="feature-title">Multi-domaine</div>
+                <div class="feature-desc">Informatique, droit, commerce, santé, ingénierie… chaque domaine dispose de ses propres offres et paramètres de recherche.</div>
+            </div>
+            <div class="feature-card reveal">
+                <span class="feature-icon">📋</span>
+                <div class="feature-title">Suivi des candidatures</div>
+                <div class="feature-desc">Suivez le statut de chaque candidature, notez les relances, les entretiens et les réponses directement depuis le tableau de bord.</div>
+            </div>
+            <div class="feature-card reveal">
+                <span class="feature-icon">✉️</span>
+                <div class="feature-title">Lettres de motivation IA</div>
+                <div class="feature-desc">Générez une lettre de motivation personnalisée pour chaque offre en un clic, adaptée à votre profil et à l'entreprise ciblée.</div>
+            </div>
+            <div class="feature-card reveal">
+                <span class="feature-icon">🆓</span>
+                <div class="feature-title">100 % gratuit</div>
+                <div class="feature-desc">Aucun abonnement, aucune pub, aucune limite. Projet open source maintenu par la communauté.</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Domains ─────────────────────────────────────────────── -->
+{% if domains %}
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title reveal">Domaines disponibles</h2>
+        <p class="section-sub reveal">Choisissez votre filière lors de l'inscription pour n'afficher que les offres qui vous correspondent</p>
+        <div class="domains-grid">
+            {% for d in domains %}
+            <div class="domain-chip reveal">
+                <div class="domain-chip-name">{{ d.name }}</div>
+                {% if d.description %}
+                <div class="domain-chip-desc">{{ d.description }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- ── CTA band ─────────────────────────────────────────────── -->
+<section class="cta-band">
+    <div class="container">
+        <h2 class="reveal">Prêt à trouver votre alternance ?</h2>
+        <p class="reveal">Créez votre compte en 30 secondes et accédez immédiatement à toutes les offres.</p>
+        <a href="/register" class="btn btn-primary btn-lg reveal">Commencer gratuitement</a>
+    </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────── -->
+<footer>
+    <div class="container">
+        <div class="footer-inner">
+            <span class="footer-copy">MyJobHunter — Projet open source par Mathias Quillateau</span>
+            <a href="https://github.com/Kiwi6212/JobHunter" class="footer-link" target="_blank" rel="noopener">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // Scroll-triggered fade-in
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.classList.add('visible');
+                observer.unobserve(e.target);
+            }
+        });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
