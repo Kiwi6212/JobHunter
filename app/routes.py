@@ -231,6 +231,11 @@ def dashboard():
         has_cv = CV_TEXT_PATH.exists()
         cutoff_new = datetime.utcnow() - timedelta(hours=24)
 
+        # Pass domain list to template only for admins (no domain scoping)
+        admin_domains = []
+        if not domain_id:
+            admin_domains = db.query(Domain).order_by(Domain.name).all()
+
         return render_template(
             'dashboard.html',
             offers=offers,
@@ -243,6 +248,7 @@ def dashboard():
             cutoff_new=cutoff_new,
             role=get_current_role(),
             username=session.get("username"),
+            admin_domains=admin_domains,
         )
     finally:
         db.close()

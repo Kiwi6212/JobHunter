@@ -50,6 +50,17 @@
             {% endfor %}
         </select>
     </div>
+    {% if admin_domains %}
+    <div class="filter-group">
+        <label for="filter-domain" data-i18n="filter_domain">Domaine</label>
+        <select id="filter-domain">
+            <option value="" data-i18n="filter_all">Tous</option>
+            {% for d in admin_domains %}
+            <option value="{{ d.id }}">{{ d.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
     <div class="filter-group">
         <label for="filter-company" data-i18n="filter_company">Entreprise</label>
         <input type="text" id="filter-company"
@@ -125,7 +136,8 @@
                 data-score="{{ offer.relevance_score or 0 }}"
                 data-cv-score="{{ '%.1f' % offer.cv_match_score if offer.cv_match_score is not none else '' }}"
                 data-offer-type="{{ offer.offer_type or 'job' }}"
-                data-target="{{ '1' if offer.id in target_ids else '0' }}">
+                data-target="{{ '1' if offer.id in target_ids else '0' }}"
+                data-domain-id="{{ offer.domain_id or '' }}">
                 <td class="col-title">
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>{% if offer.found_date and offer.found_date >= cutoff_new %}<span class="badge-new">NEW</span>{% endif %}
                 </td>

@@ -41,6 +41,7 @@
       stat_interviews:    "Entretiens",
       filter_status:      "Statut",
       filter_source:      "Source",
+      filter_domain:      "Domaine",
       filter_company:     "Entreprise",
       filter_search:      "Recherche",
       filter_all:         "Tous",
@@ -87,6 +88,7 @@
       stat_interviews:    "Interviews",
       filter_status:      "Status",
       filter_source:      "Source",
+      filter_domain:      "Domain",
       filter_company:     "Company",
       filter_search:      "Search",
       filter_all:         "All",
@@ -357,6 +359,7 @@
 
   var filterStatus  = document.getElementById("filter-status");
   var filterSource  = document.getElementById("filter-source");
+  var filterDomain  = document.getElementById("filter-domain");
   var filterCompany = document.getElementById("filter-company");
   var filterSearch  = document.getElementById("filter-search");
   var showRecruiters = document.getElementById("show-recruiters");
@@ -369,6 +372,7 @@
   function applyFilters() {
     var status  = filterStatus  ? filterStatus.value  : "";
     var source  = filterSource  ? filterSource.value  : "";
+    var domain  = filterDomain  ? filterDomain.value  : "";
     var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
     var search  = filterSearch  ? filterSearch.value.toLowerCase().trim()  : "";
     var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
@@ -385,6 +389,7 @@
       if (show && !showAll && row.dataset.target !== "1") show = false;
       if (show && status  && row.dataset.status !== status)                          show = false;
       if (show && source  && row.dataset.source !== source)                          show = false;
+      if (show && domain  && row.dataset.domainId !== domain)                        show = false;
       if (show && company && row.dataset.company.indexOf(company) === -1)            show = false;
       if (show && search) {
         var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
@@ -421,6 +426,7 @@
 
   if (filterStatus)  filterStatus.addEventListener("change", applyFilters);
   if (filterSource)  filterSource.addEventListener("change", applyFilters);
+  if (filterDomain)  filterDomain.addEventListener("change", applyFilters);
   if (filterCompany) filterCompany.addEventListener("input",  applyFilters);
   if (filterSearch)  filterSearch.addEventListener("input",   applyFilters);
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
@@ -434,6 +440,7 @@
     resetBtn.addEventListener("click", function () {
       if (filterStatus)  filterStatus.value  = "";
       if (filterSource)  filterSource.value  = "";
+      if (filterDomain)  filterDomain.value  = "";
       if (filterCompany) filterCompany.value = "";
       if (filterSearch)  filterSearch.value  = "";
       if (showRecruiters) showRecruiters.checked = false;
@@ -507,6 +514,7 @@
       sessionStorage.setItem(STATE_KEY, JSON.stringify({
         status:         filterStatus   ? filterStatus.value    : "",
         source:         filterSource   ? filterSource.value    : "",
+        domain:         filterDomain   ? filterDomain.value    : "",
         company:        filterCompany  ? filterCompany.value   : "",
         search:         filterSearch   ? filterSearch.value    : "",
         showRecruiters: showRecruiters ? showRecruiters.checked : false,
@@ -522,6 +530,7 @@
     if (!state) return false;
     if (filterStatus  && state.status   !== undefined) filterStatus.value    = state.status;
     if (filterSource  && state.source   !== undefined) filterSource.value    = state.source;
+    if (filterDomain  && state.domain   !== undefined) filterDomain.value    = state.domain;
     if (filterCompany && state.company  !== undefined) filterCompany.value   = state.company;
     if (filterSearch  && state.search   !== undefined) filterSearch.value    = state.search;
     if (showRecruiters && state.showRecruiters !== undefined) showRecruiters.checked = state.showRecruiters;
