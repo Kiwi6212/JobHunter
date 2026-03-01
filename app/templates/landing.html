@@ -407,6 +407,18 @@
     </div>
 </nav>
 
+<!-- ── Account deleted banner ─────────────────────────────── -->
+<script>
+(function() {
+    if (new URLSearchParams(window.location.search).get('deleted') === '1') {
+        var b = document.createElement('div');
+        b.style.cssText = 'background:#dcfce7;color:#15803d;border-bottom:1px solid #86efac;padding:.75rem 1.5rem;text-align:center;font-size:.9rem;font-weight:500;';
+        b.textContent = 'Votre compte a été supprimé. À bientôt !';
+        document.body.insertBefore(b, document.body.firstChild);
+    }
+})();
+</script>
+
 <!-- ── Hero ───────────────────────────────────────────────── -->
 <section class="hero">
     <div class="container hero-content">

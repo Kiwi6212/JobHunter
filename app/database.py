@@ -123,6 +123,13 @@ def _migrate_columns():
                     "ALTER TABLE users ADD COLUMN security_answer_hash VARCHAR(255)"
                 ))
             print("[MIGRATE] Done.")
+        if "email" not in user_cols:
+            print("[MIGRATE] Adding email column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN email VARCHAR(255)"
+                ))
+            print("[MIGRATE] Done.")
 
     # Migrate user_offers table
     if "user_offers" in insp.get_table_names():

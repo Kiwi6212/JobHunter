@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Mon profil — JobHunter{% endblock %}
+
+{% block extra_css %}
+<style>
+.account-page { max-width: 680px; margin: 2rem auto; }
+
+.account-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.8rem 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,.06));
+}
+.account-section h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.6rem;
+}
+
+.form-field { margin-bottom: 1rem; }
+.form-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.form-field input[type="text"],
+.form-field input[type="email"],
+.form-field select {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: border-color .2s;
+}
+.form-field input:focus,
+.form-field select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.form-field input[readonly] {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 500px) {
+    .info-grid { grid-template-columns: 1fr; }
+}
+
+.info-item {}
+.info-item .info-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 0.25rem;
+}
+.info-item .info-value {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.alert-success {
+    background: #dcfce7; color: #15803d;
+    border: 1px solid #86efac; border-radius: 8px;
+    padding: 0.65rem 0.85rem; font-size: 0.9rem; margin-bottom: 1rem;
+}
+.alert-error {
+    background: #fee2e2; color: #991b1b;
+    border: 1px solid #fca5a5; border-radius: 8px;
+    padding: 0.65rem 0.85rem; font-size: 0.9rem; margin-bottom: 1rem;
+}
+[data-theme="dark"] .alert-success { background: #14532d; color: #bbf7d0; border-color: #166534; }
+[data-theme="dark"] .alert-error   { background: #3b0f0f; color: #fca5a5; border-color: #7f1d1d; }
+
+.btn-submit {
+    padding: 0.6rem 1.4rem;
+    background: var(--primary-color, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+}
+.btn-submit:hover { background: #1d4ed8; }
+
+.btn-danger-outline {
+    padding: 0.6rem 1.4rem;
+    background: transparent;
+    color: #dc2626;
+    border: 1.5px solid #dc2626;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+}
+.btn-danger-outline:hover {
+    background: #dc2626;
+    color: #fff;
+}
+
+.domain-warning {
+    display: none;
+    background: #fef9c3;
+    border: 1px solid #fde047;
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    color: #854d0e;
+    margin-bottom: 1rem;
+}
+[data-theme="dark"] .domain-warning {
+    background: #422006;
+    border-color: #a16207;
+    color: #fde68a;
+}
+
+.delete-section {
+    background: var(--card-bg);
+    border: 1.5px solid #dc2626;
+    border-radius: 12px;
+    padding: 1.8rem 2rem;
+    margin-bottom: 1.5rem;
+}
+.delete-section h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #dc2626;
+}
+.delete-section p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+.delete-confirm-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.delete-confirm-row input {
+    flex: 1;
+    min-width: 160px;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+#delete-error {
+    font-size: 0.85rem;
+    color: #dc2626;
+    margin-top: 0.5rem;
+    min-height: 1.2em;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="account-page">
+    <div class="dashboard-header">
+        <h2>Mon profil</h2>
+        <p style="color:var(--text-secondary);margin-top:.25rem;">
+            <a href="{{ url_for('main.account') }}" style="color:var(--primary-color);">← Retour à mon compte</a>
+        </p>
+    </div>
+
+    {% if success %}
+    <div class="alert-success">{{ success }}</div>
+    {% endif %}
+    {% if errors %}
+    <div class="alert-error">
+        {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ── 1. Account info ──────────────────────────────────── -->
+    <div class="account-section">
+        <h3>Informations du compte</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Identifiant</div>
+                <div class="info-value">{{ user.username }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Rôle</div>
+                <div class="info-value">
+                    {% if user.role == 'admin' %}Administrateur
+                    {% elif user.role == 'viewer' %}Lecture seule
+                    {% else %}Utilisateur{% endif %}
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Domaine actuel</div>
+                <div class="info-value">
+                    {% if user.domain %}{{ user.domain.name }}{% else %}<em style="color:var(--text-secondary)">Tous</em>{% endif %}
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Inscription</div>
+                <div class="info-value">{{ user.created_at.strftime('%d/%m/%Y à %H:%M') }}</div>
+            </div>
+            {% if user.email %}
+            <div class="info-item">
+                <div class="info-label">E-mail</div>
+                <div class="info-value">{{ user.email }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── 2. Change domain ─────────────────────────────────── -->
+    <div class="account-section">
+        <h3>Changer de domaine</h3>
+        <div class="domain-warning" id="domain-warning">
+            ⚠️ Changer de domaine réinitialisera tous vos scores Match IA — les offres filtrées changeront.
+        </div>
+        <form method="POST" action="{{ url_for('main.account_profile') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="change_domain">
+            <div class="form-field">
+                <label for="domain_id">Domaine métier</label>
+                <select id="domain_id" name="domain_id" onchange="document.getElementById('domain-warning').style.display='block'">
+                    <option value="">— Tous les domaines —</option>
+                    {% for d in domains %}
+                    <option value="{{ d.id }}" {{ 'selected' if user.domain_id == d.id else '' }}>{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn-submit">Enregistrer le domaine</button>
+        </form>
+    </div>
+
+    <!-- ── 3. Change email ──────────────────────────────────── -->
+    <div class="account-section">
+        <h3>Adresse e-mail</h3>
+        <form method="POST" action="{{ url_for('main.account_profile') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="change_email">
+            <div class="form-field">
+                <label for="email">E-mail</label>
+                <input type="text" id="email" name="email"
+                       value="{{ user.email or '' }}"
+                       placeholder="votre@email.com"
+                       autocomplete="email">
+            </div>
+            <button type="submit" class="btn-submit">Modifier l'e-mail</button>
+        </form>
+    </div>
+
+    <!-- ── 4. Delete account ────────────────────────────────── -->
+    <div class="delete-section">
+        <h3>Supprimer mon compte</h3>
+        <p>
+            Cette action est <strong>irréversible</strong>. Toutes vos données seront supprimées :
+            suivi des candidatures, documents, scores Match IA.
+            Tapez <strong>SUPPRIMER</strong> dans le champ ci-dessous pour confirmer.
+        </p>
+        <div class="delete-confirm-row">
+            <input type="text" id="delete-confirm-input" placeholder="SUPPRIMER" autocomplete="off">
+            <button type="button" class="btn-danger-outline" onclick="confirmDelete()">Supprimer mon compte</button>
+        </div>
+        <div id="delete-error"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    var val = document.getElementById('delete-confirm-input').value.trim();
+    var errEl = document.getElementById('delete-error');
+    if (val !== 'SUPPRIMER') {
+        errEl.textContent = 'Veuillez taper exactement "SUPPRIMER" pour confirmer.';
+        return;
+    }
+    errEl.textContent = '';
+
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrf = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+    var formData = new FormData();
+    formData.append('confirm_text', 'SUPPRIMER');
+    formData.append('csrf_token', csrf);
+
+    fetch('/api/account/delete', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.ok) {
+                window.location.href = '/?deleted=1';
+            } else {
+                errEl.textContent = 'Erreur : ' + (res.error || 'inconnue');
+            }
+        })
+        .catch(function() {
+            errEl.textContent = 'Erreur réseau.';
+        });
+}
+</script>
+{% endblock %}

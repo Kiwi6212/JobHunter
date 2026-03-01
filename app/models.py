@@ -129,6 +129,9 @@ class User(Base):
     totp_secret = Column(String(64), nullable=True, default=None)
     totp_enabled = Column(Boolean, nullable=False, default=False)
 
+    # Contact
+    email = Column(String(255), nullable=True, default=None)
+
     # Account recovery via security question
     security_question = Column(String(255), nullable=True, default=None)
     security_answer_hash = Column(String(255), nullable=True, default=None)

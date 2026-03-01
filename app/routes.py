@@ -1162,6 +1162,113 @@ def account_disable_2fa():
     return redirect(url_for('main.account') + '?ok=2fa_disabled')
 
 
+# ── Account profile ───────────────────────────────────────────────────────────
+
+@bp.route('/account/profile', methods=['GET', 'POST'])
+@login_required
+def account_profile():
+    """Profile page: info display, domain change, email change."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('main.account'))
+
+    errors = []
+    success = None
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return redirect(url_for('main.logout'))
+
+        if request.method == 'POST':
+            action = request.form.get('action')
+
+            if action == 'change_domain':
+                new_domain_id = request.form.get('domain_id', '').strip()
+                if new_domain_id == '':
+                    new_domain_id = None
+                else:
+                    try:
+                        new_domain_id = int(new_domain_id)
+                    except ValueError:
+                        errors.append("Domaine invalide.")
+                        new_domain_id = user.domain_id
+
+                if not errors and new_domain_id != user.domain_id:
+                    # Reset cv_match_score on all user_offers
+                    db.query(UserOffer).filter(UserOffer.user_id == user_id).update(
+                        {UserOffer.cv_match_score: None},
+                        synchronize_session='fetch'
+                    )
+                    user.domain_id = new_domain_id
+                    user.updated_at = datetime.utcnow()
+                    db.commit()
+                    session['domain_id'] = new_domain_id
+                    success = "Domaine mis à jour. Les scores Match IA ont été réinitialisés."
+
+            elif action == 'change_email':
+                new_email = request.form.get('email', '').strip()
+                if new_email and ('@' not in new_email or '.' not in new_email.split('@')[-1]):
+                    errors.append("Adresse e-mail invalide.")
+                else:
+                    user.email = new_email or None
+                    user.updated_at = datetime.utcnow()
+                    db.commit()
+                    success = "Adresse e-mail mise à jour."
+
+        # Reload user after possible commit
+        db.refresh(user)
+        domains = db.query(Domain).order_by(Domain.name).all()
+
+        return render_template(
+            'profile.html',
+            user=user,
+            domains=domains,
+            errors=errors,
+            success=success,
+            role=get_current_role(),
+            username=session.get('username'),
+        )
+    finally:
+        db.close()
+
+
+@bp.route('/api/account/delete', methods=['POST'])
+@login_required
+def account_delete():
+    """Self-service account deletion — requires typing 'SUPPRIMER' to confirm."""
+    import shutil
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Non autorisé'}), 403
+
+    confirm = request.form.get('confirm_text', '').strip()
+    if confirm != 'SUPPRIMER':
+        return jsonify({'ok': False, 'error': 'Confirmation incorrecte'}), 400
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'ok': False, 'error': 'Utilisateur introuvable'}), 404
+
+        # Delete documents directory
+        docs_dir = Path(DATA_DIR) / 'documents' / str(user_id)
+        if docs_dir.exists():
+            shutil.rmtree(docs_dir, ignore_errors=True)
+
+        # Delete user (cascades: user_offers, password_resets)
+        db.delete(user)
+        db.commit()
+    finally:
+        db.close()
+
+    session.clear()
+    return jsonify({'ok': True})
+
+
 # ── Document management ───────────────────────────────────────────────────────
 
 @bp.route('/documents')
