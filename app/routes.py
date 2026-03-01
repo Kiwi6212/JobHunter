@@ -1412,6 +1412,33 @@ def admin_toggle_user(user_id):
         db.close()
 
 
+@bp.route('/api/admin/users/<int:user_id>/delete', methods=['POST'])
+@superadmin_required
+def admin_delete_user(user_id):
+    """Delete a user account and all associated data."""
+    if user_id == session.get('user_id'):
+        return jsonify({'error': 'Impossible de supprimer votre propre compte'}), 400
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'error': 'Utilisateur introuvable'}), 404
+        # Delete documents directory
+        import shutil
+        docs_dir = _admin_user_docs_dir(user_id)
+        if docs_dir.exists():
+            shutil.rmtree(str(docs_dir))
+        # Cascade deletes user_offers and password_resets via FK cascade
+        db.delete(user)
+        db.commit()
+        return jsonify({'ok': True})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
 # ── Admin: per-user document management ───────────────────────────────────────
 
 def _admin_user_docs_dir(user_id: int) -> Path:

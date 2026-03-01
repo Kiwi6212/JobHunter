@@ -65,6 +65,11 @@
                             onclick="resetPassword({{ u.id }}, this)">
                         Reset MDP
                     </button>
+                    <button class="btn btn-small btn-danger"
+                            id="btn-delete-{{ u.id }}"
+                            onclick="deleteUser({{ u.id }}, '{{ u.username }}', this)">
+                        Supprimer
+                    </button>
                     {% else %}
                     <span style="font-size:0.82em;color:var(--text-secondary);">(vous)</span>
                     {% endif %}
@@ -82,6 +87,31 @@
 
 {% block extra_js %}
 <script>
+function deleteUser(userId, username, btn) {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?\nCette action est irréversible.")) return;
+    btn.disabled = true;
+    fetch("/api/admin/users/" + userId + "/delete", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.ok) {
+                btn.disabled = false;
+                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
+                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
+                return;
+            }
+            var row = document.getElementById("user-row-" + userId);
+            if (row) row.remove();
+            var msg = document.getElementById("admin-msg");
+            msg.textContent = "Utilisateur « " + username + " » supprimé.";
+            msg.style.color = "var(--text-secondary)";
+            setTimeout(function() { msg.textContent = ""; }, 4000);
+        })
+        .catch(function() {
+            btn.disabled = false;
+            document.getElementById("admin-msg").textContent = "Erreur réseau.";
+        });
+}
+
 function resetPassword(userId, btn) {
     if (!confirm("Générer un lien de réinitialisation pour cet utilisateur ?")) return;
     btn.disabled = true;
