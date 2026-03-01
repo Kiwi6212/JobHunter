@@ -5,6 +5,8 @@ Handles all web interface endpoints and API endpoints for AJAX updates.
 
 import io
 import time
+import threading
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
@@ -24,6 +26,12 @@ from app import limiter
 
 # Create Blueprint
 bp = Blueprint('main', __name__)
+
+# ── Async CV matching task registry ───────────────────────────────────────────
+# Keyed by user_id (int for DB users, None for config/legacy admin).
+# Each value: {status, task_id, scored, total, skipped, progress, progress_total, error}
+_matching_tasks: dict = {}
+_tasks_lock = threading.Lock()
 
 
 def _is_safe_redirect(url: str) -> bool:
@@ -501,26 +509,121 @@ def stats():
         db.close()
 
 
+def _persist_scores(db, user_id, offers, scores: dict) -> None:
+    """
+    Write cv_match_score values to the database.
+    DB users  → upsert into UserOffer.cv_match_score (per-user).
+    Legacy admin → write into Offer.cv_match_score.
+    """
+    if user_id is not None:
+        offer_ids = list(scores.keys())
+        existing_uos = {
+            uo.offer_id: uo
+            for uo in db.query(UserOffer).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.offer_id.in_(offer_ids),
+            ).all()
+        }
+        for offer_id, score in scores.items():
+            if offer_id in existing_uos:
+                existing_uos[offer_id].cv_match_score = score
+            else:
+                db.add(UserOffer(
+                    user_id=user_id,
+                    offer_id=offer_id,
+                    cv_match_score=score,
+                    status='New',
+                ))
+    else:
+        offer_map = {o.id: o for o in offers}
+        for offer_id, score in scores.items():
+            if offer_id in offer_map:
+                offer_map[offer_id].cv_match_score = score
+
+
+def _build_offer_query(db, domain_id, user_id, force):
+    """
+    Build the SQLAlchemy query for offers that need scoring.
+    Returns (query, skipped_count).
+    """
+    query = db.query(Offer)
+    if domain_id:
+        query = query.filter(Offer.domain_id == domain_id)
+
+    if user_id is not None:
+        if not force:
+            already_sq = (
+                db.query(UserOffer.offer_id)
+                .filter(
+                    UserOffer.user_id == user_id,
+                    UserOffer.cv_match_score.isnot(None),
+                )
+                .subquery()
+            )
+            skipped = query.filter(Offer.id.in_(already_sq)).count()
+            query = query.filter(~Offer.id.in_(already_sq))
+        else:
+            skipped = 0
+    else:
+        if not force:
+            skipped = query.filter(Offer.cv_match_score.isnot(None)).count()
+            query = query.filter(Offer.cv_match_score.is_(None))
+        else:
+            skipped = 0
+
+    return query, skipped
+
+
+def _cv_matching_worker(task_state: dict, user_id, domain_id, method: str, force: bool) -> None:
+    """
+    Thread worker: runs CV matching and writes scores to DB.
+    Updates task_state in-place so the status endpoint can poll progress.
+    """
+    db = SessionLocal()
+    try:
+        cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
+        query, skipped = _build_offer_query(db, domain_id, user_id, force)
+        offers = query.all()
+        total = len(offers)
+        task_state.update({'total': total, 'skipped': skipped})
+
+        if not offers:
+            task_state.update({'status': 'done', 'scored': 0})
+            return
+
+        if method == 'claude':
+            from app.services.cv_matcher_claude import ClaudeCVMatcher
+            matcher = ClaudeCVMatcher(cv_text)
+
+            def _progress_cb(batches_done, total_batches, offers_done):
+                task_state.update({
+                    'progress': batches_done,
+                    'progress_total': total_batches,
+                    'scored': offers_done,
+                })
+
+            scores = matcher.score_offers(offers, progress_callback=_progress_cb)
+        else:
+            from app.services.cv_matcher import CVMatcher
+            matcher = CVMatcher(cv_text)
+            scores = matcher.score_offers(offers)
+
+        _persist_scores(db, user_id, offers, scores)
+        db.commit()
+        task_state.update({'status': 'done', 'scored': len(scores), 'skipped': skipped})
+
+    except Exception as e:
+        logger.error(f"[cv_matching_worker] Error: {e}", exc_info=True)
+        db.rollback()
+        task_state.update({'status': 'error', 'error': 'Erreur interne du serveur'})
+    finally:
+        db.close()
+
+
 def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
     """
-    Run CV matching between the stored CV and offers, then persist scores.
-
-    For DB users (user_id is set):
-        Scores are written to UserOffer.cv_match_score (per-user, upserted).
-        Incremental mode (force=False) skips offers already scored in UserOffer.
-
-    For config/legacy admin (user_id is None):
-        Scores are written to Offer.cv_match_score (shared column, legacy path).
-
-    Args:
-        method:    'tfidf' (fast, local) or 'claude' (AI-powered, slower)
-        force:     Re-score ALL offers in scope when True; skip already-scored
-                   when False (default — only processes new/unscored offers).
-        domain_id: Restrict to offers of this domain when set.
-        user_id:   DB user to write scores for; None → legacy Offer column.
-
-    Returns:
-        (scored, skipped) — counts of offers scored and skipped.
+    Synchronous CV matching — used by cv_upload (tfidf, force=True).
+    Returns (scored, skipped).
     """
     if not CV_TEXT_PATH.exists():
         return 0, 0
@@ -528,33 +631,7 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
     cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
     db = SessionLocal()
     try:
-        query = db.query(Offer)
-        if domain_id:
-            query = query.filter(Offer.domain_id == domain_id)
-
-        if user_id is not None:
-            # ── Per-user path: score into UserOffer.cv_match_score ──────
-            if not force:
-                already_scored_sq = (
-                    db.query(UserOffer.offer_id)
-                    .filter(
-                        UserOffer.user_id == user_id,
-                        UserOffer.cv_match_score.isnot(None),
-                    )
-                    .subquery()
-                )
-                skipped = query.filter(Offer.id.in_(already_scored_sq)).count()
-                query = query.filter(~Offer.id.in_(already_scored_sq))
-            else:
-                skipped = 0
-        else:
-            # ── Legacy path: score into Offer.cv_match_score ────────────
-            if not force:
-                skipped = query.filter(Offer.cv_match_score.isnot(None)).count()
-                query = query.filter(Offer.cv_match_score.is_(None))
-            else:
-                skipped = 0
-
+        query, skipped = _build_offer_query(db, domain_id, user_id, force)
         offers = query.all()
         if not offers:
             return 0, skipped
@@ -567,34 +644,7 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
             matcher = CVMatcher(cv_text)
 
         scores = matcher.score_offers(offers)
-
-        if user_id is not None:
-            # Batch-load existing UserOffer rows then upsert
-            offer_ids = list(scores.keys())
-            existing_uos = {
-                uo.offer_id: uo
-                for uo in db.query(UserOffer).filter(
-                    UserOffer.user_id == user_id,
-                    UserOffer.offer_id.in_(offer_ids),
-                ).all()
-            }
-            for offer_id, score in scores.items():
-                if offer_id in existing_uos:
-                    existing_uos[offer_id].cv_match_score = score
-                else:
-                    db.add(UserOffer(
-                        user_id=user_id,
-                        offer_id=offer_id,
-                        cv_match_score=score,
-                        status='New',
-                    ))
-        else:
-            # Legacy: write directly to Offer
-            offer_map = {o.id: o for o in offers}
-            for offer_id, score in scores.items():
-                if offer_id in offer_map:
-                    offer_map[offer_id].cv_match_score = score
-
+        _persist_scores(db, user_id, offers, scores)
         db.commit()
         return len(scores), skipped
     except Exception as e:
@@ -692,12 +742,14 @@ def cv_upload():
 @admin_required
 def cv_rematch():
     """
-    Re-run CV matching using the already-stored CV text.
+    Launch CV matching asynchronously in a background thread and return immediately.
 
     Query params:
       method=tfidf|claude  — scoring engine (default: tfidf)
       force=true           — re-score ALL offers, even those already scored
-                             (default: false — only score offers with no score yet)
+
+    Returns immediately with {ok, status: 'started'|'already_running', task_id}.
+    Poll GET /api/cv/matching-status for progress.
     """
     if not CV_TEXT_PATH.exists():
         return jsonify({'error': 'No CV uploaded yet'}), 404
@@ -705,19 +757,62 @@ def cv_rematch():
     method = request.args.get('method', 'tfidf')
     if method not in ('tfidf', 'claude'):
         method = 'tfidf'
-
     force = request.args.get('force', 'false').lower() == 'true'
 
-    try:
-        scored, skipped = _run_cv_matching(
-            method=method,
-            force=force,
-            domain_id=session.get("domain_id"),
-            user_id=session.get("user_id"),
-        )
-        return jsonify({'ok': True, 'scored': scored, 'skipped': skipped, 'method': method})
-    except Exception as e:
-        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    user_id = session.get('user_id')
+    domain_id = session.get('domain_id')
+
+    with _tasks_lock:
+        existing = _matching_tasks.get(user_id)
+        if existing and existing.get('status') == 'running':
+            return jsonify({
+                'ok': False,
+                'status': 'already_running',
+                'scored': existing.get('scored', 0),
+                'total': existing.get('total', 0),
+            })
+
+        task_id = str(uuid.uuid4())
+        task_state = {
+            'status': 'running',
+            'task_id': task_id,
+            'scored': 0,
+            'total': 0,
+            'skipped': 0,
+            'progress': 0,
+            'progress_total': 0,
+            'error': None,
+        }
+        _matching_tasks[user_id] = task_state
+
+    thread = threading.Thread(
+        target=_cv_matching_worker,
+        args=(task_state, user_id, domain_id, method, force),
+        daemon=True,
+    )
+    thread.start()
+
+    return jsonify({'ok': True, 'status': 'started', 'task_id': task_id})
+
+
+@bp.route('/api/cv/matching-status')
+@login_required
+def cv_matching_status():
+    """Return the current CV matching task state for the logged-in user."""
+    user_id = session.get('user_id')
+    task = _matching_tasks.get(user_id)
+    if not task:
+        return jsonify({'ok': True, 'status': 'none'})
+    return jsonify({
+        'ok': True,
+        'status':          task['status'],
+        'scored':          task.get('scored', 0),
+        'total':           task.get('total', 0),
+        'skipped':         task.get('skipped', 0),
+        'progress':        task.get('progress', 0),
+        'progress_total':  task.get('progress_total', 0),
+        'error':           task.get('error'),
+    })
 
 
 # ── Document management ───────────────────────────────────────────────────────

@@ -96,9 +96,16 @@
         {% if has_cv %}
         <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
         <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>
-        <span id="cv-spinner" style="display:none; margin-left:6px; font-size:0.85em; color:var(--text-muted, #888);" data-i18n="cv_ai_loading">IA en cours…</span>
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
+        {% if has_cv %}
+        <div id="cv-match-progress" style="display:none; margin-top:5px; width:100%;">
+            <div style="background:var(--border,#334); border-radius:3px; height:5px; overflow:hidden; margin-bottom:3px;">
+                <div id="cv-progress-fill" style="background:var(--accent-blue,#3b82f6); height:100%; width:0%; transition:width 0.5s ease;"></div>
+            </div>
+            <span id="cv-progress-text" style="font-size:0.78em; color:var(--text-muted,#888);"></span>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 </div>

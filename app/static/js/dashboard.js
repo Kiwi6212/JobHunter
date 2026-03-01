@@ -76,6 +76,9 @@
       cv_ai_loading:      "Analyse IA en cours…",
       cv_success:         "CV importé, scores calculés.",
       cv_ai_success:      "Scores IA calculés.",
+      cv_match_started:   "Matching lancé…",
+      cv_match_done:      "Matching terminé, rechargement…",
+      cv_match_running:   "Déjà en cours — suivi de progression repris.",
       cv_error:           "Erreur : ",
     },
     en: {
@@ -123,6 +126,9 @@
       cv_ai_loading:      "AI analysis in progress…",
       cv_success:         "CV imported, scores calculated.",
       cv_ai_success:      "AI scores calculated.",
+      cv_match_started:   "Matching started…",
+      cv_match_done:      "Matching complete, reloading…",
+      cv_match_running:   "Already running — resuming progress tracking.",
       cv_error:           "Error: ",
     }
   };
@@ -620,10 +626,14 @@
 
   var cvFileInput      = document.getElementById("cv-file-input");
   var cvStatusMsg      = document.getElementById("cv-upload-status");
-  var cvSpinner        = document.getElementById("cv-spinner");
   var btnImportCv      = document.getElementById("btn-import-cv");
   var btnRematchCv     = document.getElementById("btn-rematch-cv");
   var btnRematchClaude = document.getElementById("btn-rematch-claude");
+  var cvMatchProgress  = document.getElementById("cv-match-progress");
+  var cvProgressFill   = document.getElementById("cv-progress-fill");
+  var cvProgressText   = document.getElementById("cv-progress-text");
+
+  var _matchingInterval = null;  // setInterval handle for polling
 
   // Wire the Import CV button to open the hidden file picker
   if (btnImportCv && cvFileInput) {
@@ -636,6 +646,88 @@
     if (!cvStatusMsg) return;
     cvStatusMsg.textContent = msg;
     cvStatusMsg.style.color = isError ? "var(--accent-red, #ef4444)" : "var(--accent-green, #22c55e)";
+  }
+
+  function _setMatchButtons(disabled) {
+    if (btnRematchCv)     btnRematchCv.disabled     = disabled;
+    if (btnRematchClaude) btnRematchClaude.disabled = disabled;
+  }
+
+  function _showProgress(show) {
+    if (cvMatchProgress) cvMatchProgress.style.display = show ? "block" : "none";
+  }
+
+  function _updateProgressBar(scored, total) {
+    var pct = total > 0 ? Math.min(100, Math.round(scored / total * 100)) : 0;
+    if (cvProgressFill) cvProgressFill.style.width = pct + "%";
+    if (cvProgressText) cvProgressText.textContent = scored + " / " + total + " offres (" + pct + "%)";
+  }
+
+  function _stopPolling() {
+    if (_matchingInterval) {
+      clearInterval(_matchingInterval);
+      _matchingInterval = null;
+    }
+  }
+
+  function _pollMatchingStatus() {
+    fetch("/api/cv/matching-status")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+        if (data.status === "done") {
+          _stopPolling();
+          _updateProgressBar(data.scored || 0, data.total || data.scored || 1);
+          cvSetStatus(t.cv_match_done, false);
+          setTimeout(function () { location.reload(); }, 1000);
+        } else if (data.status === "error") {
+          _stopPolling();
+          _showProgress(false);
+          _setMatchButtons(false);
+          cvSetStatus(t.cv_error + (data.error || "unknown"), true);
+        } else if (data.status === "running") {
+          _updateProgressBar(data.scored || 0, data.total || 0);
+        } else if (data.status === "none") {
+          // No task — stop polling silently
+          _stopPolling();
+          _showProgress(false);
+          _setMatchButtons(false);
+        }
+      })
+      .catch(function () { /* network hiccup — keep polling */ });
+  }
+
+  function _startMatchingPoll(url) {
+    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
+    _setMatchButtons(true);
+    _showProgress(true);
+    if (cvProgressFill) cvProgressFill.style.width = "0%";
+    if (cvProgressText) cvProgressText.textContent = "";
+    cvSetStatus(t.cv_match_started, false);
+
+    fetch(url, { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok && data.status !== "already_running") {
+          _showProgress(false);
+          _setMatchButtons(false);
+          cvSetStatus(t.cv_error + (data.error || "unknown"), true);
+          return;
+        }
+        if (data.status === "already_running") {
+          cvSetStatus(t.cv_match_running, false);
+          _updateProgressBar(data.scored || 0, data.total || 0);
+        }
+        // Start polling regardless (started or already_running)
+        _stopPolling();
+        _pollMatchingStatus();  // immediate first poll
+        _matchingInterval = setInterval(_pollMatchingStatus, 2000);
+      })
+      .catch(function (err) {
+        _showProgress(false);
+        _setMatchButtons(false);
+        cvSetStatus(t.cv_error + err, true);
+      });
   }
 
   function handleCvUpload(file) {
@@ -668,46 +760,13 @@
 
   if (btnRematchCv) {
     btnRematchCv.addEventListener("click", function () {
-      var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
-      cvSetStatus(t.cv_uploading, false);
-      fetch("/api/cv/rematch", { method: "POST" })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.ok) {
-            cvSetStatus(t.cv_success, false);
-            setTimeout(function () { location.reload(); }, 1200);
-          } else {
-            cvSetStatus(t.cv_error + (data.error || "unknown"), true);
-          }
-        })
-        .catch(function (err) { cvSetStatus(t.cv_error + err, true); });
+      _startMatchingPoll("/api/cv/rematch");
     });
   }
 
   if (btnRematchClaude) {
     btnRematchClaude.addEventListener("click", function () {
-      var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
-      cvSetStatus("", false);
-      if (cvSpinner) cvSpinner.style.display = "inline";
-      btnRematchClaude.disabled = true;
-
-      fetch("/api/cv/rematch?method=claude", { method: "POST" })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (cvSpinner) cvSpinner.style.display = "none";
-          btnRematchClaude.disabled = false;
-          if (data.ok) {
-            cvSetStatus(t.cv_ai_success, false);
-            setTimeout(function () { location.reload(); }, 1200);
-          } else {
-            cvSetStatus(t.cv_error + (data.error || "unknown"), true);
-          }
-        })
-        .catch(function (err) {
-          if (cvSpinner) cvSpinner.style.display = "none";
-          btnRematchClaude.disabled = false;
-          cvSetStatus(t.cv_error + err, true);
-        });
+      _startMatchingPoll("/api/cv/rematch?method=claude");
     });
   }
 
@@ -729,5 +788,21 @@
     applyFilters();
   }
   applyLang(currentLang);
+
+  // Auto-resume polling if a matching job is already running (e.g. page refresh)
+  if (hasCv) {
+    fetch("/api/cv/matching-status")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.status === "running") {
+          _setMatchButtons(true);
+          _showProgress(true);
+          _updateProgressBar(data.scored || 0, data.total || 0);
+          _stopPolling();
+          _matchingInterval = setInterval(_pollMatchingStatus, 2000);
+        }
+      })
+      .catch(function () {});
+  }
 
 })();

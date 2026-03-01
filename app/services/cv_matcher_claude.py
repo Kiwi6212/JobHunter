@@ -68,13 +68,14 @@ class ClaudeCVMatcher:
             raise ValueError("CV text is empty")
         self.cv_text = cv_text.strip()
 
-    def score_offers(self, offers) -> dict:
+    def score_offers(self, offers, progress_callback=None) -> dict:
         """
         Compute a 0-100 match score for each offer using Claude.
 
         Args:
-            offers: iterable of Offer ORM objects (need .id, .title,
-                    .company, .description)
+            offers:            iterable of Offer ORM objects (.id, .title, .company, .description)
+            progress_callback: optional callable(batches_done, total_batches, offers_done)
+                               called after each batch completes — used for async progress tracking.
 
         Returns:
             dict mapping offer.id -> float (0-100, rounded to 1 decimal)
@@ -109,9 +110,12 @@ class ClaudeCVMatcher:
             for i in range(0, len(offer_list), BATCH_SIZE)
         ]
 
+        total_batches = len(batches)
+        offers_done = 0
+
         for idx, batch in enumerate(batches):
             logger.info(
-                f"[cv_matcher_claude] Batch {idx + 1}/{len(batches)} "
+                f"[cv_matcher_claude] Batch {idx + 1}/{total_batches} "
                 f"({len(batch)} offers)…"
             )
             prompt = _build_prompt(self.cv_text, batch)
@@ -167,5 +171,9 @@ class ClaudeCVMatcher:
                 )
                 for offer in batch:
                     scores[offer.id] = 0.0
+
+            offers_done += len(batch)
+            if progress_callback is not None:
+                progress_callback(idx + 1, total_batches, offers_done)
 
         return scores
