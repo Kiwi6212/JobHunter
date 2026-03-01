@@ -1622,3 +1622,73 @@ def reset_password(token):
         return render_template('reset_password.html', token=token, errors=errors)
     finally:
         db.close()
+
+
+# ── Admin: site statistics ─────────────────────────────────────────────────────
+
+_NGINX_LOG = Path('/var/log/nginx/access.log')
+
+
+def _parse_nginx_today():
+    """Parse today's entries from the nginx access log.
+    Returns (unique_ips, total_requests, top_pages, landing_hits).
+    top_pages is a list of (path, count) tuples, max 10.
+    Returns None values if the log file is unavailable.
+    """
+    import re
+    from collections import Counter
+    today_prefix = datetime.now().strftime('%d/%b/%Y')
+    # Match: IP ... [DD/Mon/YYYY: ... "METHOD /path HTTP ..."
+    pat = re.compile(
+        r'^(\S+)\s+\S+\s+\S+\s+\[' + re.escape(today_prefix) +
+        r':[^\]]+\]\s+"(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(\S+)\s+HTTP'
+    )
+    unique_ips: set = set()
+    total = 0
+    counter: Counter = Counter()
+    try:
+        with open(_NGINX_LOG, 'r', errors='replace') as fh:
+            for line in fh:
+                m = pat.match(line)
+                if not m:
+                    continue
+                ip = m.group(1)
+                path = m.group(2).split('?')[0]
+                unique_ips.add(ip)
+                total += 1
+                counter[path] += 1
+    except FileNotFoundError:
+        return None, None, None, None
+    except OSError:
+        return None, None, None, None
+    landing_hits = counter.get('/', 0)
+    top_pages = counter.most_common(10)
+    return unique_ips, total, top_pages, landing_hits
+
+
+@bp.route('/api/admin/stats')
+@superadmin_required
+def admin_stats():
+    """Return today's site statistics: nginx log metrics + DB registrations."""
+    from datetime import date as _date
+    unique_ips, total_req, top_pages, landing_hits = _parse_nginx_today()
+    log_available = unique_ips is not None
+
+    db = SessionLocal()
+    try:
+        today_start = datetime.combine(_date.today(), datetime.min.time())
+        registrations_today = db.query(func.count(User.id)).filter(
+            User.created_at >= today_start
+        ).scalar() or 0
+    finally:
+        db.close()
+
+    return jsonify({
+        'ok': True,
+        'log_available': log_available,
+        'unique_ips': len(unique_ips) if log_available else None,
+        'total_requests': total_req if log_available else None,
+        'landing_hits': landing_hits if log_available else None,
+        'top_pages': top_pages if log_available else None,
+        'registrations_today': registrations_today,
+    })

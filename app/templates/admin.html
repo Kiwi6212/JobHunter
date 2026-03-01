@@ -10,6 +10,30 @@
     </p>
 </div>
 
+<!-- ── Statistiques du site ─────────────────────────── -->
+<div class="admin-stats-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;">
+        <h3 style="font-size:1rem;font-weight:700;margin:0;">Statistiques du site — aujourd'hui</h3>
+        <span id="stats-refresh-label" style="font-size:.78rem;color:var(--text-secondary);">Chargement…</span>
+    </div>
+    <div class="stats-kpis" id="stats-kpis">
+        <div class="stat-kpi"><span class="stat-kpi-val" id="s-ips">—</span><span class="stat-kpi-lbl">Visiteurs uniques</span></div>
+        <div class="stat-kpi"><span class="stat-kpi-val" id="s-reqs">—</span><span class="stat-kpi-lbl">Requêtes totales</span></div>
+        <div class="stat-kpi"><span class="stat-kpi-val" id="s-landing">—</span><span class="stat-kpi-lbl">Hits landing page</span></div>
+        <div class="stat-kpi"><span class="stat-kpi-val" id="s-regs">—</span><span class="stat-kpi-lbl">Inscriptions</span></div>
+    </div>
+    <div id="stats-log-warn" style="display:none;font-size:.8rem;color:var(--text-secondary);margin-bottom:.7rem;">
+        ⚠️ Fichier <code>/var/log/nginx/access.log</code> inaccessible — seules les inscriptions DB sont disponibles.
+    </div>
+    <div id="stats-top-pages" style="display:none;">
+        <div style="font-size:.82rem;font-weight:600;color:var(--text-secondary);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.4px;">Top 10 pages</div>
+        <table class="stats-pages-table" id="stats-pages-table">
+            <thead><tr><th>Page</th><th>Hits</th></tr></thead>
+            <tbody id="stats-pages-body"></tbody>
+        </table>
+    </div>
+</div>
+
 <div class="table-container" style="margin-top:1.5rem;">
     <div class="table-scroll">
     <table class="offers-table" id="admin-users-table">
@@ -186,7 +210,108 @@ function toggleUser(userId, btn) {
 }
 </script>
 
+<script>
+function loadStats() {
+    fetch('/api/admin/stats')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            var fmt = function(v) { return v === null || v === undefined ? '—' : v.toLocaleString('fr-FR'); };
+            document.getElementById('s-regs').textContent = fmt(d.registrations_today);
+            if (!d.log_available) {
+                document.getElementById('s-ips').textContent = '—';
+                document.getElementById('s-reqs').textContent = '—';
+                document.getElementById('s-landing').textContent = '—';
+                document.getElementById('stats-log-warn').style.display = 'block';
+                document.getElementById('stats-top-pages').style.display = 'none';
+            } else {
+                document.getElementById('stats-log-warn').style.display = 'none';
+                document.getElementById('s-ips').textContent = fmt(d.unique_ips);
+                document.getElementById('s-reqs').textContent = fmt(d.total_requests);
+                document.getElementById('s-landing').textContent = fmt(d.landing_hits);
+                var tbody = document.getElementById('stats-pages-body');
+                tbody.innerHTML = '';
+                (d.top_pages || []).forEach(function(p) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td><code>' + p[0] + '</code></td><td>' + p[1].toLocaleString('fr-FR') + '</td>';
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('stats-top-pages').style.display = (d.top_pages && d.top_pages.length) ? 'block' : 'none';
+            }
+            var now = new Date();
+            document.getElementById('stats-refresh-label').textContent =
+                'Mis à jour à ' + now.getHours().toString().padStart(2,'0') + ':' +
+                now.getMinutes().toString().padStart(2,'0') + ':' +
+                now.getSeconds().toString().padStart(2,'0') + ' — rafraîchissement auto toutes les 30 s';
+        })
+        .catch(function() {
+            document.getElementById('stats-refresh-label').textContent = 'Erreur de chargement';
+        });
+}
+loadStats();
+setInterval(loadStats, 30000);
+</script>
+
 <style>
+.admin-stats-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,.06));
+}
+.stats-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.stat-kpi {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    text-align: center;
+}
+.stat-kpi-val {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary-color, #2563eb);
+    line-height: 1.1;
+    margin-bottom: .2rem;
+}
+.stat-kpi-lbl {
+    font-size: .75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+.stats-pages-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+}
+.stats-pages-table th {
+    text-align: left;
+    padding: .3rem .6rem;
+    color: var(--text-secondary);
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    border-bottom: 1px solid var(--border-color);
+}
+.stats-pages-table td {
+    padding: .3rem .6rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.stats-pages-table tr:last-child td { border-bottom: none; }
+.stats-pages-table code {
+    font-size: .82rem;
+    color: var(--text-primary);
+}
 .row-disabled td {
     opacity: 0.45;
 }
