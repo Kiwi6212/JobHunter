@@ -1508,7 +1508,7 @@ def admin_reset_password(user_id):
         token = uuid.uuid4().hex
         db.add(PasswordReset(user_id=user_id, token=token))
         db.commit()
-        reset_url = url_for('main.reset_password', token=token, _external=True)
+        reset_url = url_for('main.reset_password', token=token, _external=True, _scheme='https')
         return jsonify({'ok': True, 'reset_url': reset_url})
     except Exception:
         db.rollback()
@@ -1572,7 +1572,7 @@ def forgot_password():
             token = uuid.uuid4().hex
             db.add(PasswordReset(user_id=user.id, token=token))
             db.commit()
-            reset_url = url_for('main.reset_password', token=token, _external=True)
+            reset_url = url_for('main.reset_password', token=token, _external=True, _scheme='https')
             return render_template('forgot_password.html', step='3', reset_url=reset_url)
         finally:
             db.close()
