@@ -4,12 +4,25 @@ Handles all web interface endpoints and API endpoints for AJAX updates.
 """
 
 import io
+import json
+import logging
+import os
 import time
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
+
+logger = logging.getLogger(__name__)
+
+# Cross-process file locking (Linux/Mac only; Windows falls back to thread lock)
+try:
+    import fcntl as _fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
 from sqlalchemy import func
@@ -27,11 +40,10 @@ from app import limiter
 # Create Blueprint
 bp = Blueprint('main', __name__)
 
-# ── Async CV matching task registry ───────────────────────────────────────────
-# Keyed by user_id (int for DB users, None for config/legacy admin).
-# Each value: {status, task_id, scored, total, skipped, progress, progress_total, error}
-_matching_tasks: dict = {}
-_tasks_lock = threading.Lock()
+# ── Async CV matching task registry (file-backed, multi-worker safe) ──────────
+# Tasks are stored in data/matching_tasks.json so all Gunicorn workers share state.
+# File is keyed by str(user_id) or "_admin" for config/legacy admin (user_id=None).
+_task_thread_lock = threading.Lock()  # intra-process thread safety
 
 
 def _is_safe_redirect(url: str) -> bool:
@@ -143,6 +155,79 @@ VALID_STATUSES = [
 # CV storage paths
 CV_DIR = DATA_DIR / "cv"
 CV_TEXT_PATH = CV_DIR / "cv_text.txt"
+
+# Task registry file (shared across all Gunicorn workers)
+_TASKS_FILE = DATA_DIR / "matching_tasks.json"
+_TASKS_LOCK_FILE = DATA_DIR / "matching_tasks.json.lock"
+
+
+@contextmanager
+def _tasks_lock_ctx():
+    """Acquire thread lock + optional cross-process file lock (fcntl on Linux)."""
+    with _task_thread_lock:
+        if not _HAS_FCNTL:
+            yield
+            return
+        try:
+            _TASKS_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+            lock_fh = open(_TASKS_LOCK_FILE, 'a')
+            _fcntl.flock(lock_fh.fileno(), _fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                _fcntl.flock(lock_fh.fileno(), _fcntl.LOCK_UN)
+                lock_fh.close()
+        except OSError:
+            yield  # fallback: no file lock
+
+
+def _read_tasks_raw() -> dict:
+    """Read the tasks JSON file. Returns {} if missing or unreadable."""
+    try:
+        if _TASKS_FILE.exists():
+            return json.loads(_TASKS_FILE.read_text(encoding='utf-8'))
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def _write_tasks_raw(data: dict) -> None:
+    """Atomically write task data (write to .tmp then os.replace)."""
+    _TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(str(_TASKS_FILE) + '.tmp')
+    tmp.write_text(json.dumps(data, default=str), encoding='utf-8')
+    os.replace(str(tmp), str(_TASKS_FILE))
+
+
+def _load_task(user_id) -> dict | None:
+    """Return the task state for user_id, or None if no task exists."""
+    key = str(user_id) if user_id is not None else '_admin'
+    with _tasks_lock_ctx():
+        return _read_tasks_raw().get(key)
+
+
+def _save_task(user_id, state: dict) -> None:
+    """Persist task state for user_id to the shared JSON file."""
+    key = str(user_id) if user_id is not None else '_admin'
+    with _tasks_lock_ctx():
+        data = _read_tasks_raw()
+        data[key] = state
+        _write_tasks_raw(data)
+
+
+def _try_start_task(user_id, initial_state: dict) -> bool:
+    """
+    Atomic check-and-set: if no task is currently running for user_id,
+    write initial_state and return True. Returns False if already running.
+    """
+    key = str(user_id) if user_id is not None else '_admin'
+    with _tasks_lock_ctx():
+        data = _read_tasks_raw()
+        if data.get(key, {}).get('status') == 'running':
+            return False
+        data[key] = initial_state
+        _write_tasks_raw(data)
+    return True
 
 # ── Document upload validation ────────────────────────────────────────────────
 MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
@@ -574,10 +659,10 @@ def _build_offer_query(db, domain_id, user_id, force):
     return query, skipped
 
 
-def _cv_matching_worker(task_state: dict, user_id, domain_id, method: str, force: bool) -> None:
+def _cv_matching_worker(user_id, domain_id, method: str, force: bool) -> None:
     """
     Thread worker: runs CV matching and writes scores to DB.
-    Updates task_state in-place so the status endpoint can poll progress.
+    Persists progress to _TASKS_FILE after each batch so all workers can poll it.
     """
     db = SessionLocal()
     try:
@@ -585,10 +670,16 @@ def _cv_matching_worker(task_state: dict, user_id, domain_id, method: str, force
         query, skipped = _build_offer_query(db, domain_id, user_id, force)
         offers = query.all()
         total = len(offers)
-        task_state.update({'total': total, 'skipped': skipped})
+        _save_task(user_id, {
+            'status': 'running', 'scored': 0, 'total': total,
+            'skipped': skipped, 'progress': 0, 'progress_total': 0, 'error': None,
+        })
 
         if not offers:
-            task_state.update({'status': 'done', 'scored': 0})
+            _save_task(user_id, {
+                'status': 'done', 'scored': 0, 'total': 0,
+                'skipped': skipped, 'progress': 0, 'progress_total': 0, 'error': None,
+            })
             return
 
         if method == 'claude':
@@ -596,10 +687,10 @@ def _cv_matching_worker(task_state: dict, user_id, domain_id, method: str, force
             matcher = ClaudeCVMatcher(cv_text)
 
             def _progress_cb(batches_done, total_batches, offers_done):
-                task_state.update({
-                    'progress': batches_done,
-                    'progress_total': total_batches,
-                    'scored': offers_done,
+                _save_task(user_id, {
+                    'status': 'running', 'scored': offers_done, 'total': total,
+                    'skipped': skipped, 'progress': batches_done,
+                    'progress_total': total_batches, 'error': None,
                 })
 
             scores = matcher.score_offers(offers, progress_callback=_progress_cb)
@@ -610,12 +701,18 @@ def _cv_matching_worker(task_state: dict, user_id, domain_id, method: str, force
 
         _persist_scores(db, user_id, offers, scores)
         db.commit()
-        task_state.update({'status': 'done', 'scored': len(scores), 'skipped': skipped})
+        _save_task(user_id, {
+            'status': 'done', 'scored': len(scores), 'total': total,
+            'skipped': skipped, 'progress': 0, 'progress_total': 0, 'error': None,
+        })
 
     except Exception as e:
         logger.error(f"[cv_matching_worker] Error: {e}", exc_info=True)
         db.rollback()
-        task_state.update({'status': 'error', 'error': 'Erreur interne du serveur'})
+        _save_task(user_id, {
+            'status': 'error', 'scored': 0, 'total': 0, 'skipped': 0,
+            'progress': 0, 'progress_total': 0, 'error': 'Erreur interne du serveur',
+        })
     finally:
         db.close()
 
@@ -762,32 +859,30 @@ def cv_rematch():
     user_id = session.get('user_id')
     domain_id = session.get('domain_id')
 
-    with _tasks_lock:
-        existing = _matching_tasks.get(user_id)
-        if existing and existing.get('status') == 'running':
-            return jsonify({
-                'ok': False,
-                'status': 'already_running',
-                'scored': existing.get('scored', 0),
-                'total': existing.get('total', 0),
-            })
+    task_id = str(uuid.uuid4())
+    initial_state = {
+        'status': 'running',
+        'task_id': task_id,
+        'scored': 0,
+        'total': 0,
+        'skipped': 0,
+        'progress': 0,
+        'progress_total': 0,
+        'error': None,
+    }
 
-        task_id = str(uuid.uuid4())
-        task_state = {
-            'status': 'running',
-            'task_id': task_id,
-            'scored': 0,
-            'total': 0,
-            'skipped': 0,
-            'progress': 0,
-            'progress_total': 0,
-            'error': None,
-        }
-        _matching_tasks[user_id] = task_state
+    if not _try_start_task(user_id, initial_state):
+        existing = _load_task(user_id) or {}
+        return jsonify({
+            'ok': False,
+            'status': 'already_running',
+            'scored': existing.get('scored', 0),
+            'total': existing.get('total', 0),
+        })
 
     thread = threading.Thread(
         target=_cv_matching_worker,
-        args=(task_state, user_id, domain_id, method, force),
+        args=(user_id, domain_id, method, force),
         daemon=True,
     )
     thread.start()
@@ -800,7 +895,7 @@ def cv_rematch():
 def cv_matching_status():
     """Return the current CV matching task state for the logged-in user."""
     user_id = session.get('user_id')
-    task = _matching_tasks.get(user_id)
+    task = _load_task(user_id)
     if not task:
         return jsonify({'ok': True, 'status': 'none'})
     return jsonify({
