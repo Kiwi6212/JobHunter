@@ -5,6 +5,7 @@ Initializes the Flask app with configuration and registers blueprints.
 
 from flask import Flask
 from flask_bcrypt import Bcrypt
+from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -12,6 +13,7 @@ from config import Config
 
 # Module-level extension instances (initialized with app in create_app)
 bcrypt = Bcrypt()
+mail = Mail()
 csrf = CSRFProtect()
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
@@ -31,6 +33,7 @@ def create_app(config_class=Config):
 
     # Initialize extensions
     bcrypt.init_app(app)
+    mail.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
 

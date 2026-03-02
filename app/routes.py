@@ -1627,7 +1627,7 @@ def admin_reset_password(user_id):
 @bp.route('/forgot-password', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def forgot_password():
-    """Account recovery via security question — displays reset link on screen."""
+    """Account recovery: email link if user has email, else security question flow."""
     if request.method == 'GET':
         return render_template('forgot_password.html', step='1',
                                security_questions=SECURITY_QUESTIONS)
@@ -1641,10 +1641,32 @@ def forgot_password():
             user = db.query(User).filter(
                 User.username == username, User.is_active == True
             ).first()
-            if not user or not user.security_question:
+            if not user:
                 return render_template(
                     'forgot_password.html', step='1',
-                    error="Nom d'utilisateur introuvable ou question de sécurité non configurée.",
+                    error="Nom d'utilisateur introuvable.",
+                    security_questions=SECURITY_QUESTIONS,
+                )
+            # ── Email path: user has an email → send reset link directly ──────
+            if user.email:
+                db.query(PasswordReset).filter(
+                    PasswordReset.user_id == user.id,
+                    PasswordReset.used == False,
+                ).update({'used': True})
+                token = uuid.uuid4().hex
+                db.add(PasswordReset(user_id=user.id, token=token))
+                db.commit()
+                reset_url = url_for('main.reset_password', token=token,
+                                    _external=True, _scheme='https')
+                _send_reset_email(user.email, username, reset_url)
+                masked = _mask_email(user.email)
+                return render_template('forgot_password.html',
+                                       step='email_sent', masked_email=masked)
+            # ── Security question path ─────────────────────────────────────────
+            if not user.security_question:
+                return render_template(
+                    'forgot_password.html', step='1',
+                    error="Aucun email ni question de sécurité configurés pour ce compte. Contactez un administrateur.",
                     security_questions=SECURITY_QUESTIONS,
                 )
             return render_template('forgot_password.html', step='2',
@@ -1686,6 +1708,96 @@ def forgot_password():
 
     return render_template('forgot_password.html', step='1',
                            security_questions=SECURITY_QUESTIONS)
+
+
+def _mask_email(email: str) -> str:
+    """Return a partially masked email: ab***@domain.com."""
+    try:
+        local, domain = email.split('@', 1)
+        visible = local[:2] if len(local) >= 2 else local[:1]
+        return f"{visible}***@{domain}"
+    except Exception:
+        return "***"
+
+
+def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
+    """Send a password reset email. Silently logs on failure."""
+    from flask_mail import Message
+    from app import mail
+    html_body = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;">
+        <!-- Header -->
+        <tr>
+          <td style="background:#2563eb;padding:28px 40px;text-align:center;">
+            <span style="font-size:2.2rem;">🎯</span>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:1.4rem;font-weight:700;letter-spacing:-.3px;">
+              MyJobHunter
+            </h1>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <h2 style="margin:0 0 12px;font-size:1.15rem;color:#0f172a;">
+              Réinitialisation de votre mot de passe
+            </h2>
+            <p style="margin:0 0 16px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bonjour <strong>{username}</strong>,
+            </p>
+            <p style="margin:0 0 24px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Vous avez demandé à réinitialiser le mot de passe de votre compte MyJobHunter.
+              Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe.
+            </p>
+            <!-- CTA button -->
+            <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+              <tr>
+                <td align="center">
+                  <a href="{reset_url}"
+                     style="display:inline-block;background:#2563eb;color:#ffffff;
+                            text-decoration:none;padding:14px 36px;border-radius:8px;
+                            font-size:1rem;font-weight:600;letter-spacing:-.2px;">
+                    Réinitialiser mon mot de passe →
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Ce lien est valable <strong>15 minutes</strong> et ne peut être utilisé qu'une seule fois.
+            </p>
+            <p style="margin:0;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Si vous n'avez pas demandé cette réinitialisation, ignorez cet email — votre mot de passe ne changera pas.
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;
+                     border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:.78rem;">
+              © 2026 MyJobHunter · Cet email est automatique, ne pas répondre.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    try:
+        msg = Message(
+            subject="MyJobHunter - Réinitialisation de votre mot de passe",
+            recipients=[to_email],
+            html=html_body,
+        )
+        mail.send(msg)
+    except Exception as exc:
+        logger.error("Failed to send reset email to %s: %s", to_email, exc)
 
 
 @bp.route('/reset/<token>', methods=['GET', 'POST'])
