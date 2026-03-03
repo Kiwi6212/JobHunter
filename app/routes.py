@@ -25,7 +25,7 @@ except ImportError:
     _HAS_FCNTL = False
 
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import joinedload
 
 from werkzeug.utils import secure_filename
@@ -52,9 +52,13 @@ SECURITY_QUESTIONS = [
 # ── User activity helpers ──────────────────────────────────────────────────────
 
 def _touch_last_login(user_id: int) -> None:
-    """Update last_login timestamp for a DB user. Silently ignores errors."""
+    """Update last_login timestamp for a DB user.
+
+    Uses SessionLocal.session_factory() to create an isolated (non-scoped) session
+    so it never closes the thread-local scoped session that a calling route may hold.
+    """
     try:
-        db = SessionLocal()
+        db = SessionLocal.session_factory()
         try:
             db.query(User).filter(User.id == user_id).update(
                 {"last_login": datetime.utcnow()},
@@ -68,15 +72,18 @@ def _touch_last_login(user_id: int) -> None:
 
 
 def _add_claude_tokens(user_id: int, tokens: int) -> None:
-    """Atomically add *tokens* to user.claude_tokens_used. Silently ignores errors."""
+    """Atomically add *tokens* to user.claude_tokens_used.
+
+    Uses SessionLocal.session_factory() to create an isolated (non-scoped) session
+    so it never closes the thread-local scoped session that a calling route may hold.
+    """
     if not user_id or tokens <= 0:
         return
     try:
-        from sqlalchemy import text as _text
-        db = SessionLocal()
+        db = SessionLocal.session_factory()
         try:
             db.execute(
-                _text("UPDATE users SET claude_tokens_used = claude_tokens_used + :t WHERE id = :uid"),
+                text("UPDATE users SET claude_tokens_used = claude_tokens_used + :t WHERE id = :uid"),
                 {"t": tokens, "uid": user_id},
             )
             db.commit()
@@ -164,12 +171,18 @@ def login_2fa():
                 totp = pyotp.TOTP(user.totp_secret)
                 if totp.verify(code, valid_window=1):
                     next_url = session.pop("_2fa_next", None) or url_for("main.dashboard")
-                    _touch_last_login(user.id)
+                    # Capture all needed attributes while the session is still open,
+                    # before any helper that opens its own DB connection.
+                    uid_val       = user.id
+                    username_val  = user.username
+                    role_val      = user.role
+                    domain_id_val = user.domain_id
+                    _touch_last_login(uid_val)
                     session.clear()
-                    session["username"] = user.username
-                    session["role"] = user.role
-                    session["user_id"] = user.id
-                    session["domain_id"] = user.domain_id
+                    session["username"]  = username_val
+                    session["role"]      = role_val
+                    session["user_id"]   = uid_val
+                    session["domain_id"] = domain_id_val
                     return redirect(next_url)
                 error = "Code A2F invalide. Vérifiez votre application et réessayez."
             else:
