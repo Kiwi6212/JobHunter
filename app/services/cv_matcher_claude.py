@@ -67,6 +67,7 @@ class ClaudeCVMatcher:
         if not cv_text or not cv_text.strip():
             raise ValueError("CV text is empty")
         self.cv_text = cv_text.strip()
+        self.total_tokens_used = 0
 
     def score_offers(self, offers, progress_callback=None) -> dict:
         """
@@ -126,6 +127,11 @@ class ClaudeCVMatcher:
                     messages=[{"role": "user", "content": prompt}],
                 )
                 raw = message.content[0].text.strip()
+                if hasattr(message, 'usage') and message.usage:
+                    self.total_tokens_used += (
+                        (message.usage.input_tokens or 0) +
+                        (message.usage.output_tokens or 0)
+                    )
                 # Strip markdown code fences if present
                 raw = re.sub(r"^```(?:json)?\s*", "", raw)
                 raw = re.sub(r"\s*```$", "", raw)

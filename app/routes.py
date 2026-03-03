@@ -49,6 +49,43 @@ SECURITY_QUESTIONS = [
     "Quel est votre plat préféré ?",
 ]
 
+# ── User activity helpers ──────────────────────────────────────────────────────
+
+def _touch_last_login(user_id: int) -> None:
+    """Update last_login timestamp for a DB user. Silently ignores errors."""
+    try:
+        db = SessionLocal()
+        try:
+            db.query(User).filter(User.id == user_id).update(
+                {"last_login": datetime.utcnow()},
+                synchronize_session=False,
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("_touch_last_login failed: %s", exc)
+
+
+def _add_claude_tokens(user_id: int, tokens: int) -> None:
+    """Atomically add *tokens* to user.claude_tokens_used. Silently ignores errors."""
+    if not user_id or tokens <= 0:
+        return
+    try:
+        from sqlalchemy import text as _text
+        db = SessionLocal()
+        try:
+            db.execute(
+                _text("UPDATE users SET claude_tokens_used = claude_tokens_used + :t WHERE id = :uid"),
+                {"t": tokens, "uid": user_id},
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("_add_claude_tokens failed: %s", exc)
+
+
 # ── Async CV matching task registry (file-backed, multi-worker safe) ──────────
 # Tasks are stored in data/matching_tasks.json so all Gunicorn workers share state.
 # File is keyed by str(user_id) or "_admin" for config/legacy admin (user_id=None).
@@ -95,6 +132,8 @@ def login():
                 finally:
                     db.close()
             # No 2FA — complete login immediately
+            if user_id is not None:
+                _touch_last_login(user_id)
             session.clear()
             session["username"] = username
             session["role"] = role
@@ -125,6 +164,7 @@ def login_2fa():
                 totp = pyotp.TOTP(user.totp_secret)
                 if totp.verify(code, valid_window=1):
                     next_url = session.pop("_2fa_next", None) or url_for("main.dashboard")
+                    _touch_last_login(user.id)
                     session.clear()
                     session["username"] = user.username
                     session["role"] = user.role
@@ -786,6 +826,16 @@ def _cv_matching_worker(user_id, domain_id, method: str, force: bool) -> None:
             scores = matcher.score_offers(offers)
 
         _persist_scores(db, user_id, offers, scores)
+
+        # Track usage counters
+        if user_id is not None:
+            tokens = getattr(matcher, 'total_tokens_used', 0)
+            user_obj = db.query(User).filter(User.id == user_id).first()
+            if user_obj:
+                user_obj.matching_count = (user_obj.matching_count or 0) + 1
+                if method == 'claude' and tokens > 0:
+                    user_obj.claude_tokens_used = (user_obj.claude_tokens_used or 0) + tokens
+
         db.commit()
         _save_task(user_id, {
             'status': 'done', 'scored': len(scores), 'total': total,
@@ -1434,6 +1484,11 @@ def generate_cover_letter(offer_id):
             messages=[{"role": "user", "content": prompt}],
         )
         letter_text = message.content[0].text
+        if hasattr(message, 'usage') and message.usage:
+            _add_claude_tokens(
+                session.get('user_id'),
+                (message.usage.input_tokens or 0) + (message.usage.output_tokens or 0),
+            )
 
         # Sanitize company name for filename
         company_safe = "".join(
@@ -1486,11 +1541,22 @@ def admin_page():
         for u in users:
             d = _admin_user_docs_dir(u.id)
             doc_counts[u.id] = sum(1 for f in d.iterdir() if f.is_file()) if d.exists() else 0
+
+        # Count tracked offers per user
+        offer_counts: dict[int, int] = {
+            uid: cnt
+            for uid, cnt in db.query(UserOffer.user_id, func.count(UserOffer.id))
+                               .group_by(UserOffer.user_id)
+                               .all()
+        }
+
         return render_template(
             'admin.html',
             users=users,
             domains=domains,
             doc_counts=doc_counts,
+            offer_counts=offer_counts,
+            now=datetime.utcnow(),
             role=get_current_role(),
             username=session.get("username"),
         )

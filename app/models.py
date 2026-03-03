@@ -136,6 +136,11 @@ class User(Base):
     security_question = Column(String(255), nullable=True, default=None)
     security_answer_hash = Column(String(255), nullable=True, default=None)
 
+    # Activity tracking
+    last_login = Column(DateTime, nullable=True, default=None)
+    claude_tokens_used = Column(Integer, nullable=False, default=0)
+    matching_count = Column(Integer, nullable=False, default=0)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

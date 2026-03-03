@@ -44,7 +44,11 @@
                 <th>Domaine</th>
                 <th>Rôle</th>
                 <th>Inscription</th>
+                <th>Dernière connexion</th>
                 <th>Statut</th>
+                <th>Offres suivies</th>
+                <th>Matchings IA</th>
+                <th>Tokens Claude</th>
                 <th>Documents</th>
                 <th>Actions</th>
             </tr>
@@ -65,10 +69,40 @@
                 <td style="font-size:0.88em;color:var(--text-secondary);">
                     {{ u.created_at.strftime('%d/%m/%Y %H:%M') }}
                 </td>
+                {# ── Dernière connexion + indicateur activité ── #}
+                <td style="font-size:0.85em;white-space:nowrap;">
+                    {% if u.last_login %}
+                        {% set diff = (now - u.last_login).total_seconds() %}
+                        {% if diff < 86400 %}
+                            <span style="color:#22c55e;font-size:0.9em;" title="Connecté il y a moins de 24h">●</span>
+                        {% elif diff < 604800 %}
+                            <span style="color:#f97316;font-size:0.9em;" title="Connecté il y a moins de 7 jours">●</span>
+                        {% else %}
+                            <span style="color:#94a3b8;font-size:0.9em;" title="Inactif depuis plus de 7 jours">●</span>
+                        {% endif %}
+                        {{ u.last_login.strftime('%d/%m/%Y %H:%M') }}
+                    {% else %}
+                        <span style="color:#ef4444;font-size:0.9em;" title="Jamais connecté">●</span>
+                        <em style="color:var(--text-secondary);">Jamais</em>
+                    {% endif %}
+                </td>
                 <td>
                     <span id="status-badge-{{ u.id }}" class="badge-status {{ 'badge-active' if u.is_active else 'badge-inactive' }}">
                         {{ 'Actif' if u.is_active else 'Désactivé' }}
                     </span>
+                </td>
+                {# ── Offres suivies ── #}
+                <td style="font-size:0.88em;text-align:center;">
+                    {{ offer_counts.get(u.id, 0) }}
+                </td>
+                {# ── Matchings IA ── #}
+                <td style="font-size:0.88em;text-align:center;">
+                    {{ u.matching_count or 0 }}
+                </td>
+                {# ── Tokens Claude ── #}
+                <td style="font-size:0.88em;text-align:center;" title="{{ u.claude_tokens_used or 0 }} tokens">
+                    {% set t = u.claude_tokens_used or 0 %}
+                    {% if t >= 1000 %}{{ "%.1f"|format(t / 1000) }}k{% else %}{{ t }}{% endif %}
                 </td>
                 <td>
                     {% set ndocs = doc_counts.get(u.id, 0) %}

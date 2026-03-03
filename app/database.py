@@ -130,6 +130,27 @@ def _migrate_columns():
                     "ALTER TABLE users ADD COLUMN email VARCHAR(255)"
                 ))
             print("[MIGRATE] Done.")
+        if "last_login" not in user_cols:
+            print("[MIGRATE] Adding last_login column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN last_login DATETIME"
+                ))
+            print("[MIGRATE] Done.")
+        if "claude_tokens_used" not in user_cols:
+            print("[MIGRATE] Adding claude_tokens_used column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN claude_tokens_used INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+        if "matching_count" not in user_cols:
+            print("[MIGRATE] Adding matching_count column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN matching_count INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
 
     # Migrate user_offers table
     if "user_offers" in insp.get_table_names():
