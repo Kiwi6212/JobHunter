@@ -40,6 +40,9 @@ from app import limiter
 # Create Blueprint
 bp = Blueprint('main', __name__)
 
+# Track application start time for /health uptime
+_APP_START_TIME = datetime.utcnow()
+
 # Predefined security questions for account recovery
 SECURITY_QUESTIONS = [
     "Quel était le nom de votre premier animal de compagnie ?",
@@ -1990,3 +1993,79 @@ def admin_stats():
         'top_pages': top_pages if log_available else None,
         'registrations_today': registrations_today,
     })
+
+
+# ── Health check ───────────────────────────────────────────────────────────────
+
+@bp.route('/health')
+def health():
+    """Public health-check endpoint. Returns JSON with uptime and DB status."""
+    uptime_sec = int((datetime.utcnow() - _APP_START_TIME).total_seconds())
+    db_status = "error"
+    offers_count = 0
+    try:
+        db = SessionLocal.session_factory()
+        try:
+            offers_count = db.query(func.count(Offer.id)).scalar() or 0
+            db_status = "ok"
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return jsonify({
+        "status": "ok",
+        "uptime": uptime_sec,
+        "db": db_status,
+        "offers_count": offers_count,
+    })
+
+
+# ── Admin error log ────────────────────────────────────────────────────────────
+
+def _read_error_log(n: int = 50) -> list[dict]:
+    """Return the last *n* entries from data/errors.log (newest first)."""
+    from collections import deque
+    log_path = DATA_DIR / "errors.log"
+    if not log_path.exists():
+        return []
+    try:
+        lines = deque(log_path.read_text(encoding="utf-8").splitlines(), maxlen=n * 2)
+        entries = []
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                pass
+            if len(entries) >= n:
+                break
+        return entries
+    except Exception:
+        return []
+
+
+@bp.route('/admin/errors')
+@superadmin_required
+def admin_errors():
+    """Admin error log: last 50 500 errors."""
+    entries = _read_error_log(50)
+    return render_template(
+        'errors.html',
+        entries=entries,
+        role=get_current_role(),
+        username=session.get("username"),
+    )
+
+
+@bp.route('/admin/errors/clear', methods=['POST'])
+@superadmin_required
+def admin_errors_clear():
+    """Truncate the errors log file."""
+    try:
+        log_path = DATA_DIR / "errors.log"
+        log_path.write_text("", encoding="utf-8")
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500

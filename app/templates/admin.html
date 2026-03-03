@@ -3,11 +3,16 @@
 {% block title %}Administration — JobHunter{% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h2>Administration des comptes</h2>
-    <p style="color:var(--text-secondary);margin-top:0.25rem;">
-        {{ users|length }} compte{{ 's' if users|length != 1 else '' }} enregistré{{ 's' if users|length != 1 else '' }}
-    </p>
+<div class="dashboard-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
+    <div>
+        <h2>Administration des comptes</h2>
+        <p style="color:var(--text-secondary);margin-top:0.25rem;">
+            {{ users|length }} compte{{ 's' if users|length != 1 else '' }} enregistré{{ 's' if users|length != 1 else '' }}
+        </p>
+    </div>
+    <a href="{{ url_for('main.admin_errors') }}" class="btn btn-secondary btn-small">
+        🔴 Journal des erreurs
+    </a>
 </div>
 
 <!-- ── Statistiques du site ─────────────────────────── -->

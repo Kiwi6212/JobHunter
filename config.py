@@ -65,6 +65,10 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Monitoring
+    ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+    ERROR_LOG_PATH = str(DATA_DIR / "errors.log")
+
     # Email / SMTP (Flask-Mail)
     MAIL_SERVER = os.getenv("MAIL_SERVER", "ssl0.ovh.net")
     MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))

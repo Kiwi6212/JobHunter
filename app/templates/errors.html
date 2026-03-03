@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Journal des erreurs — JobHunter{% endblock %}
+
+{% block extra_css %}
+<style>
+.errors-page { max-width: 1100px; margin: 2rem auto; }
+
+.error-table-wrap { overflow-x: auto; margin-top: 1.2rem; }
+
+.error-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+}
+.error-table th {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    background: var(--card-bg);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.error-table td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+.error-table tr:hover td { background: var(--bg-color); }
+
+.exc-badge {
+    display: inline-block;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: monospace;
+    white-space: nowrap;
+}
+[data-theme="dark"] .exc-badge { background: #3b0f0f; color: #fca5a5; }
+
+.tb-preview {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 4.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+}
+.tb-preview.expanded { max-height: none; }
+.tb-preview::after {
+    content: "▼ voir plus";
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: var(--card-bg);
+    padding: 0 .4rem;
+    font-size: 0.75rem;
+    color: var(--primary-color);
+}
+.tb-preview.expanded::after { content: "▲ réduire"; }
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: .5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="errors-page">
+    <div class="header-row">
+        <div>
+            <h2>Journal des erreurs</h2>
+            <p style="color:var(--text-secondary);margin-top:.25rem;font-size:.9rem;">
+                50 dernières erreurs 500 —
+                <a href="{{ url_for('main.admin_page') }}" style="color:var(--primary-color);">← Retour admin</a>
+            </p>
+        </div>
+        {% if entries %}
+        <button class="btn btn-danger btn-small" onclick="clearErrors(this)">
+            🗑️ Vider les logs
+        </button>
+        {% endif %}
+    </div>
+
+    {% if entries %}
+    <div class="error-table-wrap">
+        <table class="error-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>URL</th>
+                    <th>Méthode</th>
+                    <th>User</th>
+                    <th>Type d'erreur</th>
+                    <th>Traceback</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in entries %}
+                <tr>
+                    <td style="white-space:nowrap;color:var(--text-secondary);font-size:0.83rem;">
+                        {{ e.ts | replace('T', ' ') }}
+                    </td>
+                    <td style="max-width:220px;word-break:break-all;font-family:monospace;font-size:0.82rem;">
+                        {{ e.url }}
+                    </td>
+                    <td style="font-weight:600;font-size:0.82rem;">{{ e.method }}</td>
+                    <td style="color:var(--text-secondary);font-size:0.83rem;">
+                        {% if e.user_id %}#{{ e.user_id }}{% else %}<em>—</em>{% endif %}
+                    </td>
+                    <td><span class="exc-badge">{{ e.exc_type }}</span></td>
+                    <td style="min-width:300px;">
+                        <div class="tb-preview" onclick="this.classList.toggle('expanded')">{{ e.traceback }}</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        ✅ Aucune erreur enregistrée — tout fonctionne correctement !
+    </div>
+    {% endif %}
+
+    <div id="clear-msg" style="margin-top:1rem;font-size:.9rem;min-height:1.2em;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearErrors(btn) {
+    if (!confirm("Vider le journal des erreurs ? Cette action est irréversible.")) return;
+    btn.disabled = true;
+    fetch("{{ url_for('main.admin_errors_clear') }}", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.ok) {
+                document.querySelector("tbody").innerHTML = "";
+                document.querySelector(".error-table-wrap").style.display = "none";
+                btn.style.display = "none";
+                var msg = document.getElementById("clear-msg");
+                msg.textContent = "Journal vidé.";
+                msg.style.color = "var(--text-secondary)";
+            } else {
+                btn.disabled = false;
+                document.getElementById("clear-msg").textContent = "Erreur : " + (res.error || "inconnue");
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            document.getElementById("clear-msg").textContent = "Erreur réseau.";
+        });
+}
+</script>
+{% endblock %}
