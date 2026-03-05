@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Journal de sécurité — JobHunter{% endblock %}
+
+{% block extra_css %}
+<style nonce="{{ csp_nonce }}">
+.seclog-page { max-width: 1200px; margin: 2rem auto; }
+
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+
+.log-wrap {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-top: .5rem;
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-family: monospace;
+}
+.log-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: var(--card-bg);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.log-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+    white-space: nowrap;
+}
+.log-table tr:hover td { background: var(--bg-color); }
+
+.event-badge {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: .3px;
+}
+.ev-LOGIN_SUCCESS  { background: #dcfce7; color: #166534; }
+.ev-LOGIN_FAIL     { background: #fee2e2; color: #991b1b; }
+.ev-2FA_SUCCESS    { background: #dbeafe; color: #1e40af; }
+.ev-2FA_FAIL       { background: #fef3c7; color: #92400e; }
+.ev-2FA_ENABLED    { background: #dbeafe; color: #1e40af; }
+.ev-2FA_DISABLED   { background: #fef3c7; color: #92400e; }
+.ev-ACCOUNT_DELETE { background: #fee2e2; color: #991b1b; }
+.ev-PASSWORD_RESET { background: #f3e8ff; color: #6b21a8; }
+.ev-SEC_QUESTION_FAIL { background: #fef3c7; color: #92400e; }
+.ev-SEC_QUESTION_LOCK { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .ev-LOGIN_SUCCESS  { background: #14532d; color: #86efac; }
+[data-theme="dark"] .ev-LOGIN_FAIL     { background: #3b0f0f; color: #fca5a5; }
+[data-theme="dark"] .ev-2FA_SUCCESS    { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .ev-2FA_FAIL       { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-2FA_ENABLED    { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .ev-2FA_DISABLED   { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-ACCOUNT_DELETE { background: #3b0f0f; color: #fca5a5; }
+[data-theme="dark"] .ev-PASSWORD_RESET { background: #3b1c5e; color: #d8b4fe; }
+[data-theme="dark"] .ev-SEC_QUESTION_FAIL { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-SEC_QUESTION_LOCK { background: #3b0f0f; color: #fca5a5; }
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="seclog-page">
+    <div class="header-row">
+        <div>
+            <h2>Journal de sécurité</h2>
+            <p style="color:var(--text-secondary);margin-top:.25rem;font-size:.9rem;">
+                200 derniers événements —
+                <a href="{{ url_for('main.admin_page') }}" style="color:var(--primary-color);">← Retour admin</a>
+            </p>
+        </div>
+        {% if lines %}
+        <button class="btn btn-danger btn-small" onclick="clearLog(this)">
+            🗑️ Vider le journal
+        </button>
+        {% endif %}
+    </div>
+
+    {% if lines %}
+    <div class="log-wrap">
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Événement</th>
+                    <th>IP</th>
+                    <th>Utilisateur</th>
+                    <th>Détails</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}
+                {% set parts = line.split(' | ') %}
+                {% if parts | length >= 4 %}
+                <tr>
+                    <td style="color:var(--text-secondary);font-size:0.8rem;">{{ parts[0] }}</td>
+                    <td>
+                        <span class="event-badge ev-{{ parts[1].strip() }}">{{ parts[1].strip() }}</span>
+                    </td>
+                    <td style="color:var(--text-secondary);">{{ parts[2].strip() }}</td>
+                    <td style="font-weight:600;">{{ parts[3].strip() }}</td>
+                    <td style="color:var(--text-secondary);">{{ parts[4].strip() if parts | length > 4 else '-' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="color:var(--text-secondary);font-size:0.8rem;">{{ line }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        ✅ Aucun événement de sécurité enregistré.
+    </div>
+    {% endif %}
+
+    <div id="clear-msg" style="margin-top:1rem;font-size:.9rem;min-height:1.2em;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+function clearLog(btn) {
+    if (!confirm("Vider le journal de sécurité ? Cette action est irréversible.")) return;
+    btn.disabled = true;
+    fetch("{{ url_for('main.admin_security_log_clear') }}", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.ok) {
+                var tbody = document.querySelector("tbody");
+                if (tbody) tbody.innerHTML = "";
+                var wrap = document.querySelector(".log-wrap");
+                if (wrap) wrap.style.display = "none";
+                btn.style.display = "none";
+                var msg = document.getElementById("clear-msg");
+                msg.textContent = "Journal vidé.";
+                msg.style.color = "var(--text-secondary)";
+            } else {
+                btn.disabled = false;
+                document.getElementById("clear-msg").textContent = "Erreur : " + (res.error || "inconnue");
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            document.getElementById("clear-msg").textContent = "Erreur réseau.";
+        });
+}
+</script>
+{% endblock %}

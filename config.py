@@ -17,6 +17,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 CV_PATH = DATA_DIR / "cv.txt"
 
+# Log directory — /var/log/jobhunter in production, override with LOG_DIR env var
+# On Windows dev, set LOG_DIR=data in .env
+LOG_DIR = Path(os.getenv("LOG_DIR", "/var/log/jobhunter"))
+
 # Flask Configuration
 class Config:
     """Flask application configuration."""
@@ -58,7 +62,8 @@ class Config:
 
     # Monitoring
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
-    ERROR_LOG_PATH = str(DATA_DIR / "errors.log")
+    ERROR_LOG_PATH = str(LOG_DIR / "errors.log")
+    SECURITY_LOG_PATH = str(LOG_DIR / "security.log")
 
     # TOTP secret encryption key (Fernet — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     TOTP_ENCRYPTION_KEY = os.getenv("TOTP_ENCRYPTION_KEY")

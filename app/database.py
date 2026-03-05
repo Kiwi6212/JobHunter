@@ -152,6 +152,21 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "failed_security_attempts" not in user_cols:
+            print("[MIGRATE] Adding failed_security_attempts column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN failed_security_attempts INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+        if "security_lockout_until" not in user_cols:
+            print("[MIGRATE] Adding security_lockout_until column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN security_lockout_until DATETIME"
+                ))
+            print("[MIGRATE] Done.")
+
         # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
         _migrate_totp_secrets()
 

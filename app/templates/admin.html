@@ -10,9 +10,14 @@
             {{ users|length }} compte{{ 's' if users|length != 1 else '' }} enregistré{{ 's' if users|length != 1 else '' }}
         </p>
     </div>
-    <a href="{{ url_for('main.admin_errors') }}" class="btn btn-secondary btn-small">
-        🔴 Journal des erreurs
-    </a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <a href="{{ url_for('main.admin_security_log') }}" class="btn btn-secondary btn-small">
+            🔒 Journal de sécurité
+        </a>
+        <a href="{{ url_for('main.admin_errors') }}" class="btn btn-secondary btn-small">
+            🔴 Journal des erreurs
+        </a>
+    </div>
 </div>
 
 <!-- ── Statistiques du site ─────────────────────────── -->

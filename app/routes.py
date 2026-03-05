@@ -18,6 +18,32 @@ from urllib.parse import urlparse, urljoin
 
 logger = logging.getLogger(__name__)
 
+# ── Security event logger ──────────────────────────────────────────────────────
+_sec_logger = logging.getLogger("jobhunter.security")
+_sec_logger.setLevel(logging.INFO)
+_sec_logger.propagate = False
+
+def _init_security_logger(log_path: str) -> None:
+    """Configure the security logger file handler (called once at app startup)."""
+    if _sec_logger.handlers:
+        return
+    try:
+        from pathlib import Path as _P
+        _P(log_path).parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(log_path, encoding='utf-8')
+        fh.setFormatter(logging.Formatter('%(message)s'))
+        _sec_logger.addHandler(fh)
+    except OSError as e:
+        logger.warning("Cannot open security log %s: %s", log_path, e)
+
+
+def _sec_log(event_type: str, username: str = "-", details: str = "-") -> None:
+    """Write one security event line: timestamp | event_type | ip | username | details."""
+    from flask import request as _req
+    ip = _req.headers.get("X-Forwarded-For", _req.remote_addr or "-").split(",")[0].strip()
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    _sec_logger.info("%s | %-22s | %-15s | %-20s | %s", ts, event_type, ip, username, details)
+
 # Cross-process file locking (Linux/Mac only; Windows falls back to thread lock)
 try:
     import fcntl as _fcntl
@@ -158,13 +184,27 @@ def _add_claude_tokens(user_id: int, tokens: int) -> None:
 _task_thread_lock = threading.Lock()  # intra-process thread safety
 
 
+_REDIRECT_WHITELIST = (
+    "/dashboard",
+    "/stats",
+    "/documents",
+    "/account",
+    "/account/profile",
+    "/admin",
+    "/offers",
+)
+
+
 def _is_safe_redirect(url: str) -> bool:
-    """Return True only if *url* is a relative path on the same host (no open redirect)."""
+    """Return True only if *url* is a whitelisted relative path on the same host."""
     if not url:
         return False
     ref = urlparse(request.host_url)
     test = urlparse(urljoin(request.host_url, url))
-    return test.scheme in ("http", "https") and ref.netloc == test.netloc
+    if not (test.scheme in ("http", "https") and ref.netloc == test.netloc):
+        return False
+    path = test.path.rstrip("/") or "/"
+    return any(path == w or path.startswith(w + "/") for w in _REDIRECT_WHITELIST)
 
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
@@ -182,6 +222,7 @@ def login():
         password = request.form.get("password", "")
         role, user_id, domain_id = check_credentials(username, password)
         if role:
+            _sec_log("LOGIN_SUCCESS", username, f"role={role}")
             next_url = request.args.get("next", "")
             if not _is_safe_redirect(next_url):
                 next_url = url_for("main.dashboard")
@@ -203,9 +244,10 @@ def login():
             session.clear()
             session["username"] = username
             session["role"] = role
-            session["user_id"] = user_id      # None for config (legacy) users
-            session["domain_id"] = domain_id  # None for admin / config users
+            session["user_id"] = user_id
+            session["domain_id"] = domain_id
             return redirect(next_url)
+        _sec_log("LOGIN_FAIL", username or "-")
         error = "Identifiant ou mot de passe incorrect."
 
     return render_template("login.html", error=error)
@@ -228,14 +270,13 @@ def login_2fa():
             user = db.query(User).filter(User.id == uid).first()
             if user and user.totp_enabled and user.totp_secret:
                 totp = pyotp.TOTP(_decrypt_totp_secret(user.totp_secret))
-                if totp.verify(code, valid_window=1):
+                if totp.verify(code, valid_window=0):
                     next_url = session.pop("_2fa_next", None) or url_for("main.dashboard")
-                    # Capture all needed attributes while the session is still open,
-                    # before any helper that opens its own DB connection.
                     uid_val       = user.id
                     username_val  = user.username
                     role_val      = user.role
                     domain_id_val = user.domain_id
+                    _sec_log("2FA_SUCCESS", username_val)
                     _touch_last_login(uid_val)
                     session.clear()
                     session["username"]  = username_val
@@ -243,6 +284,7 @@ def login_2fa():
                     session["user_id"]   = uid_val
                     session["domain_id"] = domain_id_val
                     return redirect(next_url)
+                _sec_log("2FA_FAIL", user.username)
                 error = "Code A2F invalide. Vérifiez votre application et réessayez."
             else:
                 return redirect(url_for("main.login"))
@@ -291,6 +333,12 @@ def register():
                 errors.append("Les mots de passe ne correspondent pas.")
             if not domain_id_raw:
                 errors.append("Veuillez choisir un domaine.")
+            else:
+                try:
+                    domain_id_raw = int(domain_id_raw)
+                except ValueError:
+                    errors.append("Domaine invalide.")
+                    domain_id_raw = None
             if not security_question or security_question not in SECURITY_QUESTIONS:
                 errors.append("Veuillez choisir une question de sécurité.")
             if not security_answer:
@@ -308,7 +356,7 @@ def register():
                         username=username,
                         password_hash=pw_hash,
                         role="user",
-                        domain_id=int(domain_id_raw),
+                        domain_id=domain_id_raw,
                         security_question=security_question,
                         security_answer_hash=answer_hash,
                     )
@@ -367,11 +415,20 @@ def _read_tasks_raw() -> dict:
 
 
 def _write_tasks_raw(data: dict) -> None:
-    """Atomically write task data (write to .tmp then os.replace)."""
+    """Atomically write task data via a temp file, cleaning up on failure."""
+    import tempfile
     _TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = Path(str(_TASKS_FILE) + '.tmp')
-    tmp.write_text(json.dumps(data, default=str), encoding='utf-8')
-    os.replace(str(tmp), str(_TASKS_FILE))
+    fd, tmp_path = tempfile.mkstemp(dir=str(_TASKS_FILE.parent), suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+            fh.write(json.dumps(data, default=str))
+        os.replace(tmp_path, str(_TASKS_FILE))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _load_task(user_id) -> dict | None:
@@ -1257,7 +1314,7 @@ def account_confirm_2fa():
     import pyotp
     code = request.form.get('totp_code', '').strip().replace(' ', '')
     totp = pyotp.TOTP(secret)
-    if not totp.verify(code, valid_window=1):
+    if not totp.verify(code, valid_window=0):
         # Keep setup in session, show error via flash-like query param
         return redirect(url_for('main.account') + '?err=invalid_code')
 
@@ -1269,6 +1326,7 @@ def account_confirm_2fa():
             user.totp_enabled = True
             user.updated_at = datetime.utcnow()
             db.commit()
+            _sec_log("2FA_ENABLED", user.username)
     finally:
         db.close()
 
@@ -1293,8 +1351,9 @@ def account_disable_2fa():
         if not user or not user.totp_enabled or not user.totp_secret:
             return redirect(url_for('main.account'))
         totp = pyotp.TOTP(_decrypt_totp_secret(user.totp_secret))
-        if not totp.verify(code, valid_window=1):
+        if not totp.verify(code, valid_window=0):
             return redirect(url_for('main.account') + '?err=invalid_code')
+        _sec_log("2FA_DISABLED", user.username)
         user.totp_secret = None
         user.totp_enabled = False
         user.updated_at = datetime.utcnow()
@@ -1403,6 +1462,7 @@ def account_delete():
             shutil.rmtree(docs_dir, ignore_errors=True)
 
         # Delete user (cascades: user_offers, password_resets)
+        _sec_log("ACCOUNT_DELETE", user.username, "self-delete")
         db.delete(user)
         db.commit()
     finally:
@@ -1706,6 +1766,7 @@ def admin_delete_user(user_id):
         if docs_dir.exists():
             shutil.rmtree(str(docs_dir))
         # Cascade deletes user_offers and password_resets via FK cascade
+        _sec_log("ACCOUNT_DELETE", user.username, f"by_admin={session.get('username')}")
         db.delete(user)
         db.commit()
         return jsonify({'ok': True})
@@ -1863,12 +1924,33 @@ def forgot_password():
                 return render_template('forgot_password.html', step='1',
                                        error="Utilisateur introuvable.",
                                        security_questions=SECURITY_QUESTIONS)
+            # Check lockout
+            now = datetime.utcnow()
+            if user.security_lockout_until and now < user.security_lockout_until:
+                remaining = int((user.security_lockout_until - now).total_seconds() / 60) + 1
+                return render_template('forgot_password.html', step='2',
+                                       username=username,
+                                       question=user.security_question,
+                                       error=f"Trop de tentatives, réessayez dans {remaining} minutes.")
             if not bcrypt.check_password_hash(user.security_answer_hash, answer.lower()):
+                user.failed_security_attempts = (user.failed_security_attempts or 0) + 1
+                _sec_log("SEC_QUESTION_FAIL", username, f"attempt={user.failed_security_attempts}")
+                if user.failed_security_attempts >= 5:
+                    user.security_lockout_until = now + timedelta(minutes=30)
+                    db.commit()
+                    _sec_log("SEC_QUESTION_LOCK", username, f"lockout_until={user.security_lockout_until.isoformat()}")
+                    return render_template('forgot_password.html', step='2',
+                                           username=username,
+                                           question=user.security_question,
+                                           error="Trop de tentatives, réessayez dans 30 minutes.")
+                db.commit()
                 return render_template('forgot_password.html', step='2',
                                        username=username,
                                        question=user.security_question,
                                        error="Réponse incorrecte. Vérifiez votre réponse.")
-            # Generate token
+            # Correct answer — reset counter and generate token
+            user.failed_security_attempts = 0
+            user.security_lockout_until = None
             db.query(PasswordReset).filter(
                 PasswordReset.user_id == user.id,
                 PasswordReset.used == False
@@ -1999,6 +2081,7 @@ def reset_password(token):
                     user.updated_at = datetime.utcnow()
                     reset.used = True
                     db.commit()
+                    _sec_log("PASSWORD_RESET", user.username)
                     return redirect(url_for('main.login') + '?ok=password_reset')
         return render_template('reset_password.html', token=token, errors=errors)
     finally:
@@ -2103,10 +2186,17 @@ def health():
 
 # ── Admin error log ────────────────────────────────────────────────────────────
 
+def _get_log_path(key: str) -> Path:
+    """Return the configured log path for 'errors' or 'security'."""
+    from flask import current_app
+    cfg_key = "ERROR_LOG_PATH" if key == "errors" else "SECURITY_LOG_PATH"
+    return Path(current_app.config.get(cfg_key, str(DATA_DIR / f"{key}.log")))
+
+
 def _read_error_log(n: int = 50) -> list[dict]:
-    """Return the last *n* entries from data/errors.log (newest first)."""
+    """Return the last *n* entries from errors.log (newest first)."""
     from collections import deque
-    log_path = DATA_DIR / "errors.log"
+    log_path = _get_log_path("errors")
     if not log_path.exists():
         return []
     try:
@@ -2123,6 +2213,19 @@ def _read_error_log(n: int = 50) -> list[dict]:
             if len(entries) >= n:
                 break
         return entries
+    except Exception:
+        return []
+
+
+def _read_security_log(n: int = 200) -> list[str]:
+    """Return the last *n* lines from security.log (newest first)."""
+    from collections import deque
+    log_path = _get_log_path("security")
+    if not log_path.exists():
+        return []
+    try:
+        lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        return list(reversed(lines[-n:]))
     except Exception:
         return []
 
@@ -2147,8 +2250,39 @@ def admin_errors():
 def admin_errors_clear():
     """Truncate the errors log file."""
     try:
-        log_path = DATA_DIR / "errors.log"
+        _get_log_path("errors").write_text("", encoding="utf-8")
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@bp.route('/admin/security-log')
+@superadmin_required
+@limiter.limit("30 per minute")
+def admin_security_log():
+    """Admin security event log: last 200 lines."""
+    lines = _read_security_log(200)
+    return render_template(
+        'security_log.html',
+        lines=lines,
+        role=get_current_role(),
+        username=session.get("username"),
+    )
+
+
+@bp.route('/admin/security-log/clear', methods=['POST'])
+@superadmin_required
+@limiter.limit("30 per minute")
+def admin_security_log_clear():
+    """Truncate the security log file."""
+    try:
+        log_path = _get_log_path("security")
         log_path.write_text("", encoding="utf-8")
+        # Re-add the file handler so new events can be written
+        for h in _sec_logger.handlers:
+            h.close()
+        _sec_logger.handlers.clear()
+        _init_security_logger(str(log_path))
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500

@@ -43,6 +43,15 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # ── Create log directory (fallback to data/ if /var/log/jobhunter not writable) ─
+    from config import LOG_DIR, DATA_DIR as _DATA_DIR
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Typically on Windows dev — fall back to data/
+        app.config["ERROR_LOG_PATH"] = str(_DATA_DIR / "errors.log")
+        app.config["SECURITY_LOG_PATH"] = str(_DATA_DIR / "security.log")
+
     # Initialize extensions
     bcrypt.init_app(app)
     mail.init_app(app)
@@ -82,6 +91,9 @@ def create_app(config_class=Config):
     # Import and register routes
     from app import routes
     app.register_blueprint(routes.bp)
+
+    # Initialise the security event logger
+    routes._init_security_logger(app.config.get("SECURITY_LOG_PATH", "data/security.log"))
 
     # ── Startup guard: refuse to start if no admin user exists in DB ─────────
     with app.app_context():

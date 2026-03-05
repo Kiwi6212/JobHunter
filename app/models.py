@@ -141,6 +141,10 @@ class User(Base):
     claude_tokens_used = Column(Integer, nullable=False, default=0)
     matching_count = Column(Integer, nullable=False, default=0)
 
+    # Security question brute-force protection
+    failed_security_attempts = Column(Integer, nullable=False, default=0)
+    security_lockout_until = Column(DateTime, nullable=True, default=None)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
