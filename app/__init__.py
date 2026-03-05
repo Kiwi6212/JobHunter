@@ -4,12 +4,13 @@ Initializes the Flask app with configuration and registers blueprints.
 """
 
 import json
+import secrets
 import threading
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, g
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -48,18 +49,31 @@ def create_app(config_class=Config):
     csrf.init_app(app)
     limiter.init_app(app)
 
+    # ── Per-request CSP nonce ────────────────────────────────────────────────
+    @app.before_request
+    def _generate_csp_nonce():
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def _inject_csp_nonce():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     # ── Security headers ─────────────────────────────────────────────────────
     @app.after_request
     def set_security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        # CSP: allow inline scripts/styles (required by current templates) and
-        # Chart.js from jsDelivr CDN (stats page).
+        if app.config.get("ENV") == "production" or app.config.get("FLASK_ENV") == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # CSP with per-request nonce for inline scripts/styles.
+        # Chart.js is loaded from jsDelivr CDN (stats page).
+        nonce = getattr(g, "csp_nonce", "")
+        nonce_src = f"'nonce-{nonce}'" if nonce else "'unsafe-inline'"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline'; "
+            f"script-src 'self' {nonce_src} https://cdn.jsdelivr.net; "
+            f"style-src 'self' {nonce_src}; "
             "img-src 'self' data:; "
             "font-src 'self';"
         )
@@ -68,6 +82,33 @@ def create_app(config_class=Config):
     # Import and register routes
     from app import routes
     app.register_blueprint(routes.bp)
+
+    # ── Startup guard: refuse to start if no admin user exists in DB ─────────
+    with app.app_context():
+        try:
+            from app.database import SessionLocal
+            from app.models import User
+            db = SessionLocal()
+            try:
+                admin_count = db.query(User).filter(
+                    User.role == "admin", User.is_active == True
+                ).count()
+            finally:
+                db.close()
+            if admin_count == 0:
+                import sys
+                print(
+                    "[SECURITY] No active admin user found in the database.\n"
+                    "           Create an admin account before running the application:\n"
+                    "             python create_admin.py\n"
+                    "           Refusing to start.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        except SystemExit:
+            raise
+        except Exception:
+            pass  # DB not initialised yet (first run) — let init_db() handle it
 
     # ── 500 / unhandled-exception monitoring ─────────────────────────────────
     from werkzeug.exceptions import HTTPException

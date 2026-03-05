@@ -3,7 +3,7 @@
 {% block title %}Statistics - JobHunter{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .stats-page h2 {
     font-size: 2rem;
     margin-bottom: 2rem;
@@ -115,7 +115,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     "use strict";
 

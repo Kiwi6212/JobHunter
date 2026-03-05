@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import time
 import threading
 import uuid
@@ -42,6 +43,61 @@ bp = Blueprint('main', __name__)
 
 # Track application start time for /health uptime
 _APP_START_TIME = datetime.utcnow()
+
+# ── Password policy ───────────────────────────────────────────────────────────
+
+def _validate_password(password: str) -> list[str]:
+    """Return a list of policy violation messages (empty = OK).
+    Policy: 12+ chars, at least 1 uppercase letter, at least 1 digit.
+    """
+    errs = []
+    if len(password) < 12:
+        errs.append("Mot de passe trop court (12 caractères minimum).")
+    if len(password) > 72:
+        errs.append("Mot de passe trop long (72 caractères maximum).")
+    if not any(c.isupper() for c in password):
+        errs.append("Le mot de passe doit contenir au moins une lettre majuscule.")
+    if not any(c.isdigit() for c in password):
+        errs.append("Le mot de passe doit contenir au moins un chiffre.")
+    return errs
+
+
+# ── TOTP secret encryption (Fernet) ───────────────────────────────────────────
+
+def _get_fernet():
+    """Return a Fernet instance if TOTP_ENCRYPTION_KEY is configured, else None."""
+    from config import Config
+    key = Config.TOTP_ENCRYPTION_KEY
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except Exception:
+        return None
+
+
+def _encrypt_totp_secret(plaintext: str) -> str:
+    """Encrypt a TOTP secret. Returns encrypted token string, or plaintext if no key."""
+    f = _get_fernet()
+    if f is None:
+        return plaintext
+    return f.encrypt(plaintext.encode()).decode()
+
+
+def _decrypt_totp_secret(value: str) -> str:
+    """Decrypt a TOTP secret. Handles both encrypted and legacy plaintext values."""
+    if not value:
+        return value
+    f = _get_fernet()
+    if f is None:
+        return value
+    try:
+        from cryptography.fernet import InvalidToken
+        return f.decrypt(value.encode()).decode()
+    except (InvalidToken, Exception):
+        # Plaintext legacy secret (not yet migrated)
+        return value
 
 # Predefined security questions for account recovery
 SECURITY_QUESTIONS = [
@@ -171,7 +227,7 @@ def login_2fa():
         try:
             user = db.query(User).filter(User.id == uid).first()
             if user and user.totp_enabled and user.totp_secret:
-                totp = pyotp.TOTP(user.totp_secret)
+                totp = pyotp.TOTP(_decrypt_totp_secret(user.totp_secret))
                 if totp.verify(code, valid_window=1):
                     next_url = session.pop("_2fa_next", None) or url_for("main.dashboard")
                     # Capture all needed attributes while the session is still open,
@@ -229,10 +285,8 @@ def register():
                 errors.append("Nom d'utilisateur trop long (max 64 caractères).")
             if not password:
                 errors.append("Mot de passe requis.")
-            elif len(password) < 8:
-                errors.append("Mot de passe trop court (8 caractères minimum).")
-            elif len(password) > 72:
-                errors.append("Mot de passe trop long (72 caractères maximum).")
+            else:
+                errors.extend(_validate_password(password))
             if password and password != confirm:
                 errors.append("Les mots de passe ne correspondent pas.")
             if not domain_id_raw:
@@ -370,6 +424,27 @@ _BLOCKED_MIMES = {
     'application/x-msdownload', 'application/x-executable',
     'application/x-sh', 'application/x-bat',
 }
+
+# Magic bytes signatures for allowed file types
+_MAGIC_BYTES: dict[str, bytes] = {
+    '.pdf':  b'%PDF',
+    '.docx': b'PK\x03\x04',  # ZIP container (DOCX/XLSX/PPTX)
+}
+
+
+def _check_magic_bytes(raw: bytes, ext: str) -> bool:
+    """Return True if the file's magic bytes match the declared extension.
+    TXT has no magic bytes — we verify it's valid UTF-8 instead.
+    """
+    if ext in _MAGIC_BYTES:
+        return raw[:len(_MAGIC_BYTES[ext])] == _MAGIC_BYTES[ext]
+    if ext == '.txt':
+        try:
+            raw.decode('utf-8')
+            return True
+        except UnicodeDecodeError:
+            return False
+    return True  # Unknown extension — skip check
 
 
 def _user_docs_dir():
@@ -944,6 +1019,10 @@ def cv_upload():
     filename = sanitized_cv_name.lower()
     raw = file.read()
 
+    # Magic bytes validation
+    if not _check_magic_bytes(raw, cv_ext):
+        return jsonify({'error': f'Le contenu du fichier ne correspond pas à l\'extension {cv_ext}'}), 400
+
     # Extract text
     if cv_ext == '.pdf':
         try:
@@ -1101,13 +1180,11 @@ def account():
                 user = db.query(User).filter(User.id == user_id).first()
                 if not user or not bcrypt.check_password_hash(user.password_hash, current_pw):
                     errors.append("Mot de passe actuel incorrect.")
-                elif len(new_pw) < 8:
-                    errors.append("Le nouveau mot de passe doit faire au moins 8 caractères.")
-                elif len(new_pw) > 72:
-                    errors.append("Le nouveau mot de passe ne peut pas dépasser 72 caractères.")
-                elif new_pw != confirm_pw:
-                    errors.append("Les nouveaux mots de passe ne correspondent pas.")
                 else:
+                    errors.extend(_validate_password(new_pw))
+                    if new_pw != confirm_pw:
+                        errors.append("Les nouveaux mots de passe ne correspondent pas.")
+                if not errors:
                     user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
                     user.updated_at = datetime.utcnow()
                     db.commit()
@@ -1188,7 +1265,7 @@ def account_confirm_2fa():
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if user:
-            user.totp_secret = secret
+            user.totp_secret = _encrypt_totp_secret(secret)
             user.totp_enabled = True
             user.updated_at = datetime.utcnow()
             db.commit()
@@ -1215,7 +1292,7 @@ def account_disable_2fa():
         user = db.query(User).filter(User.id == user_id).first()
         if not user or not user.totp_enabled or not user.totp_secret:
             return redirect(url_for('main.account'))
-        totp = pyotp.TOTP(user.totp_secret)
+        totp = pyotp.TOTP(_decrypt_totp_secret(user.totp_secret))
         if not totp.verify(code, valid_window=1):
             return redirect(url_for('main.account') + '?err=invalid_code')
         user.totp_secret = None
@@ -1392,9 +1469,14 @@ def document_upload():
         mb = size / (1024 * 1024)
         return jsonify({'error': f'Fichier trop volumineux ({mb:.1f} Mo). Max : 5 Mo'}), 400
 
+    # 6. Magic bytes validation
+    raw = file.read()
+    if not _check_magic_bytes(raw, ext):
+        return jsonify({'error': f'Le contenu du fichier ne correspond pas à l\'extension {ext}'}), 400
+
     docs_dir = _user_docs_dir()
     docs_dir.mkdir(parents=True, exist_ok=True)
-    file.save(str(docs_dir / filename))
+    (docs_dir / filename).write_bytes(raw)
     return jsonify({'ok': True, 'filename': filename})
 
 
@@ -1402,7 +1484,10 @@ def document_upload():
 @login_required
 def document_download(filename):
     """Download an uploaded document."""
-    filepath = _user_docs_dir() / secure_filename(filename)
+    base_dir = _user_docs_dir().resolve()
+    filepath = (base_dir / secure_filename(filename)).resolve()
+    if not str(filepath).startswith(str(base_dir)):
+        return "Accès refusé", 403
     if not filepath.exists():
         return "Fichier introuvable", 404
     return send_file(str(filepath), as_attachment=True,
@@ -1546,6 +1631,7 @@ def generate_cover_letter(offer_id):
 
 @bp.route('/admin')
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_page():
     """Admin panel: list all registered users with management actions."""
     db = SessionLocal()
@@ -1582,6 +1668,7 @@ def admin_page():
 
 @bp.route('/api/admin/users/<int:user_id>/toggle', methods=['POST'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_toggle_user(user_id):
     """Enable or disable a user account."""
     db = SessionLocal()
@@ -1603,6 +1690,7 @@ def admin_toggle_user(user_id):
 
 @bp.route('/api/admin/users/<int:user_id>/delete', methods=['POST'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_delete_user(user_id):
     """Delete a user account and all associated data."""
     if user_id == session.get('user_id'):
@@ -1637,6 +1725,7 @@ def _admin_user_docs_dir(user_id: int) -> Path:
 
 @bp.route('/admin/documents/<int:user_id>')
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_user_documents(user_id):
     """Admin view: list and manage documents belonging to a specific user."""
     db = SessionLocal()
@@ -1659,9 +1748,13 @@ def admin_user_documents(user_id):
 
 @bp.route('/api/admin/documents/<int:user_id>/<filename>', methods=['GET'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_document_download(user_id, filename):
     """Admin download of a specific user's document."""
-    filepath = _admin_user_docs_dir(user_id) / secure_filename(filename)
+    base_dir = _admin_user_docs_dir(user_id).resolve()
+    filepath = (base_dir / secure_filename(filename)).resolve()
+    if not str(filepath).startswith(str(base_dir)):
+        return "Accès refusé", 403
     if not filepath.exists():
         return "Fichier introuvable", 404
     return send_file(str(filepath), as_attachment=True, download_name=filepath.name)
@@ -1669,6 +1762,7 @@ def admin_document_download(user_id, filename):
 
 @bp.route('/api/admin/documents/<int:user_id>/<filename>', methods=['DELETE'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_document_delete(user_id, filename):
     """Admin delete of a specific user's document."""
     filepath = _admin_user_docs_dir(user_id) / secure_filename(filename)
@@ -1682,6 +1776,7 @@ def admin_document_delete(user_id, filename):
 
 @bp.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_reset_password(user_id):
     """Generate a single-use 15-min password reset link for a user (admin only)."""
     db = SessionLocal()
@@ -1694,7 +1789,7 @@ def admin_reset_password(user_id):
             PasswordReset.user_id == user_id,
             PasswordReset.used == False
         ).update({'used': True})
-        token = uuid.uuid4().hex
+        token = secrets.token_urlsafe(32)
         db.add(PasswordReset(user_id=user_id, token=token))
         db.commit()
         reset_url = url_for('main.reset_password', token=token, _external=True, _scheme='https')
@@ -1735,15 +1830,13 @@ def forgot_password():
                     PasswordReset.user_id == user.id,
                     PasswordReset.used == False,
                 ).update({'used': True})
-                token = uuid.uuid4().hex
+                token = secrets.token_urlsafe(32)
                 db.add(PasswordReset(user_id=user.id, token=token))
                 db.commit()
                 reset_url = url_for('main.reset_password', token=token,
                                     _external=True, _scheme='https')
                 _send_reset_email(user.email, username, reset_url)
-                masked = _mask_email(user.email)
-                return render_template('forgot_password.html',
-                                       step='email_sent', masked_email=masked)
+                return render_template('forgot_password.html', step='email_sent')
             # ── Security question path ─────────────────────────────────────────
             if not user.security_question:
                 return render_template(
@@ -1780,7 +1873,7 @@ def forgot_password():
                 PasswordReset.user_id == user.id,
                 PasswordReset.used == False
             ).update({'used': True})
-            token = uuid.uuid4().hex
+            token = secrets.token_urlsafe(32)
             db.add(PasswordReset(user_id=user.id, token=token))
             db.commit()
             reset_url = url_for('main.reset_password', token=token, _external=True, _scheme='https')
@@ -1790,16 +1883,6 @@ def forgot_password():
 
     return render_template('forgot_password.html', step='1',
                            security_questions=SECURITY_QUESTIONS)
-
-
-def _mask_email(email: str) -> str:
-    """Return a partially masked email: ab***@domain.com."""
-    try:
-        local, domain = email.split('@', 1)
-        visible = local[:2] if len(local) >= 2 else local[:1]
-        return f"{visible}***@{domain}"
-    except Exception:
-        return "***"
 
 
 def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
@@ -1905,10 +1988,7 @@ def reset_password(token):
         if request.method == 'POST':
             new_pw = request.form.get('new_password', '')
             confirm = request.form.get('confirm_password', '')
-            if len(new_pw) < 8:
-                errors.append("Mot de passe trop court (8 caractères minimum).")
-            elif len(new_pw) > 72:
-                errors.append("Mot de passe trop long (72 caractères maximum).")
+            errors.extend(_validate_password(new_pw))
             if new_pw != confirm:
                 errors.append("Les mots de passe ne correspondent pas.")
             if not errors:
@@ -1969,6 +2049,7 @@ def _parse_nginx_today():
 
 @bp.route('/api/admin/stats')
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_stats():
     """Return today's site statistics: nginx log metrics + DB registrations."""
     from datetime import date as _date
@@ -2048,6 +2129,7 @@ def _read_error_log(n: int = 50) -> list[dict]:
 
 @bp.route('/admin/errors')
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_errors():
     """Admin error log: last 50 500 errors."""
     entries = _read_error_log(50)
@@ -2061,6 +2143,7 @@ def admin_errors():
 
 @bp.route('/admin/errors/clear', methods=['POST'])
 @superadmin_required
+@limiter.limit("30 per minute")
 def admin_errors_clear():
     """Truncate the errors log file."""
     try:

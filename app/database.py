@@ -152,6 +152,9 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
+        _migrate_totp_secrets()
+
     # Migrate user_offers table
     if "user_offers" in insp.get_table_names():
         uo_cols = [c["name"] for c in insp.get_columns("user_offers")]
@@ -171,6 +174,44 @@ def _migrate_columns():
         ))
         if result.rowcount > 0:
             print(f"[MIGRATE] Fixed {result.rowcount} offers with description as company name.")
+
+
+def _migrate_totp_secrets():
+    """Encrypt any plaintext TOTP secrets in the DB using Fernet if key is available."""
+    from config import Config
+    key = Config.TOTP_ENCRYPTION_KEY
+    if not key:
+        return
+    try:
+        from cryptography.fernet import Fernet, InvalidToken
+        f = Fernet(key.encode() if isinstance(key, str) else key)
+    except Exception as exc:
+        print(f"[MIGRATE] TOTP encryption: invalid TOTP_ENCRYPTION_KEY — {exc}")
+        return
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, totp_secret FROM users WHERE totp_secret IS NOT NULL AND totp_secret != ''"
+        )).fetchall()
+
+    migrated = 0
+    for row in rows:
+        user_id, secret = row[0], row[1]
+        # Try to decrypt — if it succeeds it's already encrypted
+        try:
+            f.decrypt(secret.encode())
+            continue  # Already encrypted
+        except (InvalidToken, Exception):
+            pass  # Plaintext — encrypt it
+        encrypted = f.encrypt(secret.encode()).decode()
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE users SET totp_secret = :s WHERE id = :id"
+            ), {"s": encrypted, "id": user_id})
+        migrated += 1
+
+    if migrated > 0:
+        print(f"[MIGRATE] Encrypted {migrated} plaintext TOTP secret(s).")
 
 
 def get_db():

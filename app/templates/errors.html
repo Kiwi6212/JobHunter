@@ -3,7 +3,7 @@
 {% block title %}Journal des erreurs — JobHunter{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .errors-page { max-width: 1100px; margin: 2rem auto; }
 
 .error-table-wrap { overflow-x: auto; margin-top: 1.2rem; }
@@ -149,7 +149,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function clearErrors(btn) {
     if (!confirm("Vider le journal des erreurs ? Cette action est irréversible.")) return;
     btn.disabled = true;

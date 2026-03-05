@@ -3,7 +3,7 @@
 {% block title %}Mon profil — JobHunter{% endblock %}
 
 {% block extra_css %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .account-page { max-width: 680px; margin: 2rem auto; }
 
 .account-section {
@@ -293,7 +293,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function confirmDelete() {
     var val = document.getElementById('delete-confirm-input').value.trim();
     var errEl = document.getElementById('delete-error');

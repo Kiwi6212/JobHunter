@@ -6,7 +6,6 @@ Roles: admin (full access + admin panel), user (write access, domain-scoped),
 
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
-from config import Config
 
 
 def get_current_user():
@@ -87,33 +86,23 @@ def superadmin_required(f):
 
 def check_credentials(username, password):
     """
-    Validate username/password.
-    Checks DB users first (bcrypt), then falls back to Config.USERS (plaintext).
+    Validate username/password against DB users only (bcrypt).
 
     Returns:
         (role, user_id, domain_id) on success, or (None, None, None) on failure.
-        user_id is None for config (legacy) users.
     """
-    # --- DB users (bcrypt) ---
+    from app.database import SessionLocal
+    from app.models import User
+    from app import bcrypt
+    db = SessionLocal()
     try:
-        from app.database import SessionLocal
-        from app.models import User
-        from app import bcrypt
-        db = SessionLocal()
-        try:
-            user = db.query(User).filter(User.username == username).first()
-            if user and bcrypt.check_password_hash(user.password_hash, password):
-                if not user.is_active:
-                    return None, None, None  # Account disabled
-                return user.role, user.id, user.domain_id
-        finally:
-            db.close()
+        user = db.query(User).filter(User.username == username).first()
+        if user and bcrypt.check_password_hash(user.password_hash, password):
+            if not user.is_active:
+                return None, None, None  # Account disabled
+            return user.role, user.id, user.domain_id
     except Exception:
-        pass  # DB not ready yet — fall through to config
-
-    # --- Config (legacy) users ---
-    cfg_user = Config.USERS.get(username)
-    if cfg_user and cfg_user["password"] == password:
-        return cfg_user["role"], None, None
-
+        pass
+    finally:
+        db.close()
     return None, None, None

@@ -42,32 +42,26 @@ class Config:
     # Session cookie hardening
     SESSION_COOKIE_HTTPONLY = True           # JS cannot read the cookie
     SESSION_COOKIE_SAMESITE = "Lax"         # CSRF mitigation for cross-site requests
-    SESSION_COOKIE_SECURE = False            # Set True when running behind HTTPS
+    SESSION_COOKIE_SECURE = os.getenv("FLASK_ENV") == "production"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
     # CSRF (Flask-WTF)
     WTF_CSRF_TIME_LIMIT = 3600              # Token valid for 1 hour
-
-    # Auth — two roles: admin (full access) and viewer (read-only)
-    USERS = {
-        os.getenv("ADMIN_USERNAME", "mathias"): {
-            "password": os.getenv("ADMIN_PASSWORD", "change_me_admin"),
-            "role": "admin",
-        },
-        os.getenv("VIEWER_USERNAME", "invite"): {
-            "password": os.getenv("VIEWER_PASSWORD", "change_me_viewer"),
-            "role": "viewer",
-        },
-    }
 
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "jobhunter.db"))
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Request size limit (10 MB)
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
+
     # Monitoring
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
     ERROR_LOG_PATH = str(DATA_DIR / "errors.log")
+
+    # TOTP secret encryption key (Fernet — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+    TOTP_ENCRYPTION_KEY = os.getenv("TOTP_ENCRYPTION_KEY")
 
     # Email / SMTP (Flask-Mail)
     MAIL_SERVER = os.getenv("MAIL_SERVER", "ssl0.ovh.net")

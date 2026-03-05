@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code A2F — JobHunter</title>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         (function () {
             var t = localStorage.getItem("jh-theme") || "light";
             document.documentElement.setAttribute("data-theme", t);
         })();
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         .login-wrapper {
             min-height: 100vh;
             display: flex;

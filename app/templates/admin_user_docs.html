@@ -65,7 +65,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function showMsg(text, ok) {
     var el = document.getElementById("docs-msg");
     el.textContent = text;
@@ -124,7 +124,7 @@ function toggleUser(userId, btn) {
 }
 </script>
 
-<style>
+<style nonce="{{ csp_nonce }}">
 .badge-status {
     display: inline-block;
     padding: 0.2rem 0.6rem;

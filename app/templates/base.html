@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Apply saved theme immediately (before first paint) to avoid flash
     (function () {
         var t = localStorage.getItem("jh-theme") || "light";
@@ -61,7 +61,7 @@
         </div>
     </footer>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Theme & language toggle — runs on every page
     (function () {
         var themeBtn = document.getElementById("theme-toggle");
@@ -98,7 +98,7 @@
     })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // ── CSRF: automatically attach X-CSRFToken to all non-GET fetch requests ──
     (function () {
         var meta = document.querySelector('meta[name="csrf-token"]');

@@ -149,7 +149,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function deleteUser(userId, username, btn) {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?\nCette action est irréversible.")) return;
     btn.disabled = true;
@@ -249,7 +249,7 @@ function toggleUser(userId, btn) {
 }
 </script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function loadStats() {
     fetch('/api/admin/stats')
         .then(function(r) { return r.json(); })
@@ -291,7 +291,7 @@ loadStats();
 setInterval(loadStats, 30000);
 </script>
 
-<style>
+<style nonce="{{ csp_nonce }}">
 .admin-stats-section {
     background: var(--card-bg);
     border: 1px solid var(--border-color);

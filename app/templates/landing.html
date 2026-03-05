@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         /* ── Reset & base ─────────────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -409,7 +409,7 @@
 </nav>
 
 <!-- ── Account deleted banner ─────────────────────────────── -->
-<script>
+<script nonce="{{ csp_nonce }}">
 (function() {
     if (new URLSearchParams(window.location.search).get('deleted') === '1') {
         var b = document.createElement('div');
@@ -564,7 +564,7 @@
     </div>
 </footer>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // Scroll-triggered fade-in
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(e => {
