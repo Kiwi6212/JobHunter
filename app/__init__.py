@@ -16,6 +16,7 @@ from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 
 # Module-level extension instances (initialized with app in create_app)
@@ -42,6 +43,11 @@ def create_app(config_class=Config):
     """
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # ── Proxy fix: trust one level of X-Forwarded-* (Nginx → Gunicorn) ──────
+    # Required so request.remote_addr reflects the client IP (not Nginx loopback),
+    # which makes per-IP rate limiting and security log IPs accurate.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # ── Create log directory (fallback to data/ if /var/log/jobhunter not writable) ─
     from config import LOG_DIR, DATA_DIR as _DATA_DIR

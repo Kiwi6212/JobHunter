@@ -40,7 +40,9 @@ def _init_security_logger(log_path: str) -> None:
 def _sec_log(event_type: str, username: str = "-", details: str = "-") -> None:
     """Write one security event line: timestamp | event_type | ip | username | details."""
     from flask import request as _req
-    ip = _req.headers.get("X-Forwarded-For", _req.remote_addr or "-").split(",")[0].strip()
+    # ProxyFix is configured in create_app() — remote_addr already reflects the
+    # real client IP (set by Nginx via X-Forwarded-For, trusted exactly 1 hop).
+    ip = _req.remote_addr or "-"
     ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     _sec_logger.info("%s | %-22s | %-15s | %-20s | %s", ts, event_type, ip, username, details)
 
@@ -658,7 +660,6 @@ def update_tracking(offer_id):
                 tracking = Tracking(offer_id=offer_id, status='New')
                 db.add(tracking)
         t_q1 = time.perf_counter()
-        print(f"[DIAG] query tracking: {(t_q1 - t_q0) * 1000:.1f}ms")
 
         data = request.get_json()
 
@@ -686,15 +687,12 @@ def update_tracking(offer_id):
 
         tracking.updated_at = datetime.utcnow()
         t_upd1 = time.perf_counter()
-        print(f"[DIAG] update fields: {(t_upd1 - t_upd0) * 1000:.1f}ms")
 
         t_c0 = time.perf_counter()
         db.commit()
         t_c1 = time.perf_counter()
-        print(f"[DIAG] db.commit: {(t_c1 - t_c0) * 1000:.1f}ms")
 
         t_total = (time.perf_counter() - t_start) * 1000
-        print(f"[DIAG] TOTAL server time for offer {offer_id}: {t_total:.1f}ms")
 
         return jsonify({
             'ok': True,
@@ -1558,7 +1556,10 @@ def document_download(filename):
 @login_required
 def document_delete(filename):
     """Delete an uploaded document."""
-    filepath = _user_docs_dir() / secure_filename(filename)
+    base_dir = _user_docs_dir().resolve()
+    filepath = (base_dir / secure_filename(filename)).resolve()
+    if not str(filepath).startswith(str(base_dir)):
+        return jsonify({'error': 'Accès refusé'}), 403
     if not filepath.exists():
         return jsonify({'error': 'Fichier introuvable'}), 404
     filepath.unlink()
@@ -1582,6 +1583,11 @@ def generate_cover_letter(offer_id):
         offer = db.query(Offer).filter(Offer.id == offer_id).first()
         if not offer:
             return jsonify({'error': 'Offre introuvable'}), 404
+
+        # Domain authorization: users may only act on offers in their domain
+        _domain_id = session.get('domain_id')
+        if _domain_id and offer.domain_id and offer.domain_id != _domain_id:
+            return jsonify({'error': 'Accès refusé'}), 403
 
         data = request.get_json() or {}
         template_filename = data.get('template_filename', '').strip()
@@ -1826,7 +1832,10 @@ def admin_document_download(user_id, filename):
 @limiter.limit("30 per minute")
 def admin_document_delete(user_id, filename):
     """Admin delete of a specific user's document."""
-    filepath = _admin_user_docs_dir(user_id) / secure_filename(filename)
+    base_dir = _admin_user_docs_dir(user_id).resolve()
+    filepath = (base_dir / secure_filename(filename)).resolve()
+    if not str(filepath).startswith(str(base_dir)):
+        return jsonify({'error': 'Accès refusé'}), 403
     if not filepath.exists():
         return jsonify({'error': 'Fichier introuvable'}), 404
     filepath.unlink()
@@ -1969,8 +1978,12 @@ def forgot_password():
 
 def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
     """Send a password reset email. Silently logs on failure."""
+    import html as _html
     from flask_mail import Message
     from app import mail
+    # Escape user-controlled values before embedding in HTML
+    safe_username = _html.escape(username)
+    safe_reset_url = _html.escape(reset_url)
     html_body = f"""<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"></head>
@@ -1995,7 +2008,7 @@ def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
               Réinitialisation de votre mot de passe
             </h2>
             <p style="margin:0 0 16px;color:#475569;font-size:.95rem;line-height:1.6;">
-              Bonjour <strong>{username}</strong>,
+              Bonjour <strong>{safe_username}</strong>,
             </p>
             <p style="margin:0 0 24px;color:#475569;font-size:.95rem;line-height:1.6;">
               Vous avez demandé à réinitialiser le mot de passe de votre compte MyJobHunter.
@@ -2005,7 +2018,7 @@ def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
             <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
               <tr>
                 <td align="center">
-                  <a href="{reset_url}"
+                  <a href="{safe_reset_url}"
                      style="display:inline-block;background:#2563eb;color:#ffffff;
                             text-decoration:none;padding:14px 36px;border-radius:8px;
                             font-size:1rem;font-weight:600;letter-spacing:-.2px;">
@@ -2162,6 +2175,7 @@ def admin_stats():
 # ── Health check ───────────────────────────────────────────────────────────────
 
 @bp.route('/health')
+@limiter.limit('60 per minute')
 def health():
     """Public health-check endpoint. Returns JSON with uptime and DB status."""
     uptime_sec = int((datetime.utcnow() - _APP_START_TIME).total_seconds())
