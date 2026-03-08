@@ -305,6 +305,41 @@ The dashboard is available at `http://localhost:5000`.
 
 ---
 
+## Backup & Restore
+
+### Automatic daily backup (cron)
+
+`scripts/backup.py` copies `data/jobhunter.db` to a timestamped file in
+`/home/ubuntu/backups/` and automatically deletes backups older than the 7
+most recent ones.
+
+Add this line to your crontab (`crontab -e`) to run the backup every night at
+02:00:
+
+```cron
+0 2 * * * cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/backup.py >> /home/ubuntu/backups/backup.log 2>&1
+```
+
+You can override the backup directory via the `BACKUP_DIR` environment variable:
+
+```bash
+BACKUP_DIR=/mnt/nas/backups python scripts/backup.py
+```
+
+### Manual restore
+
+`scripts/restore.py` restores a chosen backup over the live database. It
+creates a pre-restore safety copy before overwriting.
+
+```bash
+python scripts/restore.py /home/ubuntu/backups/jobhunter_20260308_020000.db
+```
+
+The script prompts for explicit confirmation (`YES`) before any data is
+overwritten.
+
+---
+
 ## Development Roadmap
 
 ### Phase 1 — Foundations
