@@ -345,6 +345,8 @@ def register():
                 errors.append("Veuillez choisir une question de sécurité.")
             if not security_answer:
                 errors.append("La réponse à la question de sécurité est requise.")
+            if not request.form.get("accept_terms"):
+                errors.append("Vous devez accepter les CGU et la Politique de confidentialité pour créer un compte.")
 
             if not errors:
                 existing = db.query(User).filter(User.username == username).first()
@@ -2300,3 +2302,105 @@ def admin_security_log_clear():
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# ── Legal pages (public) ───────────────────────────────────────────────────────
+
+@bp.route('/cgu')
+def cgu():
+    """Conditions Générales d'Utilisation — public page."""
+    return render_template('cgu.html')
+
+
+@bp.route('/confidentialite')
+def confidentialite():
+    """Politique de Confidentialité (RGPD) — public page."""
+    return render_template('confidentialite.html')
+
+
+@bp.route('/mentions-legales')
+def mentions_legales():
+    """Mentions légales — public page."""
+    return render_template('mentions_legales.html')
+
+
+# ── Personal data export ───────────────────────────────────────────────────────
+
+@bp.route('/api/account/export', methods=['POST'])
+@login_required
+@limiter.limit("5 per minute")
+def account_export():
+    """Export all personal data for the logged-in user as a JSON file (RGPD Article 20)."""
+    import json as _json
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Non autorisé'}), 403
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'error': 'Utilisateur introuvable'}), 404
+
+        # ── Profile data ─────────────────────────────────────
+        export_data = {
+            'profil': {
+                'identifiant':   user.username,
+                'email':         user.email,
+                'role':          user.role,
+                'domaine_id':    user.domain_id,
+                'domaine':       user.domain.name if user.domain else None,
+                'a2f_active':    user.totp_enabled,
+                'inscription':   user.created_at.isoformat() if user.created_at else None,
+                'derniere_connexion': user.last_login.isoformat() if user.last_login else None,
+                'tokens_ia_utilises': user.claude_tokens_used,
+                'nb_matchings':  user.matching_count,
+            },
+            'candidatures': [],
+            'documents': [],
+        }
+
+        # ── UserOffer tracking data ───────────────────────────
+        user_offers = (
+            db.query(UserOffer)
+            .filter(UserOffer.user_id == user_id)
+            .options(joinedload(UserOffer.offer))
+            .all()
+        )
+        for uo in user_offers:
+            o = uo.offer
+            export_data['candidatures'].append({
+                'offre_id':     o.id if o else None,
+                'titre':        o.title if o else None,
+                'entreprise':   o.company if o else None,
+                'url':          o.url if o else None,
+                'statut':       uo.status,
+                'cv_envoye':    uo.cv_sent,
+                'relance_faite': uo.follow_up_done,
+                'date_envoi':   uo.date_sent.isoformat() if uo.date_sent else None,
+                'date_relance': uo.follow_up_date.isoformat() if uo.follow_up_date else None,
+                'notes':        uo.notes,
+                'score_match':  uo.cv_match_score,
+            })
+
+        # ── Documents list (filenames only, not binary content) ──
+        docs_dir = DATA_DIR / 'documents' / str(user_id)
+        if docs_dir.exists():
+            export_data['documents'] = sorted(f.name for f in docs_dir.iterdir() if f.is_file())
+
+        export_json = _json.dumps(export_data, ensure_ascii=False, indent=2, default=str)
+        safe_username = "".join(c if c.isalnum() or c in "-_" else "_" for c in user.username)
+        filename = f"myjobhunter_export_{safe_username}.json"
+
+        from flask import Response
+        return Response(
+            export_json,
+            mimetype='application/json',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Type': 'application/json; charset=utf-8',
+            },
+        )
+    finally:
+        db.close()

@@ -275,7 +275,20 @@
         </form>
     </div>
 
-    <!-- ── 4. Delete account ────────────────────────────────── -->
+    <!-- ── 4. Personal data export ─────────────────────────── -->
+    <div class="account-section">
+        <h3>Mes données personnelles</h3>
+        <p style="font-size:.88rem;color:var(--text-secondary);margin-bottom:1rem;">
+            Conformément au RGPD (Art. 20), vous pouvez télécharger une copie de toutes vos données
+            : profil, candidatures, documents, scores IA.
+        </p>
+        <form method="POST" action="{{ url_for('main.account_export') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-submit">Exporter mes données (JSON)</button>
+        </form>
+    </div>
+
+    <!-- ── 5. Delete account ────────────────────────────────── -->
     <div class="delete-section">
         <h3>Supprimer mon compte</h3>
         <p>
