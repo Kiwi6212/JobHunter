@@ -97,7 +97,7 @@
             </p>
         </div>
         {% if entries %}
-        <button class="btn btn-danger btn-small" onclick="clearErrors(this)">
+        <button id="clear-errors-btn" class="btn btn-danger btn-small">
             🗑️ Vider les logs
         </button>
         {% endif %}
@@ -131,7 +131,7 @@
                     </td>
                     <td><span class="exc-badge">{{ e.exc_type }}</span></td>
                     <td style="min-width:300px;">
-                        <div class="tb-preview" onclick="this.classList.toggle('expanded')">{{ e.traceback }}</div>
+                        <div class="tb-preview">{{ e.traceback }}</div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -150,28 +150,38 @@
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
-function clearErrors(btn) {
-    if (!confirm("Vider le journal des erreurs ? Cette action est irréversible.")) return;
-    btn.disabled = true;
-    fetch("{{ url_for('main.admin_errors_clear') }}", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            if (res.ok) {
-                document.querySelector("tbody").innerHTML = "";
-                document.querySelector(".error-table-wrap").style.display = "none";
-                btn.style.display = "none";
-                var msg = document.getElementById("clear-msg");
-                msg.textContent = "Journal vidé.";
-                msg.style.color = "var(--text-secondary)";
-            } else {
-                btn.disabled = false;
-                document.getElementById("clear-msg").textContent = "Erreur : " + (res.error || "inconnue");
-            }
-        })
-        .catch(function() {
-            btn.disabled = false;
-            document.getElementById("clear-msg").textContent = "Erreur réseau.";
+(function () {
+    // ── Traceback expand/collapse ──────────────────────────────────────────────
+    document.querySelectorAll('.tb-preview').forEach(function (el) {
+        el.addEventListener('click', function () {
+            el.classList.toggle('expanded');
         });
-}
+    });
+
+    // ── Clear log button ───────────────────────────────────────────────────────
+    var clearBtn = document.getElementById('clear-errors-btn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            if (!confirm('Vider le journal des erreurs ? Cette action est irréversible.')) return;
+            clearBtn.disabled = true;
+            fetch("{{ url_for('main.admin_errors_clear') }}", { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        location.reload();
+                    } else {
+                        clearBtn.disabled = false;
+                        var msg = document.getElementById('clear-msg');
+                        msg.textContent = 'Erreur : ' + (res.error || 'inconnue');
+                        msg.style.color = 'var(--danger-color, #dc2626)';
+                    }
+                })
+                .catch(function () {
+                    clearBtn.disabled = false;
+                    document.getElementById('clear-msg').textContent = 'Erreur réseau.';
+                });
+        });
+    }
+})();
 </script>
 {% endblock %}

@@ -15,6 +15,38 @@
     margin-bottom: .75rem;
 }
 
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+    padding: .6rem .9rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.filter-bar label {
+    font-size: .8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.filter-bar select {
+    font-size: .83rem;
+    padding: .25rem .5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    min-width: 140px;
+}
+.filter-bar .filter-count {
+    font-size: .8rem;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
 .log-wrap {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -47,6 +79,7 @@
     white-space: nowrap;
 }
 .log-table tr:hover td { background: var(--bg-color); }
+.log-table tr.hidden { display: none; }
 
 .event-badge {
     display: inline-block;
@@ -56,26 +89,26 @@
     font-weight: 700;
     letter-spacing: .3px;
 }
-.ev-LOGIN_SUCCESS  { background: #dcfce7; color: #166534; }
-.ev-LOGIN_FAIL     { background: #fee2e2; color: #991b1b; }
-.ev-2FA_SUCCESS    { background: #dbeafe; color: #1e40af; }
-.ev-2FA_FAIL       { background: #fef3c7; color: #92400e; }
-.ev-2FA_ENABLED    { background: #dbeafe; color: #1e40af; }
-.ev-2FA_DISABLED   { background: #fef3c7; color: #92400e; }
-.ev-ACCOUNT_DELETE { background: #fee2e2; color: #991b1b; }
-.ev-PASSWORD_RESET { background: #f3e8ff; color: #6b21a8; }
-.ev-SEC_QUESTION_FAIL { background: #fef3c7; color: #92400e; }
-.ev-SEC_QUESTION_LOCK { background: #fee2e2; color: #991b1b; }
-[data-theme="dark"] .ev-LOGIN_SUCCESS  { background: #14532d; color: #86efac; }
-[data-theme="dark"] .ev-LOGIN_FAIL     { background: #3b0f0f; color: #fca5a5; }
-[data-theme="dark"] .ev-2FA_SUCCESS    { background: #1e3a5f; color: #93c5fd; }
-[data-theme="dark"] .ev-2FA_FAIL       { background: #3b2f08; color: #fde68a; }
-[data-theme="dark"] .ev-2FA_ENABLED    { background: #1e3a5f; color: #93c5fd; }
-[data-theme="dark"] .ev-2FA_DISABLED   { background: #3b2f08; color: #fde68a; }
-[data-theme="dark"] .ev-ACCOUNT_DELETE { background: #3b0f0f; color: #fca5a5; }
-[data-theme="dark"] .ev-PASSWORD_RESET { background: #3b1c5e; color: #d8b4fe; }
-[data-theme="dark"] .ev-SEC_QUESTION_FAIL { background: #3b2f08; color: #fde68a; }
-[data-theme="dark"] .ev-SEC_QUESTION_LOCK { background: #3b0f0f; color: #fca5a5; }
+.ev-LOGIN_SUCCESS      { background: #dcfce7; color: #166534; }
+.ev-LOGIN_FAIL         { background: #fee2e2; color: #991b1b; }
+.ev-2FA_SUCCESS        { background: #dbeafe; color: #1e40af; }
+.ev-2FA_FAIL           { background: #fef3c7; color: #92400e; }
+.ev-2FA_ENABLED        { background: #dbeafe; color: #1e40af; }
+.ev-2FA_DISABLED       { background: #fef3c7; color: #92400e; }
+.ev-ACCOUNT_DELETE     { background: #fee2e2; color: #991b1b; }
+.ev-PASSWORD_RESET     { background: #f3e8ff; color: #6b21a8; }
+.ev-SEC_QUESTION_FAIL  { background: #fef3c7; color: #92400e; }
+.ev-SEC_QUESTION_LOCK  { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .ev-LOGIN_SUCCESS      { background: #14532d; color: #86efac; }
+[data-theme="dark"] .ev-LOGIN_FAIL         { background: #3b0f0f; color: #fca5a5; }
+[data-theme="dark"] .ev-2FA_SUCCESS        { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .ev-2FA_FAIL           { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-2FA_ENABLED        { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .ev-2FA_DISABLED       { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-ACCOUNT_DELETE     { background: #3b0f0f; color: #fca5a5; }
+[data-theme="dark"] .ev-PASSWORD_RESET     { background: #3b1c5e; color: #d8b4fe; }
+[data-theme="dark"] .ev-SEC_QUESTION_FAIL  { background: #3b2f08; color: #fde68a; }
+[data-theme="dark"] .ev-SEC_QUESTION_LOCK  { background: #3b0f0f; color: #fca5a5; }
 
 .empty-state {
     text-align: center;
@@ -97,13 +130,26 @@
             </p>
         </div>
         {% if lines %}
-        <button class="btn btn-danger btn-small" onclick="clearLog(this)">
+        <button id="clear-log-btn" class="btn btn-danger btn-small">
             🗑️ Vider le journal
         </button>
         {% endif %}
     </div>
 
     {% if lines %}
+    {# ── Filter bar ─────────────────────────────────────────────────────────── #}
+    <div class="filter-bar">
+        <label for="filter-user">Utilisateur :</label>
+        <select id="filter-user">
+            <option value="">Tous</option>
+        </select>
+        <label for="filter-event" style="margin-left:.4rem;">Événement :</label>
+        <select id="filter-event">
+            <option value="">Tous</option>
+        </select>
+        <span class="filter-count" id="filter-count"></span>
+    </div>
+
     <div class="log-wrap">
         <table class="log-table">
             <thead>
@@ -115,11 +161,11 @@
                     <th>Détails</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="log-tbody">
                 {% for line in lines %}
                 {% set parts = line.split(' | ') %}
                 {% if parts | length >= 4 %}
-                <tr>
+                <tr data-user="{{ parts[3].strip() }}" data-event="{{ parts[1].strip() }}">
                     <td style="color:var(--text-secondary);font-size:0.8rem;">{{ parts[0] }}</td>
                     <td>
                         <span class="event-badge ev-{{ parts[1].strip() }}">{{ parts[1].strip() }}</span>
@@ -129,7 +175,7 @@
                     <td style="color:var(--text-secondary);">{{ parts[4].strip() if parts | length > 4 else '-' }}</td>
                 </tr>
                 {% else %}
-                <tr>
+                <tr data-user="-" data-event="-">
                     <td colspan="5" style="color:var(--text-secondary);font-size:0.8rem;">{{ line }}</td>
                 </tr>
                 {% endif %}
@@ -149,30 +195,90 @@
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
-function clearLog(btn) {
-    if (!confirm("Vider le journal de sécurité ? Cette action est irréversible.")) return;
-    btn.disabled = true;
-    fetch("{{ url_for('main.admin_security_log_clear') }}", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            if (res.ok) {
-                var tbody = document.querySelector("tbody");
-                if (tbody) tbody.innerHTML = "";
-                var wrap = document.querySelector(".log-wrap");
-                if (wrap) wrap.style.display = "none";
-                btn.style.display = "none";
-                var msg = document.getElementById("clear-msg");
-                msg.textContent = "Journal vidé.";
-                msg.style.color = "var(--text-secondary)";
-            } else {
-                btn.disabled = false;
-                document.getElementById("clear-msg").textContent = "Erreur : " + (res.error || "inconnue");
-            }
-        })
-        .catch(function() {
-            btn.disabled = false;
-            document.getElementById("clear-msg").textContent = "Erreur réseau.";
+(function () {
+    // ── Client-side filtering ─────────────────────────────────────────────────
+    var tbody      = document.getElementById('log-tbody');
+    var selUser    = document.getElementById('filter-user');
+    var selEvent   = document.getElementById('filter-event');
+    var countEl    = document.getElementById('filter-count');
+
+    if (tbody && selUser && selEvent) {
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+        var total = rows.length;
+
+        // Collect unique values from data attributes
+        var users  = {};
+        var events = {};
+        rows.forEach(function (row) {
+            var u = row.getAttribute('data-user') || '-';
+            var e = row.getAttribute('data-event') || '-';
+            if (u && u !== '-') users[u]   = true;
+            if (e && e !== '-') events[e]  = true;
         });
-}
+
+        // Populate user dropdown (sorted alphabetically)
+        Object.keys(users).sort().forEach(function (u) {
+            var opt = document.createElement('option');
+            opt.value       = u;
+            opt.textContent = u;
+            selUser.appendChild(opt);
+        });
+
+        // Populate event-type dropdown (sorted alphabetically)
+        Object.keys(events).sort().forEach(function (e) {
+            var opt = document.createElement('option');
+            opt.value       = e;
+            opt.textContent = e;
+            selEvent.appendChild(opt);
+        });
+
+        function applyFilters() {
+            var fUser  = selUser.value;
+            var fEvent = selEvent.value;
+            var visible = 0;
+            rows.forEach(function (row) {
+                var u = row.getAttribute('data-user') || '';
+                var e = row.getAttribute('data-event') || '';
+                var match = (!fUser || u === fUser) && (!fEvent || e === fEvent);
+                row.classList.toggle('hidden', !match);
+                if (match) visible++;
+            });
+            if (fUser || fEvent) {
+                countEl.textContent = visible + ' / ' + total + ' événement' + (total !== 1 ? 's' : '');
+            } else {
+                countEl.textContent = total + ' événement' + (total !== 1 ? 's' : '');
+            }
+        }
+
+        selUser.addEventListener('change',  applyFilters);
+        selEvent.addEventListener('change', applyFilters);
+        applyFilters(); // initialise the count on page load
+    }
+
+    // ── Clear log button ───────────────────────────────────────────────────────
+    var clearBtn = document.getElementById('clear-log-btn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            if (!confirm('Vider le journal de sécurité ? Cette action est irréversible.')) return;
+            clearBtn.disabled = true;
+            fetch("{{ url_for('main.admin_security_log_clear') }}", { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        location.reload();
+                    } else {
+                        clearBtn.disabled = false;
+                        var msg = document.getElementById('clear-msg');
+                        msg.textContent = 'Erreur : ' + (res.error || 'inconnue');
+                        msg.style.color = 'var(--danger-color, #dc2626)';
+                    }
+                })
+                .catch(function () {
+                    clearBtn.disabled = false;
+                    document.getElementById('clear-msg').textContent = 'Erreur réseau.';
+                });
+        });
+    }
+})();
 </script>
 {% endblock %}
