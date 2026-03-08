@@ -91,6 +91,11 @@
         <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
         <button class="btn btn-secondary btn-small" id="btn-import-cv" data-i18n="btn_import_cv">Importer CV</button>
         <input type="file" id="cv-file-input" accept=".pdf,.txt" style="display:none">
+        <p class="upload-privacy-notice" style="flex-basis:100%;margin-top:.3rem;">
+            Nous vous recommandons de ne pas inclure de données sensibles (santé, handicap, religion,
+            opinions politiques, orientation sexuelle) dans votre CV.
+            MyJobHunter ne traite pas ces données et décline toute responsabilité en cas d'inclusion volontaire.
+        </p>
         {% if has_cv %}
         <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
         <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>

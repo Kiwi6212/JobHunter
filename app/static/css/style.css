@@ -1027,6 +1027,12 @@ body {
     color: var(--text-secondary);
     font-style: italic;
 }
+.upload-privacy-notice {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.6rem;
+    line-height: 1.5;
+}
 .documents-table th { width: auto; }
 .doc-name { font-weight: 500; word-break: break-all; }
 .doc-actions {
