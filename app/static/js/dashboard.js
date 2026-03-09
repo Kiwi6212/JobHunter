@@ -636,11 +636,9 @@
     URL.revokeObjectURL(blobUrl);
   }
 
-  // ── CV upload & rematch ───────────────────────────────────────────
+  // ── CV rematch ────────────────────────────────────────────
 
-  var cvFileInput      = document.getElementById("cv-file-input");
   var cvStatusMsg      = document.getElementById("cv-upload-status");
-  var btnImportCv      = document.getElementById("btn-import-cv");
   var btnRematchCv     = document.getElementById("btn-rematch-cv");
   var btnRematchClaude = document.getElementById("btn-rematch-claude");
   var cvMatchProgress  = document.getElementById("cv-match-progress");
@@ -648,13 +646,6 @@
   var cvProgressText   = document.getElementById("cv-progress-text");
 
   var _matchingInterval = null;  // setInterval handle for polling
-
-  // Wire the Import CV button to open the hidden file picker
-  if (btnImportCv && cvFileInput) {
-    btnImportCv.addEventListener("click", function () {
-      cvFileInput.click();
-    });
-  }
 
   function cvSetStatus(msg, isError) {
     if (!cvStatusMsg) return;
@@ -742,34 +733,6 @@
         _setMatchButtons(false);
         cvSetStatus(t.cv_error + err, true);
       });
-  }
-
-  function handleCvUpload(file) {
-    if (!file) return;
-    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
-    cvSetStatus(t.cv_uploading, false);
-
-    var formData = new FormData();
-    formData.append("cv", file);
-
-    fetch("/api/cv/upload", { method: "POST", body: formData })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.ok) {
-          cvSetStatus(t.cv_success, false);
-          setTimeout(function () { location.reload(); }, 1200);
-        } else {
-          cvSetStatus(t.cv_error + (data.error || "unknown"), true);
-        }
-      })
-      .catch(function (err) { cvSetStatus(t.cv_error + err, true); });
-  }
-
-  if (cvFileInput) {
-    cvFileInput.addEventListener("change", function () {
-      handleCvUpload(this.files[0]);
-      this.value = "";
-    });
   }
 
   if (btnRematchCv) {

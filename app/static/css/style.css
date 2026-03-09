@@ -724,6 +724,17 @@ body {
     text-align: center;
 }
 
+/* ── CV no-hint message ──────────────────────────────────── */
+.cv-no-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.cv-no-hint a {
+    color: var(--primary-color, #2563eb);
+    text-decoration: underline;
+}
+
 /* ── Weekly quota badge ──────────────────────────────────── */
 .quota-badge {
     font-size: 0.8rem;

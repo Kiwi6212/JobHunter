@@ -599,6 +599,93 @@ def _user_docs_dir():
     return DATA_DIR / "documents" / folder
 
 
+_CV_ALLOWED_EXTS = {'.pdf', '.docx', '.txt'}
+
+
+def _extract_doc_text(path: Path) -> str | None:
+    """Extract plain text from a PDF, DOCX, or TXT file.  Returns None on failure."""
+    ext = path.suffix.lower()
+    try:
+        if ext == '.pdf':
+            import PyPDF2
+            reader = PyPDF2.PdfReader(str(path))
+            text = "\n".join(p.extract_text() or "" for p in reader.pages)
+            return text.strip() or None
+        elif ext == '.docx':
+            from docx import Document as _DocxDoc
+            doc = _DocxDoc(str(path))
+            text = "\n".join(p.text for p in doc.paragraphs)
+            return text.strip() or None
+        elif ext == '.txt':
+            try:
+                return path.read_text(encoding='utf-8').strip() or None
+            except UnicodeDecodeError:
+                return path.read_text(encoding='latin-1', errors='replace').strip() or None
+    except Exception as exc:
+        logger.warning("_extract_doc_text failed for %s: %s", path, exc)
+    return None
+
+
+def _find_cv_text(user_id) -> str | None:
+    """Find and extract CV text for a user.
+
+    Search order for DB users (user_id is not None):
+      1. Most recent file whose stem contains 'cv' (case-insensitive) in data/documents/{user_id}/
+      2. Most recent PDF or DOCX in that folder
+    Falls back to the legacy CV_TEXT_PATH for config/legacy admin (user_id is None).
+    Returns None if nothing is found or text extraction fails.
+    """
+    if user_id is None:
+        # Legacy config admin: use the old pre-extracted text file
+        if CV_TEXT_PATH.exists():
+            return CV_TEXT_PATH.read_text(encoding='utf-8')
+        return None
+
+    docs_dir = DATA_DIR / "documents" / str(user_id)
+    if not docs_dir.exists():
+        return None
+
+    files = [f for f in docs_dir.iterdir() if f.is_file() and f.suffix.lower() in _CV_ALLOWED_EXTS]
+    if not files:
+        return None
+
+    # Priority 1: files whose stem contains 'cv' (case-insensitive), most recent first
+    cv_named = sorted(
+        [f for f in files if 'cv' in f.stem.lower()],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    if cv_named:
+        text = _extract_doc_text(cv_named[0])
+        if text:
+            return text
+
+    # Priority 2: most recent PDF or DOCX
+    doc_files = sorted(
+        [f for f in files if f.suffix.lower() in ('.pdf', '.docx')],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    if doc_files:
+        return _extract_doc_text(doc_files[0])
+
+    return None
+
+
+def _has_cv_file(user_id) -> bool:
+    """Return True if the user has at least one usable document for CV matching."""
+    if user_id is None:
+        return CV_TEXT_PATH.exists()
+
+    docs_dir = DATA_DIR / "documents" / str(user_id)
+    if not docs_dir.exists():
+        return False
+    return any(
+        f.is_file() and f.suffix.lower() in _CV_ALLOWED_EXTS
+        for f in docs_dir.iterdir()
+    )
+
+
 @bp.route('/')
 def landing():
     """Public landing page. Redirects to dashboard if already authenticated."""
@@ -683,7 +770,7 @@ def dashboard():
                     target_ids.add(o.id)
                     break
 
-        has_cv = CV_TEXT_PATH.exists()
+        has_cv = _has_cv_file(user_id)
         cutoff_new = datetime.utcnow() - timedelta(hours=24)
 
         # Pass domain list to template only for admins (no domain scoping)
@@ -912,7 +999,7 @@ def stats():
             score_buckets[bucket] += 1
 
         # CV match score distribution (only when a CV has been uploaded)
-        has_cv = CV_TEXT_PATH.exists()
+        has_cv = _has_cv_file(user_id)
         cv_score_buckets = [0] * 10
         if has_cv:
             if user_id is not None:
@@ -1027,7 +1114,14 @@ def _cv_matching_worker(user_id, domain_id, method: str, force: bool) -> None:
     """
     db = SessionLocal()
     try:
-        cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
+        cv_text = _find_cv_text(user_id)
+        if not cv_text:
+            _save_task(user_id, {
+                'status': 'error', 'scored': 0, 'total': 0, 'skipped': 0,
+                'progress': 0, 'progress_total': 0,
+                'error': 'Aucun CV trouvé. Importez votre CV dans la section Documents.',
+            })
+            return
         query, skipped = _build_offer_query(db, domain_id, user_id, force)
         offers = query.all()
         total = len(offers)
@@ -1093,10 +1187,9 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
     Synchronous CV matching — used by cv_upload (tfidf, force=True).
     Returns (scored, skipped).
     """
-    if not CV_TEXT_PATH.exists():
+    cv_text = _find_cv_text(user_id)
+    if not cv_text:
         return 0, 0
-
-    cv_text = CV_TEXT_PATH.read_text(encoding="utf-8")
     db = SessionLocal()
     try:
         query, skipped = _build_offer_query(db, domain_id, user_id, force)
@@ -1223,15 +1316,15 @@ def cv_rematch():
     Returns immediately with {ok, status: 'started'|'already_running', task_id}.
     Poll GET /api/cv/matching-status for progress.
     """
-    if not CV_TEXT_PATH.exists():
-        return jsonify({'error': 'No CV uploaded yet'}), 404
+    user_id = session.get('user_id')
+    if not _has_cv_file(user_id):
+        return jsonify({'error': 'Aucun CV trouvé. Importez votre CV dans la section Documents.'}), 404
 
     method = request.args.get('method', 'tfidf')
     if method not in ('tfidf', 'claude'):
         method = 'tfidf'
     force = request.args.get('force', 'false').lower() == 'true'
 
-    user_id = session.get('user_id')
     domain_id = session.get('domain_id')
 
     # Quota check — only for claude method on role=user accounts
