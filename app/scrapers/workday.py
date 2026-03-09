@@ -18,11 +18,25 @@ from app.scrapers.base_scraper import BaseScraper
 logger = logging.getLogger(__name__)
 
 # Target companies on Workday: (subdomain_slug, wd_number, site_name, display_name)
+#
+# Site name discovery notes:
+#   thales.wd3/Careers          → confirmed HTTP 200 (237 results)
+#   ag.wd3/Airbus               → confirmed via robots.txt (/Airbus/ disallow)
+#   ratp.wd3/RATP_Externe       → confirmed
+#   airliquidehr.wd3/AirLiquideExternalCareer → confirmed
+#   axa.wd3/AXA_External        → tenant exists; CXS returns 422 (Jibe frontend at
+#                                  careers.axa.com; site name unconfirmed — best effort)
+#   loreal.wd3/LOrealExternal   → tenant exists; CXS returns 422 (custom protected
+#                                  platform at careers.loreal.com; best effort)
 COMPANIES = [
     ("thales", 3, "Careers", "Thales"),
     ("ag", 3, "Airbus", "Airbus"),
     ("ratp", 3, "RATP_Externe", "RATP"),
     ("airliquidehr", 3, "AirLiquideExternalCareer", "Air Liquide"),
+    # Added — Workday tenants confirmed; site names are best-effort
+    # (public career portals use different frontends, but Workday is the backend)
+    ("axa", 3, "AXA_External", "AXA"),
+    ("loreal", 3, "LOrealExternal", "L'Oréal"),
 ]
 
 # Search queries combining alternance + domain keywords
