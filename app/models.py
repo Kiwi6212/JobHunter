@@ -141,6 +141,11 @@ class User(Base):
     claude_tokens_used = Column(Integer, nullable=False, default=0)
     matching_count = Column(Integer, nullable=False, default=0)
 
+    # Weekly quotas (role=user only; admin has no limit)
+    weekly_matches_used = Column(Integer, nullable=False, default=0)
+    weekly_letters_used = Column(Integer, nullable=False, default=0)
+    quota_reset_at = Column(DateTime, nullable=True, default=None)
+
     # Security question brute-force protection
     failed_security_attempts = Column(Integer, nullable=False, default=0)
     security_lockout_until = Column(DateTime, nullable=True, default=None)

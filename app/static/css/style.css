@@ -724,6 +724,17 @@ body {
     text-align: center;
 }
 
+/* ── Weekly quota badge ──────────────────────────────────── */
+.quota-badge {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    white-space: nowrap;
+}
+
 /* ── Status Badges (used in stats / detail pages) ───────── */
 .status-badge {
     display: inline-block;

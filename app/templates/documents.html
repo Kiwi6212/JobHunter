@@ -9,7 +9,7 @@
         <p class="text-muted">CV, lettres de motivation et autres fichiers utiles pour vos candidatures.</p>
     </div>
 
-    {% if role == 'admin' %}
+    {% if role != 'viewer' %}
     <div class="card-section">
         <h3>Importer un document</h3>
         <div class="upload-form">
@@ -56,7 +56,7 @@
                     <td class="doc-actions">
                         <a href="{{ url_for('main.document_download', filename=f) }}"
                            class="btn btn-small btn-secondary" download>Télécharger</a>
-                        {% if role == 'admin' %}
+                        {% if role != 'viewer' %}
                         <button class="btn btn-small btn-danger btn-doc-delete"
                                 data-filename="{{ f }}">Supprimer</button>
                         {% endif %}

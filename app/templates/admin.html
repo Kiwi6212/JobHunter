@@ -126,16 +126,20 @@
                     {% if u.username != username %}
                     <button class="btn btn-small {{ 'btn-danger' if u.is_active else 'btn-secondary' }}"
                             id="btn-toggle-{{ u.id }}"
-                            onclick="toggleUser({{ u.id }}, this)">
+                            data-user-id="{{ u.id }}"
+                            data-action="toggle">
                         {{ 'Désactiver' if u.is_active else 'Réactiver' }}
                     </button>
                     <button class="btn btn-small btn-secondary"
-                            onclick="resetPassword({{ u.id }}, this)">
+                            data-user-id="{{ u.id }}"
+                            data-action="reset-password">
                         Reset MDP
                     </button>
                     <button class="btn btn-small btn-danger"
                             id="btn-delete-{{ u.id }}"
-                            onclick="deleteUser({{ u.id }}, '{{ u.username }}', this)">
+                            data-user-id="{{ u.id }}"
+                            data-username="{{ u.username }}"
+                            data-action="delete">
                         Supprimer
                     </button>
                     {% else %}
@@ -155,103 +159,124 @@
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
-function deleteUser(userId, username, btn) {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?\nCette action est irréversible.")) return;
-    btn.disabled = true;
-    fetch("/api/admin/users/" + userId + "/delete", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            if (!res.ok) {
+(function () {
+    "use strict";
+
+    function showMsg(text, isError) {
+        var msg = document.getElementById("admin-msg");
+        if (!msg) return;
+        msg.textContent = text;
+        msg.style.color = isError ? "var(--danger-color, #dc2626)" : "var(--text-secondary)";
+        if (!isError) setTimeout(function () { msg.textContent = ""; }, 4000);
+    }
+
+    function doToggle(userId, btn) {
+        btn.disabled = true;
+        fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
                 btn.disabled = false;
-                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
-                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
-                return;
-            }
-            var row = document.getElementById("user-row-" + userId);
-            if (row) row.remove();
-            var msg = document.getElementById("admin-msg");
-            msg.textContent = "Utilisateur « " + username + " » supprimé.";
-            msg.style.color = "var(--text-secondary)";
-            setTimeout(function() { msg.textContent = ""; }, 4000);
-        })
-        .catch(function() {
-            btn.disabled = false;
-            document.getElementById("admin-msg").textContent = "Erreur réseau.";
+                if (!res.ok) { showMsg("Erreur : " + (res.error || "inconnue"), true); return; }
+                var isActive = res.is_active;
+                var row   = document.getElementById("user-row-" + userId);
+                var badge = document.getElementById("status-badge-" + userId);
+                if (isActive) {
+                    row.classList.remove("row-disabled");
+                    badge.textContent = "Actif";
+                    badge.className   = "badge-status badge-active";
+                    btn.textContent   = "Désactiver";
+                    btn.className     = "btn btn-small btn-danger";
+                } else {
+                    row.classList.add("row-disabled");
+                    badge.textContent = "Désactivé";
+                    badge.className   = "badge-status badge-inactive";
+                    btn.textContent   = "Réactiver";
+                    btn.className     = "btn btn-small btn-secondary";
+                }
+                showMsg(isActive ? "Compte réactivé." : "Compte désactivé.", false);
+                setTimeout(function () { showMsg("", false); }, 3000);
+            })
+            .catch(function () { btn.disabled = false; showMsg("Erreur réseau.", true); });
+    }
+
+    function doResetPassword(userId, btn) {
+        if (!confirm("Générer un lien de réinitialisation pour cet utilisateur ?")) return;
+        btn.disabled = true;
+        fetch("/api/admin/users/" + userId + "/reset-password", { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                btn.disabled = false;
+                if (!res.ok) { showMsg("Erreur : " + (res.error || "inconnue"), true); return; }
+                var box = document.getElementById("reset-link-" + userId);
+                if (!box) return;
+                box.style.display = "block";
+                var resetUrl = res.reset_url;
+                var wrapper  = document.createElement("div");
+                wrapper.style.cssText = "background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.4rem .6rem;font-size:.82rem;";
+                var lbl = document.createElement("span");
+                lbl.style.color = "var(--text-secondary)";
+                lbl.textContent = "Lien (valable 15 min) :";
+                var row2 = document.createElement("div");
+                row2.style.cssText = "display:flex;gap:.3rem;align-items:center;margin-top:.25rem;";
+                var inp = document.createElement("input");
+                inp.type = "text";
+                inp.value = resetUrl;
+                inp.readOnly = true;
+                inp.style.cssText = "flex:1;padding:.3rem .5rem;border:1px solid var(--border-color);border-radius:5px;background:var(--bg-color);color:var(--text-primary);font-size:.82rem;font-family:monospace;";
+                var copyBtn = document.createElement("button");
+                copyBtn.type = "button";
+                copyBtn.className = "btn btn-small btn-secondary";
+                copyBtn.textContent = "Copier";
+                copyBtn.addEventListener("click", function () {
+                    navigator.clipboard.writeText(resetUrl).then(function () {
+                        copyBtn.textContent = "Copié !";
+                        setTimeout(function () { copyBtn.textContent = "Copier"; }, 2000);
+                    });
+                });
+                row2.appendChild(inp);
+                row2.appendChild(copyBtn);
+                wrapper.appendChild(lbl);
+                wrapper.appendChild(document.createElement("br"));
+                wrapper.appendChild(row2);
+                box.innerHTML = "";
+                box.appendChild(wrapper);
+            })
+            .catch(function () { btn.disabled = false; showMsg("Erreur réseau.", true); });
+    }
+
+    function doDelete(userId, username, btn) {
+        if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?\nCette action est irréversible.")) return;
+        btn.disabled = true;
+        fetch("/api/admin/users/" + userId + "/delete", { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.ok) {
+                    btn.disabled = false;
+                    showMsg("Erreur : " + (res.error || "inconnue"), true);
+                    return;
+                }
+                var row = document.getElementById("user-row-" + userId);
+                if (row) row.remove();
+                showMsg("Utilisateur « " + username + " » supprimé.", false);
+            })
+            .catch(function () { btn.disabled = false; showMsg("Erreur réseau.", true); });
+    }
+
+    // Event delegation on the table
+    var table = document.getElementById("admin-users-table");
+    if (table) {
+        table.addEventListener("click", function (e) {
+            var btn = e.target.closest("button[data-action]");
+            if (!btn) return;
+            var userId   = parseInt(btn.dataset.userId, 10);
+            var action   = btn.dataset.action;
+            var username = btn.dataset.username || "";
+            if (action === "toggle")         doToggle(userId, btn);
+            else if (action === "reset-password") doResetPassword(userId, btn);
+            else if (action === "delete")    doDelete(userId, username, btn);
         });
-}
-
-function resetPassword(userId, btn) {
-    if (!confirm("Générer un lien de réinitialisation pour cet utilisateur ?")) return;
-    btn.disabled = true;
-    fetch("/api/admin/users/" + userId + "/reset-password", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            btn.disabled = false;
-            if (!res.ok) {
-                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
-                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
-                return;
-            }
-            var box = document.getElementById("reset-link-" + userId);
-            box.style.display = "block";
-            box.innerHTML =
-                '<div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.4rem .6rem;font-size:.82rem;">' +
-                '<span style="color:var(--text-secondary);">Lien (valable 15 min) :</span><br>' +
-                '<div style="display:flex;gap:.3rem;align-items:center;margin-top:.25rem;">' +
-                '<input type="text" value="' + res.reset_url + '" readonly ' +
-                'style="flex:1;padding:.3rem .5rem;border:1px solid var(--border-color);border-radius:5px;' +
-                'background:var(--bg-color);color:var(--text-primary);font-size:.82rem;font-family:monospace;">' +
-                '<button class="btn btn-small btn-secondary" onclick="(function(b){' +
-                    'navigator.clipboard.writeText(\'' + res.reset_url + '\').then(function(){' +
-                    'b.textContent=\'Copié !\';setTimeout(function(){b.textContent=\'Copier\';},2000);})' +
-                '})(this)" type="button">Copier</button>' +
-                '</div></div>';
-        })
-        .catch(function() {
-            btn.disabled = false;
-            document.getElementById("admin-msg").textContent = "Erreur réseau.";
-        });
-}
-
-function toggleUser(userId, btn) {
-    btn.disabled = true;
-    fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            btn.disabled = false;
-            if (!res.ok) {
-                document.getElementById("admin-msg").textContent = "Erreur : " + (res.error || "inconnue");
-                document.getElementById("admin-msg").style.color = "var(--danger-color, #dc2626)";
-                return;
-            }
-            var isActive = res.is_active;
-            var row = document.getElementById("user-row-" + userId);
-            var badge = document.getElementById("status-badge-" + userId);
-
-            if (isActive) {
-                row.classList.remove("row-disabled");
-                badge.textContent = "Actif";
-                badge.className = "badge-status badge-active";
-                btn.textContent = "Désactiver";
-                btn.className = "btn btn-small btn-danger";
-            } else {
-                row.classList.add("row-disabled");
-                badge.textContent = "Désactivé";
-                badge.className = "badge-status badge-inactive";
-                btn.textContent = "Réactiver";
-                btn.className = "btn btn-small btn-secondary";
-            }
-
-            var msg = document.getElementById("admin-msg");
-            msg.textContent = isActive ? "Compte réactivé." : "Compte désactivé.";
-            msg.style.color = isActive ? "var(--success-color, #16a34a)" : "var(--text-secondary)";
-            setTimeout(function() { msg.textContent = ""; }, 3000);
-        })
-        .catch(function() {
-            btn.disabled = false;
-            document.getElementById("admin-msg").textContent = "Erreur réseau.";
-        });
-}
+    }
+})();
 </script>
 
 <script nonce="{{ csp_nonce }}">

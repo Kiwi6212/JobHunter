@@ -152,6 +152,28 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "weekly_matches_used" not in user_cols:
+            print("[MIGRATE] Adding weekly_matches_used column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN weekly_matches_used INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+        if "weekly_letters_used" not in user_cols:
+            print("[MIGRATE] Adding weekly_letters_used column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN weekly_letters_used INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+        if "quota_reset_at" not in user_cols:
+            print("[MIGRATE] Adding quota_reset_at column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN quota_reset_at DATETIME"
+                ))
+            print("[MIGRATE] Done.")
+
         if "failed_security_attempts" not in user_cols:
             print("[MIGRATE] Adding failed_security_attempts column to users table...")
             with engine.begin() as conn:

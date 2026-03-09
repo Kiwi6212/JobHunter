@@ -180,6 +180,90 @@ def _add_claude_tokens(user_id: int, tokens: int) -> None:
         logger.warning("_add_claude_tokens failed: %s", exc)
 
 
+# ── Weekly quota helpers ───────────────────────────────────────────────────────
+
+WEEKLY_MATCH_LIMIT  = 1   # max AI matchings per week for role=user
+WEEKLY_LETTER_LIMIT = 5   # max cover letter generations per week for role=user
+
+
+def _next_monday() -> datetime:
+    """Return next Monday at 00:00 UTC."""
+    now = datetime.utcnow()
+    days_ahead = (7 - now.weekday()) % 7  # 0 = already Monday
+    if days_ahead == 0:
+        days_ahead = 7
+    return (now + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _check_and_increment_quota(user_id: int, quota_field: str, limit: int) -> tuple[bool, int, int]:
+    """Check and increment a weekly quota for a DB user (role=user only).
+
+    Returns (allowed, used_after, limit).
+    Admin users (role != 'user') are always allowed.
+    """
+    if not user_id:
+        return True, 0, limit  # config/legacy admin — no limit
+
+    try:
+        db = SessionLocal.session_factory()
+        try:
+            user = db.query(User).filter(User.id == user_id).with_for_update().first()
+            if not user:
+                return True, 0, limit
+            if user.role != 'user':
+                return True, 0, limit  # admin / viewer — no quota
+
+            now = datetime.utcnow()
+            # Reset counters if quota_reset_at is in the past (or unset)
+            if not user.quota_reset_at or user.quota_reset_at <= now:
+                user.weekly_matches_used = 0
+                user.weekly_letters_used = 0
+                user.quota_reset_at = _next_monday()
+
+            current = getattr(user, quota_field, 0) or 0
+            if current >= limit:
+                db.commit()
+                return False, current, limit
+
+            setattr(user, quota_field, current + 1)
+            db.commit()
+            return True, current + 1, limit
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("_check_and_increment_quota failed: %s", exc)
+        return True, 0, limit  # fail open (don't block user on DB error)
+
+
+def _get_user_quota(user_id: int) -> dict:
+    """Return current quota state for a DB user.  Returns None for admin/config user."""
+    if not user_id:
+        return None
+    try:
+        db = SessionLocal.session_factory()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user or user.role != 'user':
+                return None
+            now = datetime.utcnow()
+            # If reset_at is past, quotas are effectively 0
+            if not user.quota_reset_at or user.quota_reset_at <= now:
+                return {
+                    'matches_used': 0, 'matches_limit': WEEKLY_MATCH_LIMIT,
+                    'letters_used': 0, 'letters_limit': WEEKLY_LETTER_LIMIT,
+                }
+            return {
+                'matches_used': user.weekly_matches_used or 0,
+                'matches_limit': WEEKLY_MATCH_LIMIT,
+                'letters_used': user.weekly_letters_used or 0,
+                'letters_limit': WEEKLY_LETTER_LIMIT,
+            }
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+
 # ── Async CV matching task registry (file-backed, multi-worker safe) ──────────
 # Tasks are stored in data/matching_tasks.json so all Gunicorn workers share state.
 # File is keyed by str(user_id) or "_admin" for config/legacy admin (user_id=None).
@@ -607,6 +691,8 @@ def dashboard():
         if not domain_id:
             admin_domains = db.query(Domain).order_by(Domain.name).all()
 
+        user_quota = _get_user_quota(user_id)
+
         return render_template(
             'dashboard.html',
             offers=offers,
@@ -620,6 +706,7 @@ def dashboard():
             role=get_current_role(),
             username=session.get("username"),
             admin_domains=admin_domains,
+            user_quota=user_quota,
         )
     finally:
         db.close()
@@ -1147,6 +1234,19 @@ def cv_rematch():
     user_id = session.get('user_id')
     domain_id = session.get('domain_id')
 
+    # Quota check — only for claude method on role=user accounts
+    if method == 'claude':
+        allowed, used, limit = _check_and_increment_quota(
+            user_id, 'weekly_matches_used', WEEKLY_MATCH_LIMIT
+        )
+        if not allowed:
+            return jsonify({
+                'error': f'Quota atteint : {limit} matching(s) IA par semaine. Réessayez lundi.',
+                'quota_exceeded': True,
+                'used': used,
+                'limit': limit,
+            }), 429
+
     task_id = str(uuid.uuid4())
     initial_state = {
         'status': 'running',
@@ -1590,6 +1690,19 @@ def generate_cover_letter(offer_id):
         _domain_id = session.get('domain_id')
         if _domain_id and offer.domain_id and offer.domain_id != _domain_id:
             return jsonify({'error': 'Accès refusé'}), 403
+
+        # Quota check for cover letter generation
+        _uid = session.get('user_id')
+        _allowed, _used, _limit = _check_and_increment_quota(
+            _uid, 'weekly_letters_used', WEEKLY_LETTER_LIMIT
+        )
+        if not _allowed:
+            return jsonify({
+                'error': f'Quota atteint : {_limit} lettre(s) de motivation par semaine. Réessayez lundi.',
+                'quota_exceeded': True,
+                'used': _used,
+                'limit': _limit,
+            }), 429
 
         data = request.get_json() or {}
         template_filename = data.get('template_filename', '').strip()

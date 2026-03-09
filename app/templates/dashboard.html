@@ -70,6 +70,21 @@
                    placeholder="Filtrer par entreprise...">
         </div>
         <div class="filter-group">
+            <label for="filter-location">Lieu</label>
+            <input type="text" id="filter-location" placeholder="Filtrer par lieu...">
+        </div>
+        <div class="filter-group">
+            <label for="filter-contract">Type de contrat</label>
+            <select id="filter-contract">
+                <option value="">Tous</option>
+                <option value="CDI">CDI</option>
+                <option value="CDD">CDD</option>
+                <option value="Alternance">Alternance</option>
+                <option value="Stage">Stage</option>
+                <option value="Autre">Autre</option>
+            </select>
+        </div>
+        <div class="filter-group">
             <label for="filter-search" data-i18n="filter_search">Recherche</label>
             <input type="text" id="filter-search"
                    data-i18n-placeholder="filter_search_ph"
@@ -102,6 +117,12 @@
         {% endif %}
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
+        {% if user_quota %}
+        <span class="quota-badge" title="Quotas hebdomadaires (réinitialisés chaque lundi)">
+            Match IA : {{ user_quota.matches_limit - user_quota.matches_used }}/{{ user_quota.matches_limit }} &nbsp;|&nbsp;
+            Lettres : {{ user_quota.letters_limit - user_quota.letters_used }}/{{ user_quota.letters_limit }}
+        </span>
+        {% endif %}
     </div>
     <!-- Progress bar (visible only during matching) -->
     {% if has_cv and role != 'viewer' %}
@@ -150,7 +171,8 @@
                 data-cv-score="{{ '%.1f' % cv_score_val if cv_score_val is not none else '' }}"
                 data-offer-type="{{ offer.offer_type or 'job' }}"
                 data-target="{{ '1' if offer.id in target_ids else '0' }}"
-                data-domain-id="{{ offer.domain_id or '' }}">
+                data-domain-id="{{ offer.domain_id or '' }}"
+                data-contract-type="{% set ct = (offer.contract_type or '')|lower %}{% if 'cdi' in ct %}CDI{% elif 'cdd' in ct %}CDD{% elif 'alternance' in ct or 'apprenti' in ct %}Alternance{% elif 'stage' in ct %}Stage{% elif ct %}Autre{% else %}Autre{% endif %}">
                 <td class="col-title">
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>{% if offer.found_date and offer.found_date >= cutoff_new %}<span class="badge-new">NEW</span>{% endif %}
                 </td>

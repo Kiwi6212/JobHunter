@@ -363,11 +363,13 @@
   var filteredRows = [];
   var allRows      = Array.from(tbody.querySelectorAll(".offer-row"));
 
-  var filterStatus  = document.getElementById("filter-status");
-  var filterSource  = document.getElementById("filter-source");
-  var filterDomain  = document.getElementById("filter-domain");
-  var filterCompany = document.getElementById("filter-company");
-  var filterSearch  = document.getElementById("filter-search");
+  var filterStatus   = document.getElementById("filter-status");
+  var filterSource   = document.getElementById("filter-source");
+  var filterDomain   = document.getElementById("filter-domain");
+  var filterCompany  = document.getElementById("filter-company");
+  var filterLocation = document.getElementById("filter-location");
+  var filterContract = document.getElementById("filter-contract");
+  var filterSearch   = document.getElementById("filter-search");
   var showRecruiters = document.getElementById("show-recruiters");
   var showAllOffers  = document.getElementById("show-all-offers");
   var visibleCount   = document.getElementById("visible-count");
@@ -376,11 +378,13 @@
   var pagePrev       = document.getElementById("page-prev");
 
   function applyFilters() {
-    var status  = filterStatus  ? filterStatus.value  : "";
-    var source  = filterSource  ? filterSource.value  : "";
-    var domain  = filterDomain  ? filterDomain.value  : "";
-    var company = filterCompany ? filterCompany.value.toLowerCase().trim() : "";
-    var search  = filterSearch  ? filterSearch.value.toLowerCase().trim()  : "";
+    var status   = filterStatus   ? filterStatus.value                        : "";
+    var source   = filterSource   ? filterSource.value                        : "";
+    var domain   = filterDomain   ? filterDomain.value                        : "";
+    var company  = filterCompany  ? filterCompany.value.toLowerCase().trim()  : "";
+    var location = filterLocation ? filterLocation.value.toLowerCase().trim() : "";
+    var contract = filterContract ? filterContract.value                      : "";
+    var search   = filterSearch   ? filterSearch.value.toLowerCase().trim()   : "";
     var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
     var showAll           = showAllOffers  ? showAllOffers.checked  : false;
 
@@ -396,7 +400,9 @@
       if (show && status  && row.dataset.status !== status)                          show = false;
       if (show && source  && row.dataset.source !== source)                          show = false;
       if (show && domain  && row.dataset.domainId !== domain)                        show = false;
-      if (show && company && row.dataset.company.indexOf(company) === -1)            show = false;
+      if (show && company  && row.dataset.company.indexOf(company) === -1)            show = false;
+      if (show && location && row.dataset.location.indexOf(location) === -1)         show = false;
+      if (show && contract && row.dataset.contractType !== contract)                 show = false;
       if (show && search) {
         var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
         if (text.indexOf(search) === -1) show = false;
@@ -430,11 +436,13 @@
     if (pageNext) pageNext.disabled = currentPage >= totalPages - 1;
   }
 
-  if (filterStatus)  filterStatus.addEventListener("change", applyFilters);
-  if (filterSource)  filterSource.addEventListener("change", applyFilters);
-  if (filterDomain)  filterDomain.addEventListener("change", applyFilters);
-  if (filterCompany) filterCompany.addEventListener("input",  applyFilters);
-  if (filterSearch)  filterSearch.addEventListener("input",   applyFilters);
+  if (filterStatus)   filterStatus.addEventListener("change",  applyFilters);
+  if (filterSource)   filterSource.addEventListener("change",  applyFilters);
+  if (filterDomain)   filterDomain.addEventListener("change",  applyFilters);
+  if (filterCompany)  filterCompany.addEventListener("input",   applyFilters);
+  if (filterLocation) filterLocation.addEventListener("input",  applyFilters);
+  if (filterContract) filterContract.addEventListener("change", applyFilters);
+  if (filterSearch)   filterSearch.addEventListener("input",    applyFilters);
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
   if (showAllOffers)  showAllOffers.addEventListener("change",  applyFilters);
 
@@ -444,11 +452,13 @@
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
     resetBtn.addEventListener("click", function () {
-      if (filterStatus)  filterStatus.value  = "";
-      if (filterSource)  filterSource.value  = "";
-      if (filterDomain)  filterDomain.value  = "";
-      if (filterCompany) filterCompany.value = "";
-      if (filterSearch)  filterSearch.value  = "";
+      if (filterStatus)   filterStatus.value   = "";
+      if (filterSource)   filterSource.value   = "";
+      if (filterDomain)   filterDomain.value   = "";
+      if (filterCompany)  filterCompany.value  = "";
+      if (filterLocation) filterLocation.value = "";
+      if (filterContract) filterContract.value = "";
+      if (filterSearch)   filterSearch.value   = "";
       if (showRecruiters) showRecruiters.checked = false;
       if (showAllOffers)  showAllOffers.checked  = false;
       currentSort.col = null;
@@ -521,6 +531,8 @@
         status:         filterStatus   ? filterStatus.value    : "",
         source:         filterSource   ? filterSource.value    : "",
         domain:         filterDomain   ? filterDomain.value    : "",
+        location:       filterLocation ? filterLocation.value  : "",
+        contract:       filterContract ? filterContract.value  : "",
         company:        filterCompany  ? filterCompany.value   : "",
         search:         filterSearch   ? filterSearch.value    : "",
         showRecruiters: showRecruiters ? showRecruiters.checked : false,
@@ -534,11 +546,13 @@
 
   function restoreState(state) {
     if (!state) return false;
-    if (filterStatus  && state.status   !== undefined) filterStatus.value    = state.status;
-    if (filterSource  && state.source   !== undefined) filterSource.value    = state.source;
-    if (filterDomain  && state.domain   !== undefined) filterDomain.value    = state.domain;
-    if (filterCompany && state.company  !== undefined) filterCompany.value   = state.company;
-    if (filterSearch  && state.search   !== undefined) filterSearch.value    = state.search;
+    if (filterStatus   && state.status   !== undefined) filterStatus.value    = state.status;
+    if (filterSource   && state.source   !== undefined) filterSource.value    = state.source;
+    if (filterDomain   && state.domain   !== undefined) filterDomain.value    = state.domain;
+    if (filterCompany  && state.company  !== undefined) filterCompany.value   = state.company;
+    if (filterLocation && state.location !== undefined) filterLocation.value  = state.location;
+    if (filterContract && state.contract !== undefined) filterContract.value  = state.contract;
+    if (filterSearch   && state.search   !== undefined) filterSearch.value    = state.search;
     if (showRecruiters && state.showRecruiters !== undefined) showRecruiters.checked = state.showRecruiters;
     if (showAllOffers  && state.showAll        !== undefined) showAllOffers.checked  = state.showAll;
     if (state.sortCol) {
