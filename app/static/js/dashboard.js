@@ -743,7 +743,7 @@
 
   if (btnRematchClaude) {
     btnRematchClaude.addEventListener("click", function () {
-      _startMatchingPoll("/api/cv/rematch?method=claude");
+      _startMatchingPoll("/api/cv/rematch?method=claude&force=true");
     });
   }
 
