@@ -29,6 +29,8 @@ import app.scrapers.lever as _lever_mod
 import app.scrapers.talentbrew as _tb_mod
 import app.scrapers.phenom as _phenom_mod
 import app.scrapers.place_emploi_public as _pep_mod
+import app.scrapers.safran as _safran_mod
+import app.scrapers.bpce as _bpce_mod
 import app.services.filter_engine as _fe_mod
 
 from app.database import SessionLocal, init_db
@@ -239,6 +241,8 @@ def _apply_domain_config(cfg: dict) -> None:
     _wd_mod.SEARCH_QUERIES = cfg["search_queries"]
     _tb_mod.SEARCH_QUERIES = cfg["search_queries"]
     _phenom_mod.SEARCH_QUERIES = cfg["search_queries"]
+    _safran_mod.SEARCH_QUERIES = cfg["search_queries"]
+    _bpce_mod.SEARCH_QUERIES = cfg["search_queries"]
     # FilterEngine reads KEYWORDS at __init__ time; patch before instantiation
     _fe_mod.KEYWORDS = cfg["keywords"]
 
@@ -379,6 +383,8 @@ def run_domain(
         _tb_mod.TalentBrewScraper(),
         _phenom_mod.PhenomScraper(),
         _pep_mod.PlaceEmploiPublicScraper(),
+        _safran_mod.SafranScraper(),
+        _bpce_mod.BpceScraper(),
     ]
 
     # Collect raw offers from all scrapers
