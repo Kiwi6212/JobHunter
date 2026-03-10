@@ -32,10 +32,10 @@
         <div class="stat-kpi"><span class="stat-kpi-val" id="s-landing">—</span><span class="stat-kpi-lbl">Hits landing page</span></div>
         <div class="stat-kpi"><span class="stat-kpi-val" id="s-regs">—</span><span class="stat-kpi-lbl">Inscriptions</span></div>
     </div>
-    <div id="stats-log-warn" style="display:none;font-size:.8rem;color:var(--text-secondary);margin-bottom:.7rem;">
+    <div id="stats-log-warn" class="hidden" style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.7rem;">
         ⚠️ Fichier <code>/var/log/nginx/access.log</code> inaccessible — seules les inscriptions DB sont disponibles.
     </div>
-    <div id="stats-top-pages" style="display:none;">
+    <div id="stats-top-pages" class="hidden">
         <div style="font-size:.82rem;font-weight:600;color:var(--text-secondary);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.4px;">Top 10 pages</div>
         <table class="stats-pages-table" id="stats-pages-table">
             <thead><tr><th>Page</th><th>Hits</th></tr></thead>
@@ -56,6 +56,8 @@
                 <th>Inscription</th>
                 <th>Dernière connexion</th>
                 <th>Statut</th>
+                <th>Email</th>
+                <th>A2F</th>
                 <th>Offres suivies</th>
                 <th>Matchings IA</th>
                 <th>Tokens Claude</th>
@@ -101,6 +103,20 @@
                         {{ 'Actif' if u.is_active else 'Désactivé' }}
                     </span>
                 </td>
+                <td>
+                    {% if u.email_confirmed %}
+                    <span class="badge-status badge-active" style="font-size:0.78em;">Confirmé</span>
+                    {% else %}
+                    <span class="badge-status badge-inactive" style="font-size:0.78em;">En attente</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u.totp_enabled %}
+                    <span class="badge-status badge-active" style="font-size:0.78em;">Activée</span>
+                    {% else %}
+                    <span class="badge-status badge-inactive" style="font-size:0.78em;background:#fee2e2;color:#991b1b;">Inactive</span>
+                    {% endif %}
+                </td>
                 {# ── Offres suivies ── #}
                 <td style="font-size:0.88em;text-align:center;">
                     {{ offer_counts.get(u.id, 0) }}
@@ -145,7 +161,7 @@
                     {% else %}
                     <span style="font-size:0.82em;color:var(--text-secondary);">(vous)</span>
                     {% endif %}
-                    <span id="reset-link-{{ u.id }}" style="display:none;width:100%;margin-top:.3rem;"></span>
+                    <span id="reset-link-{{ u.id }}" class="hidden" style="width:100%;margin-top:.3rem;"></span>
                 </td>
             </tr>
             {% endfor %}
@@ -209,7 +225,7 @@
                 if (!res.ok) { showMsg("Erreur : " + (res.error || "inconnue"), true); return; }
                 var box = document.getElementById("reset-link-" + userId);
                 if (!box) return;
-                box.style.display = "block";
+                box.classList.remove("hidden");
                 var resetUrl = res.reset_url;
                 var wrapper  = document.createElement("div");
                 wrapper.style.cssText = "background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.4rem .6rem;font-size:.82rem;";
@@ -291,10 +307,10 @@ function loadStats() {
                 document.getElementById('s-ips').textContent = '—';
                 document.getElementById('s-reqs').textContent = '—';
                 document.getElementById('s-landing').textContent = '—';
-                document.getElementById('stats-log-warn').style.display = 'block';
-                document.getElementById('stats-top-pages').style.display = 'none';
+                document.getElementById('stats-log-warn').classList.remove('hidden');
+                document.getElementById('stats-top-pages').classList.add('hidden');
             } else {
-                document.getElementById('stats-log-warn').style.display = 'none';
+                document.getElementById('stats-log-warn').classList.add('hidden');
                 document.getElementById('s-ips').textContent = fmt(d.unique_ips);
                 document.getElementById('s-reqs').textContent = fmt(d.total_requests);
                 document.getElementById('s-landing').textContent = fmt(d.landing_hits);
@@ -302,10 +318,19 @@ function loadStats() {
                 tbody.innerHTML = '';
                 (d.top_pages || []).forEach(function(p) {
                     var tr = document.createElement('tr');
-                    tr.innerHTML = '<td><code>' + p[0] + '</code></td><td>' + p[1].toLocaleString('fr-FR') + '</td>';
+                    var td1 = document.createElement('td');
+                    var code = document.createElement('code');
+                    code.textContent = p[0];
+                    td1.appendChild(code);
+                    var td2 = document.createElement('td');
+                    td2.textContent = p[1].toLocaleString('fr-FR');
+                    tr.appendChild(td1);
+                    tr.appendChild(td2);
                     tbody.appendChild(tr);
                 });
-                document.getElementById('stats-top-pages').style.display = (d.top_pages && d.top_pages.length) ? 'block' : 'none';
+                var topPagesEl = document.getElementById('stats-top-pages');
+                if (d.top_pages && d.top_pages.length) { topPagesEl.classList.remove('hidden'); }
+                else { topPagesEl.classList.add('hidden'); }
             }
             var now = new Date();
             document.getElementById('stats-refresh-label').textContent =
@@ -406,6 +431,10 @@ setInterval(loadStats, 30000);
 [data-theme="dark"] .badge-inactive {
     background: #374151;
     color: #9ca3af;
+}
+[data-theme="dark"] .badge-2fa-off {
+    background: #7f1d1d;
+    color: #fecaca;
 }
 .btn-danger {
     background: #dc2626;

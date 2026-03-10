@@ -378,6 +378,56 @@ See [ROADMAP.md](ROADMAP.md) for detailed progress.
 
 ---
 
+## Maintenance & Error Pages
+
+### Maintenance mode (Nginx)
+
+To enable maintenance mode without stopping the app, create a flag file:
+
+```bash
+touch /home/ubuntu/JobHunter/maintenance_on
+```
+
+To disable maintenance mode:
+
+```bash
+rm /home/ubuntu/JobHunter/maintenance_on
+```
+
+### Nginx configuration
+
+Add the following to your Nginx `server` block to serve custom error pages and enable maintenance mode:
+
+```nginx
+# --- Maintenance mode ---
+# If the flag file exists, return 503 for all requests
+if (-f /home/ubuntu/JobHunter/maintenance_on) {
+    return 503;
+}
+
+# --- Custom error pages ---
+error_page 502 /static/error.html;
+error_page 503 /static/maintenance.html;
+
+location = /static/maintenance.html {
+    root /home/ubuntu/JobHunter/app;
+    internal;
+}
+
+location = /static/error.html {
+    root /home/ubuntu/JobHunter/app;
+    internal;
+}
+```
+
+- **502** (Bad Gateway) — served when Gunicorn/Flask is down or unresponsive
+- **503** (Service Unavailable) — served when maintenance mode is enabled
+- **404** and **500** — handled by Flask with custom templates (`templates/404.html`, `templates/500.html`)
+
+The `internal` directive ensures these pages are only served by Nginx error handling, not directly accessible via URL.
+
+---
+
 ## Security
 
 * **API keys** — Stored in `.env`, never committed to version control

@@ -93,15 +93,21 @@ class WTTJScraper(BaseScraper):
             all_offers.extend(offers)
             self._delay()
 
-        # Deduplicate by external_id
+        # Deduplicate by external_id and URL
         seen_ids = set()
+        seen_urls = set()
         unique_offers = []
         for offer in all_offers:
             eid = offer.get("external_id")
             if eid and eid in seen_ids:
                 continue
+            url = offer.get("url", "")
+            if not eid and url and url in seen_urls:
+                continue
             if eid:
                 seen_ids.add(eid)
+            if url:
+                seen_urls.add(url)
             unique_offers.append(offer)
 
         logger.info(
@@ -110,6 +116,10 @@ class WTTJScraper(BaseScraper):
         )
 
         return unique_offers
+
+    def close(self):
+        """Close the HTTP session."""
+        self.session.close()
 
     def _search(self, query, facet_filters):
         """Run a single Algolia search and return parsed offers."""

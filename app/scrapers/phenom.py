@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import time
+from urllib.parse import quote_plus
 
 import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
@@ -22,7 +23,23 @@ BRAVE_PATH = os.getenv(
     "BRAVE_PATH",
     r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
 )
-BRAVE_VERSION_MAIN = 145
+def _detect_brave_version():
+    """Auto-detect installed Brave browser major version."""
+    import subprocess
+    try:
+        path = BRAVE_PATH
+        if os.path.exists(path):
+            result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                m = re.search(r'(\d+)\.\d+\.\d+', result.stdout)
+                if m:
+                    return int(m.group(1))
+    except Exception:
+        pass
+    return 145  # fallback
+
+
+BRAVE_VERSION_MAIN = _detect_brave_version()
 
 # (base_url, search_path, lang_prefix, display_name)
 # lang_prefix is part of the URL path (e.g. /fr/fr or /global/fr)
@@ -78,6 +95,10 @@ class PhenomScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.driver = None
+
+    def close(self):
+        """Close the browser driver if open."""
+        self._quit_driver()
 
     def _create_driver(self):
         """Create an undetected Chrome driver using Brave browser."""
@@ -162,7 +183,7 @@ class PhenomScraper(BaseScraper):
                 offset = page * 10
                 url = (
                     f"{base_url}{search_path}"
-                    f"?keywords={query.replace(' ', '+')}"
+                    f"?keywords={quote_plus(query)}"
                     f"&from={offset}&s=1"
                 )
 

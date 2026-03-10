@@ -3,7 +3,7 @@ Database models for JobHunter application.
 Defines the structure for offers and tracking tables.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
 )
@@ -35,15 +35,15 @@ class Offer(Base):
 
     # Dates
     posted_date = Column(DateTime, nullable=True)  # When posted by company
-    found_date = Column(DateTime, nullable=False, default=datetime.utcnow)  # When scraped
+    found_date = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))  # When scraped
 
     # Scoring
     relevance_score = Column(Float, nullable=True, default=0.0)
     cv_match_score = Column(Float, nullable=True, default=None)  # TF-IDF cosine sim × 100
 
     # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
     # Domain (for multi-user filtering)
     domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
@@ -87,8 +87,8 @@ class Tracking(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationship
     offer = relationship("Offer", back_populates="tracking")
@@ -124,6 +124,7 @@ class User(Base):
     role = Column(String(20), nullable=False, default="user")  # admin, user, viewer
     domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    email_confirmed = Column(Boolean, nullable=False, default=True)
 
     # Two-factor authentication (TOTP / Google Authenticator)
     totp_secret = Column(String(64), nullable=True, default=None)
@@ -150,12 +151,13 @@ class User(Base):
     failed_security_attempts = Column(Integer, nullable=False, default=0)
     security_lockout_until = Column(DateTime, nullable=True, default=None)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
     domain = relationship("Domain", back_populates="users")
     user_offers = relationship("UserOffer", back_populates="user", cascade="all, delete-orphan")
     password_resets = relationship("PasswordReset", back_populates="user", cascade="all, delete-orphan")
+    email_confirmations = relationship("EmailConfirmation", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
@@ -181,8 +183,11 @@ class UserOffer(Base):
     # Per-user CV match score (replaces Offer.cv_match_score for DB users)
     cv_match_score = Column(Float, nullable=True, default=None)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Favorites
+    is_favorite = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="user_offers")
     offer = relationship("Offer", back_populates="user_offers")
@@ -201,10 +206,27 @@ class PasswordReset(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token = Column(String(64), nullable=False, unique=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     used = Column(Boolean, nullable=False, default=False)
 
     user = relationship("User", back_populates="password_resets")
 
     def __repr__(self):
         return f"<PasswordReset(user_id={self.user_id}, used={self.used})>"
+
+
+class EmailConfirmation(Base):
+    """Single-use, time-limited email confirmation tokens for registration."""
+
+    __tablename__ = "email_confirmations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    used = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User", back_populates="email_confirmations")
+
+    def __repr__(self):
+        return f"<EmailConfirmation(user_id={self.user_id}, used={self.used})>"

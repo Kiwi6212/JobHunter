@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, g, request, render_template
+from flask import Flask, g, session, redirect, url_for, flash, request, render_template
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -86,6 +86,40 @@ def create_app(config_class=Config):
     def _inject_csp_nonce():
         return {"csp_nonce": getattr(g, "csp_nonce", "")}
 
+    # ── Enforce mandatory 2FA ────────────────────────────────────────────────
+    _2FA_EXEMPT_ENDPOINTS = {
+        "main.account", "main.account_setup_2fa", "main.account_confirm_2fa",
+        "main.account_disable_2fa", "main.account_delete",
+        "main.logout", "main.login", "main.login_2fa", "main.register",
+        "main.register_pending", "main.confirm_email", "main.resend_confirmation",
+        "main.landing", "main.faq", "main.cgu",
+        "main.confidentialite", "main.mentions_legales",
+        "main.forgot_password",
+        "static",
+    }
+
+    @app.before_request
+    def _enforce_mandatory_2fa():
+        # Only check authenticated users with a user_id in session
+        user_id = session.get("user_id")
+        if not user_id:
+            return
+        # Allow exempt routes (account, 2FA setup, logout, static)
+        endpoint = request.endpoint or ""
+        if endpoint in _2FA_EXEMPT_ENDPOINTS or endpoint.startswith("static"):
+            return
+        # Check totp_enabled from DB
+        from app.database import SessionLocal
+        from app.models import User
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and not user.totp_enabled:
+                flash("Pour la sécurité de votre compte, l'activation de l'A2F est obligatoire.", "warning")
+                return redirect(url_for("main.account"))
+        finally:
+            db.close()
+
     # ── Security headers ─────────────────────────────────────────────────────
     @app.after_request
     def set_security_headers(response):
@@ -141,12 +175,20 @@ def create_app(config_class=Config):
         except Exception:
             pass  # DB not initialised yet (first run) — let init_db() handle it
 
-    # ── 500 / unhandled-exception monitoring ─────────────────────────────────
+    # ── Custom error pages ──────────────────────────────────────────────────
     from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(404)
+    def page_not_found(exc):
+        from flask import render_template as _rt
+        return _rt("404.html"), 404
+
+    # ── 500 / unhandled-exception monitoring ─────────────────────────────────
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
-        # Let Werkzeug handle normal HTTP errors (404, 403, 400, …) unchanged
+        # Let Werkzeug handle normal HTTP errors (403, 400, …) unchanged
+        # (404 is handled above by its own handler)
         if isinstance(exc, HTTPException):
             return exc
 

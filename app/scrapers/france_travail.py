@@ -99,10 +99,11 @@ class FranceTravailScraper(BaseScraper):
         departments = FILTERS.get("departments", ["75", "77", "78", "91", "92", "93", "94", "95"])
         all_offers = []
         seen_ids = set()
+        seen_urls = set()
 
         for rome in ROME_CODES:
             for dept in departments:
-                offers = self._search_page(headers, rome, dept, seen_ids)
+                offers = self._search_page(headers, rome, dept, seen_ids, seen_urls)
                 all_offers.extend(offers)
                 if offers:
                     logger.info(
@@ -112,7 +113,7 @@ class FranceTravailScraper(BaseScraper):
         logger.info(f"[france_travail] Total unique offers: {len(all_offers)}")
         return all_offers
 
-    def _search_page(self, headers, rome_code, departement, seen_ids):
+    def _search_page(self, headers, rome_code, departement, seen_ids, seen_urls):
         """Paginate through all results for one (ROME, department) pair."""
         offers = []
         start = 0
@@ -170,8 +171,13 @@ class FranceTravailScraper(BaseScraper):
                 eid = offer.get("external_id")
                 if eid and eid in seen_ids:
                     continue
+                url = offer.get("url", "")
+                if not eid and url and url in seen_urls:
+                    continue
                 if eid:
                     seen_ids.add(eid)
+                if url:
+                    seen_urls.add(url)
                 offers.append(offer)
 
             # Determine total from Content-Range: "offres 0-149/320"

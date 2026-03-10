@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>500 — Erreur interne — MyJobHunter</title>
+    <title>Service indisponible — MyJobHunter</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -43,13 +43,7 @@
             padding: 2.5rem 2rem;
             box-shadow: 0 16px 48px rgba(0,0,0,.15);
         }
-        .code {
-            font-size: clamp(3.5rem, 10vw, 5rem);
-            font-weight: 800;
-            opacity: .25;
-            line-height: 1;
-            margin-bottom: .5rem;
-        }
+        .icon { font-size: 3rem; margin-bottom: 1.2rem; }
         h1 {
             font-size: clamp(1.3rem, 4vw, 1.6rem);
             font-weight: 800;
@@ -103,11 +97,11 @@
         <div class="logo">🎯</div>
         <div class="brand">MyJobHunter</div>
         <div class="card">
-            <div class="code">500</div>
-            <h1>Erreur interne</h1>
-            <p>Une erreur inattendue s'est produite.<br>L'équipe a été notifiée automatiquement.</p>
+            <div class="icon">⚠️</div>
+            <h1>MyJobHunter est temporairement indisponible</h1>
+            <p>Notre équipe est informée et travaille à résoudre le problème.</p>
             <div class="actions">
-                <a class="btn btn-primary" href="/">Retour à l'accueil</a>
+                <a class="btn btn-primary" href="javascript:location.reload()">Réessayer</a>
                 <a class="btn btn-outline" id="report-btn" href="#">Signaler le problème</a>
             </div>
         </div>
@@ -117,10 +111,10 @@
             var now = new Date();
             var date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
             var time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            var subject = encodeURIComponent('MyJobHunter - Erreur 500');
+            var subject = encodeURIComponent('MyJobHunter - Site indisponible');
             var body = encodeURIComponent(
                 'Bonjour,\n\n' +
-                'J\'ai rencontré une erreur 500 sur MyJobHunter.\n\n' +
+                'Le site MyJobHunter est indisponible.\n\n' +
                 'Date et heure : ' + date + ' à ' + time + '\n' +
                 'URL : ' + window.location.href + '\n\n' +
                 'Cordialement'

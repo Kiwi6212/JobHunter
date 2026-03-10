@@ -6,23 +6,28 @@
 <div class="dashboard-header">
     <h2 data-i18n="dashboard_title">Tableau de bord des offres</h2>
     <div class="stats-summary">
-        <div class="stat-card">
+        <div class="stat-card stat-card--total">
+            <span class="stat-icon">📋</span>
             <span class="stat-number">{{ stats.total_offers }}</span>
             <span class="stat-label" data-i18n="stat_total">Total offres</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--cv">
+            <span class="stat-icon">📨</span>
             <span class="stat-number" id="stat-cv-sent">{{ stats.cv_sent }}</span>
             <span class="stat-label" data-i18n="stat_cv">CV envoyés</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--followup">
+            <span class="stat-icon">🔄</span>
             <span class="stat-number" id="stat-follow-ups">{{ stats.follow_ups }}</span>
             <span class="stat-label" data-i18n="stat_followup">Relances</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--interviews">
+            <span class="stat-icon">🤝</span>
             <span class="stat-number" id="stat-interviews">{{ stats.interviews }}</span>
             <span class="stat-label" data-i18n="stat_interviews">Entretiens</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--targets">
+            <span class="stat-icon">🎯</span>
             <span class="stat-number">{{ target_ids|length }}</span>
             <span class="stat-label" data-i18n="stat_targets">Offres cibles</span>
         </div>
@@ -98,31 +103,47 @@
             <input type="checkbox" id="show-recruiters">
             <span data-i18n="filter_recruiters">Recruteurs potentiels</span>
         </label>
+        <label class="filter-toggle">
+            <input type="checkbox" id="show-favorites">
+            <span data-i18n="filter_favorites">Favoris uniquement</span>
+        </label>
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">
-        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
+        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">🔄 Réinitialiser</button>
         {% if role != 'viewer' %}
-        <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
-        <a href="{{ url_for('main.documents') }}" class="btn btn-secondary btn-small">Gérer mes documents</a>
+        <button class="btn btn-accent btn-small" id="export-csv" data-i18n="btn_export_csv">📥 Exporter CSV</button>
+        <a href="{{ url_for('main.documents') }}" class="btn btn-secondary btn-small">📄 Gérer mes documents</a>
         {% if has_cv %}
-        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
-        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>
+        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">🔃 Recalculer</button>
+        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">🤖 Match IA</button>
         {% else %}
         <span class="cv-no-hint">Importez votre CV dans <a href="{{ url_for('main.documents') }}">Documents</a> pour activer le matching</span>
         {% endif %}
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
         {% if user_quota %}
-        <span class="quota-badge" title="Quotas hebdomadaires (réinitialisés chaque lundi)">
-            Match IA : {{ user_quota.matches_limit - user_quota.matches_used }}/{{ user_quota.matches_limit }} &nbsp;|&nbsp;
-            Lettres : {{ user_quota.letters_limit - user_quota.letters_used }}/{{ user_quota.letters_limit }}
-        </span>
+        <div class="quota-container" title="Quotas hebdomadaires (réinitialisés chaque lundi)">
+            <div class="quota-item">
+                <span class="quota-label">🤖 Match IA</span>
+                <div class="quota-bar-track">
+                    <div class="quota-bar-fill quota-bar-fill--ia" style="width: {{ ((user_quota.matches_limit - user_quota.matches_used) / user_quota.matches_limit * 100) if user_quota.matches_limit else 0 }}%"></div>
+                </div>
+                <span class="quota-count">{{ user_quota.matches_limit - user_quota.matches_used }}/{{ user_quota.matches_limit }}</span>
+            </div>
+            <div class="quota-item">
+                <span class="quota-label">✉️ Lettres</span>
+                <div class="quota-bar-track">
+                    <div class="quota-bar-fill quota-bar-fill--letters" style="width: {{ ((user_quota.letters_limit - user_quota.letters_used) / user_quota.letters_limit * 100) if user_quota.letters_limit else 0 }}%"></div>
+                </div>
+                <span class="quota-count">{{ user_quota.letters_limit - user_quota.letters_used }}/{{ user_quota.letters_limit }}</span>
+            </div>
+        </div>
         {% endif %}
     </div>
     <!-- Progress bar (visible only during matching) -->
     {% if has_cv and role != 'viewer' %}
-    <div id="cv-match-progress" class="filters-row-progress" style="display:none;">
+    <div id="cv-match-progress" class="filters-row-progress hidden">
         <div class="cv-progress-track">
             <div id="cv-progress-fill" class="cv-progress-fill"></div>
         </div>
@@ -168,8 +189,10 @@
                 data-offer-type="{{ offer.offer_type or 'job' }}"
                 data-target="{{ '1' if offer.id in target_ids else '0' }}"
                 data-domain-id="{{ offer.domain_id or '' }}"
-                data-contract-type="{% set ct = (offer.contract_type or '')|lower %}{% if 'cdi' in ct %}CDI{% elif 'cdd' in ct %}CDD{% elif 'alternance' in ct or 'apprenti' in ct %}Alternance{% elif 'stage' in ct %}Stage{% elif ct %}Autre{% else %}Autre{% endif %}">
+                data-contract-type="{% set ct = (offer.contract_type or '')|lower %}{% if 'cdi' in ct %}CDI{% elif 'cdd' in ct %}CDD{% elif 'alternance' in ct or 'apprenti' in ct %}Alternance{% elif 'stage' in ct %}Stage{% elif ct %}Autre{% else %}Autre{% endif %}"
+                data-favorite="{{ '1' if (uo and uo.__class__.__name__ == 'UserOffer' and uo.is_favorite) else '0' }}">
                 <td class="col-title">
+                    {% if role != 'viewer' %}<button class="btn-fav" data-field="favorite" title="Favori">{{ '★' if (uo and uo.__class__.__name__ == 'UserOffer' and uo.is_favorite) else '☆' }}</button>{% endif %}
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>{% if offer.found_date and offer.found_date >= cutoff_new %}<span class="badge-new">NEW</span>{% endif %}
                 </td>
                 <td class="col-company">{{ offer.company }}{% if offer.id in target_ids %}<span class="target-badge" title="Entreprise cible">⭐</span>{% endif %}</td>
@@ -217,7 +240,7 @@
                 {% endif %}
                 <td>
                     {% if role != 'viewer' %}
-                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
+                    <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
                     {% else %}
                     <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>

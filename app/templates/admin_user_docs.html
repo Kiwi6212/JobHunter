@@ -19,7 +19,7 @@
     {% if target_user.username != username %}
     <button id="btn-ban"
             class="btn btn-small {{ 'btn-danger' if target_user.is_active else 'btn-secondary' }}"
-            onclick="toggleUser({{ target_user.id }}, this)">
+            data-user-id="{{ target_user.id }}">
         {{ 'Désactiver le compte' if target_user.is_active else 'Réactiver le compte' }}
     </button>
     {% endif %}
@@ -43,8 +43,10 @@
                 <td style="display:flex;gap:0.5rem;">
                     <a href="{{ url_for('main.admin_document_download', user_id=target_user.id, filename=f) }}"
                        class="btn btn-small btn-secondary">Télécharger</a>
-                    <button class="btn btn-small btn-danger"
-                            onclick="deleteDoc({{ target_user.id }}, '{{ f }}', this, 'doc-row-{{ loop.index }}')">
+                    <button class="btn btn-small btn-danger btn-delete-doc"
+                            data-user-id="{{ target_user.id }}"
+                            data-filename="{{ f }}"
+                            data-row-id="doc-row-{{ loop.index }}">
                         Supprimer
                     </button>
                 </td>
@@ -66,62 +68,82 @@
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
-function showMsg(text, ok) {
-    var el = document.getElementById("docs-msg");
-    el.textContent = text;
-    el.style.color = ok ? "var(--success-color, #16a34a)" : "var(--danger-color, #dc2626)";
-    setTimeout(function() { el.textContent = ""; }, 3000);
-}
+(function () {
+    "use strict";
 
-function deleteDoc(userId, filename, btn, rowId) {
-    if (!confirm("Supprimer le fichier « " + filename + " » ?")) return;
-    btn.disabled = true;
-    fetch("/api/admin/documents/" + userId + "/" + encodeURIComponent(filename), { method: "DELETE" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            if (res.ok) {
-                var row = document.getElementById(rowId);
-                if (row) row.remove();
-                showMsg("Fichier supprimé.", true);
-            } else {
+    function showMsg(text, ok) {
+        var el = document.getElementById("docs-msg");
+        el.textContent = text;
+        el.className = ok ? "msg-success" : "msg-error";
+        setTimeout(function() { el.textContent = ""; el.className = ""; }, 3000);
+    }
+
+    // ── Delete document (event delegation on table) ──────────
+    var docsTable = document.getElementById("docs-table");
+    if (docsTable) {
+        docsTable.addEventListener("click", function (e) {
+            var btn = e.target.closest(".btn-delete-doc");
+            if (!btn) return;
+            var userId   = btn.dataset.userId;
+            var filename = btn.dataset.filename;
+            var rowId    = btn.dataset.rowId;
+            if (!confirm("Supprimer le fichier \u00ab " + filename + " \u00bb ?")) return;
+            btn.disabled = true;
+            fetch("/api/admin/documents/" + userId + "/" + encodeURIComponent(filename), {
+                method: "DELETE"
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.ok) {
+                    var row = document.getElementById(rowId);
+                    if (row) row.remove();
+                    showMsg("Fichier supprimé.", true);
+                } else {
+                    btn.disabled = false;
+                    showMsg("Erreur : " + (res.error || "inconnue"), false);
+                }
+            })
+            .catch(function() {
                 btn.disabled = false;
-                showMsg("Erreur : " + (res.error || "inconnue"), false);
-            }
-        })
-        .catch(function() {
-            btn.disabled = false;
-            showMsg("Erreur réseau.", false);
+                showMsg("Erreur réseau.", false);
+            });
         });
-}
+    }
 
-function toggleUser(userId, btn) {
-    btn.disabled = true;
-    fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            btn.disabled = false;
-            if (!res.ok) {
-                showMsg("Erreur : " + (res.error || "inconnue"), false);
-                return;
-            }
-            var isActive = res.is_active;
-            var label = document.getElementById("user-status-label");
-            if (label) {
-                label.textContent = isActive ? "Actif" : "Désactivé";
-                label.className = "badge-status " + (isActive ? "badge-active" : "badge-inactive");
-            }
-            btn.textContent = isActive ? "Désactiver le compte" : "Réactiver le compte";
-            btn.className = "btn btn-small " + (isActive ? "btn-danger" : "btn-secondary");
-            var banMsg = document.getElementById("ban-msg");
-            banMsg.textContent = isActive ? "Compte réactivé." : "Compte désactivé.";
-            banMsg.style.color = isActive ? "var(--success-color, #16a34a)" : "var(--text-secondary)";
-            setTimeout(function() { banMsg.textContent = ""; }, 3000);
-        })
-        .catch(function() {
-            btn.disabled = false;
-            showMsg("Erreur réseau.", false);
+    // ── Toggle user active/inactive ──────────────────────────
+    var banBtn = document.getElementById("btn-ban");
+    if (banBtn) {
+        banBtn.addEventListener("click", function () {
+            var userId = banBtn.dataset.userId;
+            banBtn.disabled = true;
+            fetch("/api/admin/users/" + userId + "/toggle", { method: "POST" })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    banBtn.disabled = false;
+                    if (!res.ok) {
+                        showMsg("Erreur : " + (res.error || "inconnue"), false);
+                        return;
+                    }
+                    var isActive = res.is_active;
+                    var label = document.getElementById("user-status-label");
+                    if (label) {
+                        label.textContent = isActive ? "Actif" : "Désactivé";
+                        label.className = "badge-status " + (isActive ? "badge-active" : "badge-inactive");
+                    }
+                    banBtn.textContent = isActive ? "Désactiver le compte" : "Réactiver le compte";
+                    banBtn.className = "btn btn-small " + (isActive ? "btn-danger" : "btn-secondary");
+                    var banMsg = document.getElementById("ban-msg");
+                    banMsg.textContent = isActive ? "Compte réactivé." : "Compte désactivé.";
+                    banMsg.className = isActive ? "msg-success" : "msg-muted";
+                    setTimeout(function() { banMsg.textContent = ""; banMsg.className = ""; }, 3000);
+                })
+                .catch(function() {
+                    banBtn.disabled = false;
+                    showMsg("Erreur réseau.", false);
+                });
         });
-}
+    }
+})();
 </script>
 
 <style nonce="{{ csp_nonce }}">
@@ -138,5 +160,8 @@ function toggleUser(userId, btn) {
 [data-theme="dark"] .badge-inactive { background: #374151; color: #9ca3af; }
 .btn-danger { background: #dc2626; color: #fff; border: none; }
 .btn-danger:hover { background: #b91c1c; }
+.msg-success { color: var(--success-color, #16a34a); }
+.msg-error   { color: var(--danger-color, #dc2626); }
+.msg-muted   { color: var(--text-secondary); }
 </style>
 {% endblock %}

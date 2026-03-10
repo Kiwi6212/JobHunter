@@ -81,6 +81,11 @@ class BaseScraper(ABC):
             "offer_type": kwargs.get("offer_type", "job"),
         }
 
+    def close(self):
+        """Close the HTTP session if one exists."""
+        if hasattr(self, "session"):
+            self.session.close()
+
     def run(self):
         """
         Execute the scraper with logging and error handling.
@@ -104,3 +109,5 @@ class BaseScraper(ABC):
                 f"[{self.source_name}] Error after {elapsed:.1f}s: {e}", exc_info=True
             )
             return []
+        finally:
+            self.close()

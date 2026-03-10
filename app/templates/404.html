@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>500 — Erreur interne — MyJobHunter</title>
+    <title>404 — Page introuvable — MyJobHunter</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -62,13 +62,6 @@
             line-height: 1.6;
             margin-bottom: 1.5rem;
         }
-        .actions {
-            display: flex;
-            gap: .75rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: .5rem;
-        }
         .btn {
             display: inline-block;
             padding: .7rem 1.5rem;
@@ -76,25 +69,13 @@
             font-size: .95rem;
             font-weight: 600;
             text-decoration: none;
-            cursor: pointer;
-            border: none;
+            background: #fff;
+            color: #2563eb;
             transition: transform .15s ease, box-shadow .15s ease;
         }
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 24px rgba(0,0,0,.2);
-        }
-        .btn-primary {
-            background: #fff;
-            color: #2563eb;
-        }
-        .btn-outline {
-            background: transparent;
-            color: #fff;
-            border: 2px solid rgba(255,255,255,.4);
-        }
-        .btn-outline:hover {
-            border-color: rgba(255,255,255,.7);
         }
     </style>
 </head>
@@ -103,30 +84,11 @@
         <div class="logo">🎯</div>
         <div class="brand">MyJobHunter</div>
         <div class="card">
-            <div class="code">500</div>
-            <h1>Erreur interne</h1>
-            <p>Une erreur inattendue s'est produite.<br>L'équipe a été notifiée automatiquement.</p>
-            <div class="actions">
-                <a class="btn btn-primary" href="/">Retour à l'accueil</a>
-                <a class="btn btn-outline" id="report-btn" href="#">Signaler le problème</a>
-            </div>
+            <div class="code">404</div>
+            <h1>Page introuvable</h1>
+            <p>La page que vous recherchez n'existe pas ou a été déplacée.</p>
+            <a class="btn" href="/">Retour à l'accueil</a>
         </div>
     </div>
-    <script>
-        (function() {
-            var now = new Date();
-            var date = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            var time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            var subject = encodeURIComponent('MyJobHunter - Erreur 500');
-            var body = encodeURIComponent(
-                'Bonjour,\n\n' +
-                'J\'ai rencontré une erreur 500 sur MyJobHunter.\n\n' +
-                'Date et heure : ' + date + ' à ' + time + '\n' +
-                'URL : ' + window.location.href + '\n\n' +
-                'Cordialement'
-            );
-            document.getElementById('report-btn').href = 'mailto:contact@myjobhunter.fr?subject=' + subject + '&body=' + body;
-        })();
-    </script>
 </body>
 </html>

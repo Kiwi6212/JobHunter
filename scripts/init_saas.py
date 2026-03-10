@@ -43,6 +43,22 @@ DOMAINS = [
         "name": "Cloud / DevOps",
         "description": "Ingénieur cloud, SRE, DevOps",
     },
+    {
+        "name": "Droit",
+        "description": "Juriste, avocat, compliance, contentieux, notariat",
+    },
+    {
+        "name": "Commerce / Marketing",
+        "description": "Commercial, marketing, business developer, e-commerce",
+    },
+    {
+        "name": "Santé",
+        "description": "Infirmier, aide-soignant, pharmacie, paramédical",
+    },
+    {
+        "name": "Ingénierie",
+        "description": "Ingénieur mécanique, électronique, production, qualité",
+    },
 ]
 
 

@@ -33,8 +33,24 @@ BRAVE_PATH = os.getenv(
     r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
 )
 
-# Brave Chromium major version (update when Brave updates)
-BRAVE_VERSION_MAIN = 145
+def _detect_brave_version():
+    """Auto-detect installed Brave browser major version."""
+    import subprocess
+    try:
+        path = BRAVE_PATH
+        if os.path.exists(path):
+            result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                m = re.search(r'(\d+)\.\d+\.\d+', result.stdout)
+                if m:
+                    return int(m.group(1))
+    except Exception:
+        pass
+    return 145  # fallback
+
+
+# Brave Chromium major version (auto-detected, fallback to 145)
+BRAVE_VERSION_MAIN = _detect_brave_version()
 
 # Search queries (alternance keywords for sysadmin/infra roles)
 SEARCH_QUERIES = [

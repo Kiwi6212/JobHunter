@@ -44,7 +44,10 @@
                         {{ session.username }}
                         <span class="nav-user-role">{% if session.role == 'admin' %}(admin){% elif session.role == 'viewer' %}(lecture seule){% else %}(utilisateur){% endif %}</span>
                     </span>
-                    <a href="{{ url_for('main.logout') }}" class="btn-logout">Déconnexion</a>
+                    <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn-logout">Déconnexion</button>
+                    </form>
                 </div>
                 {% endif %}
             </div>
@@ -59,6 +62,7 @@
         <div class="container">
             <p style="font-size:.82rem;color:var(--text-secondary,#64748b);">
                 &copy; 2026 MyJobHunter — Mathias Quillateau &nbsp;|&nbsp;
+                <a href="/faq" style="color:inherit;">FAQ</a> &nbsp;|&nbsp;
                 <a href="/cgu" style="color:inherit;">CGU</a> &nbsp;|&nbsp;
                 <a href="/confidentialite" style="color:inherit;">Confidentialité</a> &nbsp;|&nbsp;
                 <a href="/mentions-legales" style="color:inherit;">Mentions légales</a>

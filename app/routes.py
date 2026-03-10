@@ -60,7 +60,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
-from app.models import Offer, Tracking, Domain, User, UserOffer, PasswordReset
+from app.models import Offer, Tracking, Domain, User, UserOffer, PasswordReset, EmailConfirmation
 from app.auth import login_required, admin_required, superadmin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
@@ -207,7 +207,7 @@ def _check_and_increment_quota(user_id: int, quota_field: str, limit: int) -> tu
     try:
         db = SessionLocal.session_factory()
         try:
-            user = db.query(User).filter(User.id == user_id).with_for_update().first()
+            user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return True, 0, limit
             if user.role != 'user':
@@ -303,11 +303,21 @@ def login():
         return redirect(url_for("main.dashboard"))
 
     error = None
+    confirm_resend_user_id = None
     if request.method == 'POST':
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role, user_id, domain_id = check_credentials(username, password)
-        if role:
+        if role == "inactive":
+            # user_id is set, domain_id is actually email_confirmed (bool)
+            email_confirmed = domain_id
+            _sec_log("LOGIN_FAIL_INACTIVE", username)
+            if not email_confirmed:
+                error = "Veuillez d'abord confirmer votre adresse email."
+                confirm_resend_user_id = user_id
+            else:
+                error = "Votre compte a été désactivé. Contactez un administrateur."
+        elif role:
             _sec_log("LOGIN_SUCCESS", username, f"role={role}")
             next_url = request.args.get("next", "")
             if not _is_safe_redirect(next_url):
@@ -333,10 +343,12 @@ def login():
             session["user_id"] = user_id
             session["domain_id"] = domain_id
             return redirect(next_url)
-        _sec_log("LOGIN_FAIL", username or "-")
-        error = "Identifiant ou mot de passe incorrect."
+        else:
+            _sec_log("LOGIN_FAIL", username or "-")
+            error = "Identifiant ou mot de passe incorrect."
 
-    return render_template("login.html", error=error)
+    return render_template("login.html", error=error,
+                           confirm_resend_user_id=confirm_resend_user_id)
 
 
 @bp.route('/login/2fa', methods=['GET', 'POST'])
@@ -380,7 +392,7 @@ def login_2fa():
     return render_template("login_2fa.html", error=error)
 
 
-@bp.route('/logout')
+@bp.route('/logout', methods=['GET', 'POST'])
 def logout():
     """Clear session and redirect to login."""
     session.clear()
@@ -400,7 +412,9 @@ def register():
         errors = []
 
         if request.method == 'POST':
+            import re as _re
             username = request.form.get("username", "").strip()
+            email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
             confirm = request.form.get("confirm_password", "")
             domain_id_raw = request.form.get("domain_id", "").strip()
@@ -411,6 +425,14 @@ def register():
                 errors.append("Nom d'utilisateur requis.")
             elif len(username) > 64:
                 errors.append("Nom d'utilisateur trop long (max 64 caractères).")
+            elif not all(c.isalnum() or c in "-_." for c in username):
+                errors.append("L'identifiant ne peut contenir que des lettres, chiffres, tirets, points et underscores.")
+            if not email:
+                errors.append("Adresse email requise.")
+            elif not _re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                errors.append("Adresse email invalide.")
+            elif len(email) > 255:
+                errors.append("Adresse email trop longue.")
             if not password:
                 errors.append("Mot de passe requis.")
             else:
@@ -437,6 +459,11 @@ def register():
                 if existing:
                     errors.append("Ce nom d'utilisateur est déjà pris.")
                 else:
+                    existing_email = db.query(User).filter(User.email == email).first()
+                    if existing_email:
+                        errors.append("Cette adresse email est déjà utilisée.")
+
+            if not errors:
                     from app import bcrypt
                     pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
                     answer_hash = bcrypt.generate_password_hash(security_answer.lower()).decode("utf-8")
@@ -445,15 +472,110 @@ def register():
                         password_hash=pw_hash,
                         role="user",
                         domain_id=domain_id_raw,
+                        email=email,
+                        is_active=False,
+                        email_confirmed=False,
                         security_question=security_question,
                         security_answer_hash=answer_hash,
                     )
                     db.add(new_user)
+                    db.flush()
+                    # Generate email confirmation token
+                    token = secrets.token_urlsafe(32)
+                    confirmation = EmailConfirmation(
+                        user_id=new_user.id,
+                        token=token,
+                    )
+                    db.add(confirmation)
                     db.commit()
-                    return redirect(url_for("main.login"))
+                    # Send confirmation email
+                    confirm_url = url_for("main.confirm_email", token=token,
+                                          _external=True, _scheme='https')
+                    _send_confirmation_email(email, username, confirm_url)
+                    _sec_log("REGISTER", username, f"email={email}")
+                    return redirect(url_for("main.register_pending", uid=new_user.id))
 
         return render_template("register.html", domains=domains, errors=errors,
                                security_questions=SECURITY_QUESTIONS)
+    finally:
+        db.close()
+
+
+@bp.route('/register/pending')
+@limiter.limit("20 per minute")
+def register_pending():
+    """Post-registration page: email confirmation pending."""
+    uid = request.args.get("uid", type=int)
+    return render_template("register_pending.html", uid=uid)
+
+
+@bp.route('/confirm-email/<token>')
+@limiter.limit("10 per minute")
+def confirm_email(token):
+    """Confirm a user's email address via the token sent at registration."""
+    db = SessionLocal()
+    try:
+        confirmation = db.query(EmailConfirmation).filter(
+            EmailConfirmation.token == token,
+            EmailConfirmation.used == False,
+        ).first()
+        if not confirmation:
+            return render_template("confirm_email.html",
+                                   error="Lien invalide ou déjà utilisé.")
+        # Check 24h expiry
+        from datetime import timezone as _tz
+        age = datetime.now(_tz.utc) - confirmation.created_at.replace(tzinfo=_tz.utc)
+        if age > timedelta(hours=24):
+            confirmation.used = True
+            db.commit()
+            return render_template("confirm_email.html",
+                                   error="Ce lien a expiré (validité 24 heures). Veuillez vous réinscrire.")
+        user = db.query(User).filter(User.id == confirmation.user_id).first()
+        if not user:
+            return render_template("confirm_email.html",
+                                   error="Compte introuvable.")
+        user.is_active = True
+        user.email_confirmed = True
+        confirmation.used = True
+        db.commit()
+        _sec_log("EMAIL_CONFIRMED", user.username)
+        return redirect(url_for("main.login") + "?ok=email_confirmed")
+    finally:
+        db.close()
+
+
+@bp.route('/api/resend-confirmation', methods=['POST'])
+@limiter.limit("1 per minute")
+def resend_confirmation():
+    """Resend email confirmation (rate limited to 1/min)."""
+    if request.is_json:
+        uid = request.json.get("user_id")
+    else:
+        uid = request.form.get("user_id", type=int)
+    if not uid:
+        return jsonify({"error": "Paramètre manquant"}), 400
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == uid).first()
+        if not user or user.email_confirmed or user.is_active:
+            # Don't reveal whether user exists
+            return jsonify({"ok": True, "message": "Si le compte existe, un email a été envoyé."})
+        if not user.email:
+            return jsonify({"error": "Aucune adresse email associée à ce compte."}), 400
+        # Invalidate old tokens
+        db.query(EmailConfirmation).filter(
+            EmailConfirmation.user_id == uid,
+            EmailConfirmation.used == False,
+        ).update({"used": True})
+        # Create new token
+        token = secrets.token_urlsafe(32)
+        confirmation = EmailConfirmation(user_id=uid, token=token)
+        db.add(confirmation)
+        db.commit()
+        confirm_url = url_for("main.confirm_email", token=token,
+                              _external=True, _scheme='https')
+        _send_confirmation_email(user.email, user.username, confirm_url)
+        return jsonify({"ok": True, "message": "Email de confirmation renvoyé."})
     finally:
         db.close()
 
@@ -890,6 +1012,40 @@ def update_tracking(offer_id):
         db.close()
 
 
+@bp.route('/api/tracking/<int:offer_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(offer_id):
+    """Toggle the is_favorite flag for a user's offer."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return jsonify({'error': 'Non disponible'}), 400
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    db = SessionLocal()
+    try:
+        uo = db.query(UserOffer).filter(
+            UserOffer.user_id == user_id,
+            UserOffer.offer_id == offer_id,
+        ).first()
+        if not uo:
+            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+            if not offer_exists:
+                return jsonify({'error': 'Offer not found'}), 404
+            uo = UserOffer(user_id=user_id, offer_id=offer_id, status='New', is_favorite=True)
+            db.add(uo)
+        else:
+            uo.is_favorite = not uo.is_favorite
+        uo.updated_at = datetime.utcnow()
+        db.commit()
+        return jsonify({'ok': True, 'is_favorite': uo.is_favorite})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
 @bp.route('/offer/<int:offer_id>')
 @login_required
 def offer_detail(offer_id):
@@ -962,12 +1118,33 @@ def stats():
             count = _uo().filter(status_col == status).count()
             status_counts[status] = count
 
+        # Interviews count for response rate
+        interviews = status_counts.get('Interview', 0) + status_counts.get('Accepted', 0)
+        response_rate = round(interviews / cv_sent * 100, 1) if cv_sent > 0 else 0
+
+        # Average CV match score
+        avg_cv_score = 0.0
+        high_score_count = 0
+        if user_id is not None:
+            avg_row = db.query(func.avg(UserOffer.cv_match_score)).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.cv_match_score.isnot(None),
+            ).scalar()
+            avg_cv_score = round(float(avg_row or 0), 1)
+            high_score_count = db.query(func.count(UserOffer.id)).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.cv_match_score >= 70,
+            ).scalar() or 0
+
         stats_data = {
             'total_offers': total_offers,
             'tracked': tracked_offers,
             'cv_sent': cv_sent,
             'follow_ups': follow_ups,
             'status_counts': status_counts,
+            'response_rate': response_rate,
+            'avg_cv_score': avg_cv_score,
+            'high_score_count': high_score_count,
         }
 
         # ── Chart data ────────────────────────────────────────────────
@@ -1022,12 +1199,54 @@ def stats():
                 bucket = min(int(s // 10), 9)
                 cv_score_buckets[bucket] += 1
 
+        # Weekly application timeline (date_sent grouped by ISO week)
+        weekly_data = {}
+        if user_id is not None:
+            date_col = UserOffer.date_sent
+            weekly_rows = db.query(UserOffer.date_sent).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.date_sent.isnot(None),
+            ).all()
+        else:
+            weekly_rows = db.query(Tracking.date_sent).filter(
+                Tracking.date_sent.isnot(None),
+            ).all()
+        for (dt,) in weekly_rows:
+            if dt:
+                week_key = dt.strftime('%Y-W%W')
+                weekly_data[week_key] = weekly_data.get(week_key, 0) + 1
+        # Sort by week and keep last 12 weeks max
+        weekly_sorted = sorted(weekly_data.items())[-12:]
+        weekly_labels = [w[0] for w in weekly_sorted]
+        weekly_values = [w[1] for w in weekly_sorted]
+
+        # Contract type distribution
+        contract_counts = {}
+        for o in offer_query.with_entities(Offer.contract_type).all():
+            ct = (o[0] or '').strip().lower()
+            if 'cdi' in ct:
+                key = 'CDI'
+            elif 'cdd' in ct:
+                key = 'CDD'
+            elif 'alternance' in ct or 'apprenti' in ct:
+                key = 'Alternance'
+            elif 'stage' in ct:
+                key = 'Stage'
+            elif ct:
+                key = 'Autre'
+            else:
+                key = 'Non précisé'
+            contract_counts[key] = contract_counts.get(key, 0) + 1
+
         chart_data = {
             'sources':         source_counts,
             'companies':       top_companies,
             'scores':          score_buckets,
             'statuses':        status_counts,
             'cv_scores':       cv_score_buckets,
+            'weekly_labels':   weekly_labels,
+            'weekly_values':   weekly_values,
+            'contracts':       contract_counts,
         }
 
         return render_template(
@@ -1216,7 +1435,8 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
 
 
 @bp.route('/api/cv/upload', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("10 per minute")
 def cv_upload():
     """
     Accept a PDF or plain-text CV file, extract text, save to disk,
@@ -1282,9 +1502,15 @@ def cv_upload():
     if not cv_text.strip():
         return jsonify({'error': 'Could not extract text from CV'}), 400
 
-    # Save to disk
-    CV_DIR.mkdir(parents=True, exist_ok=True)
-    CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
+    # Save to user-specific document directory
+    user_id = session.get("user_id")
+    if user_id is not None:
+        user_cv_dir = DATA_DIR / "documents" / str(user_id)
+        user_cv_dir.mkdir(parents=True, exist_ok=True)
+        (user_cv_dir / filename).write_bytes(raw)
+    else:
+        CV_DIR.mkdir(parents=True, exist_ok=True)
+        CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
 
     method = request.args.get('method', 'tfidf')
     if method not in ('tfidf', 'claude'):
@@ -1304,7 +1530,8 @@ def cv_upload():
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("5 per minute")
 def cv_rematch():
     """
     Launch CV matching asynchronously in a background thread and return immediately.
@@ -1438,6 +1665,16 @@ def account():
                     user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
                     user.updated_at = datetime.utcnow()
                     db.commit()
+                    # Regenerate session to invalidate old session cookies
+                    _uname = session.get("username")
+                    _role = session.get("role")
+                    _uid = session.get("user_id")
+                    _did = session.get("domain_id")
+                    session.clear()
+                    session["username"] = _uname
+                    session["role"] = _role
+                    session["user_id"] = _uid
+                    session["domain_id"] = _did
                     success = "Mot de passe modifié avec succès."
             finally:
                 db.close()
@@ -1604,7 +1841,9 @@ def account_profile():
 
             elif action == 'change_email':
                 new_email = request.form.get('email', '').strip()
-                if new_email and ('@' not in new_email or '.' not in new_email.split('@')[-1]):
+                import re as _re
+                _email_re = _re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+                if new_email and not _email_re.match(new_email):
                     errors.append("Adresse e-mail invalide.")
                 else:
                     user.email = new_email or None
@@ -1680,7 +1919,8 @@ def documents():
 
 
 @bp.route('/api/documents/upload', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("10 per minute")
 def document_upload():
     """Upload a document file (PDF, TXT, DOCX) with strict validation."""
     if 'file' not in request.files:
@@ -1764,7 +2004,8 @@ def document_delete(filename):
 # ── Cover letter generation ───────────────────────────────────────────────────
 
 @bp.route('/api/cover-letter/<int:offer_id>', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("5 per minute")
 def generate_cover_letter(offer_id):
     """
     Generate a tailored cover letter for an offer using Claude.
@@ -1953,6 +2194,9 @@ def admin_toggle_user(user_id):
         if user.username == session.get("username"):
             return jsonify({'error': 'Impossible de désactiver votre propre compte'}), 400
         user.is_active = not user.is_active
+        # When admin manually activates, also mark email as confirmed
+        if user.is_active:
+            user.email_confirmed = True
         db.commit()
         return jsonify({'ok': True, 'is_active': user.is_active})
     except Exception as e:
@@ -2097,11 +2341,8 @@ def forgot_password():
                 User.username == username, User.is_active == True
             ).first()
             if not user:
-                return render_template(
-                    'forgot_password.html', step='1',
-                    error="Nom d'utilisateur introuvable.",
-                    security_questions=SECURITY_QUESTIONS,
-                )
+                # Return same response as email-sent to prevent username enumeration
+                return render_template('forgot_password.html', step='email_sent')
             # ── Email path: user has an email → send reset link directly ──────
             if user.email:
                 db.query(PasswordReset).filter(
@@ -2268,6 +2509,85 @@ def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
         logger.error("Failed to send reset email to %s: %s", to_email, exc)
 
 
+def _send_confirmation_email(to_email: str, username: str, confirm_url: str) -> None:
+    """Send an email confirmation link after registration. Silently logs on failure."""
+    import html as _html
+    from flask_mail import Message
+    from app import mail
+    safe_username = _html.escape(username)
+    safe_confirm_url = _html.escape(confirm_url)
+    html_body = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;">
+        <tr>
+          <td style="background:#2563eb;padding:28px 40px;text-align:center;">
+            <span style="font-size:2.2rem;">&#127919;</span>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:1.4rem;font-weight:700;letter-spacing:-.3px;">
+              MyJobHunter
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <h2 style="margin:0 0 12px;font-size:1.15rem;color:#0f172a;">
+              Confirmez votre adresse email
+            </h2>
+            <p style="margin:0 0 16px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bonjour <strong>{safe_username}</strong>,
+            </p>
+            <p style="margin:0 0 24px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bienvenue sur MyJobHunter ! Pour activer votre compte, veuillez confirmer
+              votre adresse email en cliquant sur le bouton ci-dessous.
+            </p>
+            <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+              <tr>
+                <td align="center">
+                  <a href="{safe_confirm_url}"
+                     style="display:inline-block;background:#2563eb;color:#ffffff;
+                            text-decoration:none;padding:14px 36px;border-radius:8px;
+                            font-size:1rem;font-weight:600;letter-spacing:-.2px;">
+                    Confirmer mon email &#8594;
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Ce lien est valable <strong>24 heures</strong> et ne peut être utilisé qu'une seule fois.
+            </p>
+            <p style="margin:0;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Si vous n'avez pas créé de compte sur MyJobHunter, ignorez cet email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;
+                     border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:.78rem;">
+              &copy; 2026 MyJobHunter &middot; Cet email est automatique, ne pas répondre.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    try:
+        msg = Message(
+            subject="MyJobHunter - Confirmez votre adresse email",
+            recipients=[to_email],
+            html=html_body,
+        )
+        mail.send(msg)
+    except Exception as exc:
+        logger.error("Failed to send confirmation email to %s: %s", to_email, exc)
+
+
 @bp.route('/reset/<token>', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def reset_password(token):
@@ -2303,6 +2623,8 @@ def reset_password(token):
                     reset.used = True
                     db.commit()
                     _sec_log("PASSWORD_RESET", user.username)
+                    # Clear any active session for this user (current browser)
+                    session.clear()
                     return redirect(url_for('main.login') + '?ok=password_reset')
         return render_template('reset_password.html', token=token, errors=errors)
     finally:
@@ -2400,9 +2722,7 @@ def health():
         pass
     return jsonify({
         "status": "ok",
-        "uptime": uptime_sec,
         "db": db_status,
-        "offers_count": offers_count,
     })
 
 
@@ -2511,6 +2831,12 @@ def admin_security_log_clear():
 
 
 # ── Legal pages (public) ───────────────────────────────────────────────────────
+
+@bp.route('/faq')
+def faq():
+    """FAQ & Guide de démarrage — public page."""
+    return render_template('faq.html')
+
 
 @bp.route('/cgu')
 def cgu():

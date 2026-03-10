@@ -5,7 +5,7 @@ Handles SQLite database initialization and provides session factory.
 
 import os
 from pathlib import Path
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.models import Base
 
@@ -16,12 +16,22 @@ from config import Config
 DATA_DIR = Path(Config.DATABASE_PATH).parent
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create SQLite engine
+# Create SQLite engine with 30s timeout to avoid "database is locked" errors
 engine = create_engine(
     Config.SQLALCHEMY_DATABASE_URI,
     echo=False,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
+
+
+# Enable WAL mode and busy timeout for concurrent read/write support
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.close()
+
 
 # Session factory
 SessionLocal = scoped_session(sessionmaker(
@@ -189,6 +199,14 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "email_confirmed" not in user_cols:
+            print("[MIGRATE] Adding email_confirmed column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN email_confirmed BOOLEAN NOT NULL DEFAULT 1"
+                ))
+            print("[MIGRATE] Done.")
+
         # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
         _migrate_totp_secrets()
 
@@ -200,6 +218,13 @@ def _migrate_columns():
             with engine.begin() as conn:
                 conn.execute(text(
                     "ALTER TABLE user_offers ADD COLUMN cv_match_score FLOAT"
+                ))
+            print("[MIGRATE] Done.")
+        if "is_favorite" not in uo_cols:
+            print("[MIGRATE] Adding is_favorite column to user_offers table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE user_offers ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0"
                 ))
             print("[MIGRATE] Done.")
 

@@ -13,6 +13,7 @@ before the restore takes place.
 """
 
 import shutil
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +39,15 @@ def main() -> int:
 
     if not backup_path.is_file():
         print(f"[restore] ERROR: {backup_path} is not a file.", file=sys.stderr)
+        return 1
+
+    # Validate that the backup is a valid SQLite database
+    try:
+        conn = sqlite3.connect(str(backup_path))
+        conn.execute("SELECT count(*) FROM sqlite_master")
+        conn.close()
+    except sqlite3.DatabaseError:
+        print(f"[restore] ERROR: {backup_path} is not a valid SQLite database.", file=sys.stderr)
         return 1
 
     # Show what will happen and ask for confirmation

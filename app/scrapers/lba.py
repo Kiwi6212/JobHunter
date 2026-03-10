@@ -5,6 +5,7 @@ Fetches apprenticeship/alternance job offers using ROME codes.
 
 import logging
 from datetime import datetime
+from urllib.parse import urlencode
 
 import requests
 
@@ -77,15 +78,21 @@ class LaBonneAlternanceScraper(BaseScraper):
         dept_offers = self._search_by_departments(rome_codes_str, departments)
         all_offers.extend(dept_offers)
 
-        # Deduplicate by external_id
+        # Deduplicate by external_id and URL
         seen_ids = set()
+        seen_urls = set()
         unique_offers = []
         for offer in all_offers:
             eid = offer.get("external_id")
             if eid and eid in seen_ids:
                 continue
+            url = offer.get("url", "")
+            if not eid and url and url in seen_urls:
+                continue
             if eid:
                 seen_ids.add(eid)
+            if url:
+                seen_urls.add(url)
             unique_offers.append(offer)
 
         logger.info(
@@ -94,6 +101,10 @@ class LaBonneAlternanceScraper(BaseScraper):
         )
 
         return unique_offers
+
+    def close(self):
+        """Close the HTTP session."""
+        self.session.close()
 
     def _search_by_geo(self, rome_codes_str):
         """Search offers by geographic coordinates (Paris center)."""
@@ -146,12 +157,10 @@ class LaBonneAlternanceScraper(BaseScraper):
         url = f"{self.base_url}{endpoint}"
 
         try:
-            # Build query string manually for repeated departements params
+            # Use requests params with repeated keys for departements
             if departments:
-                dept_params = "&".join(f"departements={d}" for d in departments)
-                base_params = "&".join(f"{k}={v}" for k, v in params.items())
-                full_url = f"{url}?{base_params}&{dept_params}"
-                response = self.session.get(full_url, timeout=self.config.TIMEOUT)
+                all_params = list(params.items()) + [("departements", d) for d in departments]
+                response = self.session.get(url, params=all_params, timeout=self.config.TIMEOUT)
             else:
                 response = self.session.get(url, params=params, timeout=self.config.TIMEOUT)
 
