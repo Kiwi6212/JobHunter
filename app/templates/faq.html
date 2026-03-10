@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ & Guide — MyJobHunter</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+    <meta name="description" content="Guide de démarrage et questions fréquentes sur MyJobHunter : inscription, matching IA, suivi de candidatures, lettres de motivation et plus.">
+    <style nonce="{{ csp_nonce }}">
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary:      #2563EB;
+            --primary-dark: #1d4ed8;
+            --primary-light:#eff6ff;
+            --accent:       #7c3aed;
+            --bg:           #ffffff;
+            --bg-alt:       #f8fafc;
+            --card:         #ffffff;
+            --border:       #e2e8f0;
+            --text:         #0f172a;
+            --text-sub:     #475569;
+            --text-muted:   #94a3b8;
+            --shadow:       0 8px 32px rgba(0,0,0,.10);
+            --shadow-sm:    0 2px 12px rgba(0,0,0,.06);
+            --radius:       14px;
+            --radius-sm:    10px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary:      #3b82f6;
+                --primary-dark: #2563eb;
+                --primary-light:#1e3a5f;
+                --accent:       #a78bfa;
+                --bg:           #0f172a;
+                --bg-alt:       #1e293b;
+                --card:         #1e293b;
+                --border:       #334155;
+                --text:         #f1f5f9;
+                --text-sub:     #94a3b8;
+                --text-muted:   #64748b;
+                --shadow:       0 8px 32px rgba(0,0,0,.5);
+                --shadow-sm:    0 2px 12px rgba(0,0,0,.3);
+            }
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: inherit; text-decoration: none; }
+
+        .container { max-width: 820px; margin: 0 auto; padding: 0 1.5rem; }
+
+        /* ── Nav ── */
+        nav {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,.88);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+        @media (prefers-color-scheme: dark) { nav { background: rgba(15,23,42,.88); } }
+        .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+        .nav-logo { font-size: 1.3rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+        .nav-actions { display: flex; gap: 0.6rem; align-items: center; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.55rem 1.25rem; border-radius: var(--radius-sm);
+            font-size: 0.88rem; font-weight: 600; cursor: pointer; border: none;
+            transition: all 0.2s ease; white-space: nowrap;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-outline:hover { background: var(--primary-light); }
+
+        /* ── Hero ── */
+        .hero {
+            background: linear-gradient(145deg, #1e3a8a 0%, #2563eb 35%, #7c3aed 75%, #6d28d9 100%);
+            padding: 4rem 0 4.5rem; text-align: center;
+            position: relative; overflow: hidden;
+        }
+        .hero::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,255,255,.08) 0%, transparent 60%);
+        }
+        .hero-content { position: relative; z-index: 1; }
+        .hero h1 {
+            font-size: clamp(1.8rem, 4.5vw, 2.8rem); font-weight: 800;
+            color: #fff; line-height: 1.15; letter-spacing: -0.5px; margin-bottom: 0.8rem;
+        }
+        .hero p { font-size: 1.05rem; color: rgba(255,255,255,.78); max-width: 560px; margin: 0 auto; }
+
+        /* ── Section ── */
+        .section { padding: 4rem 0; }
+        .section-alt { background: var(--bg-alt); }
+        .section-title {
+            font-size: clamp(1.3rem, 3vw, 1.8rem); font-weight: 800;
+            margin-bottom: 0.5rem; letter-spacing: -0.3px;
+        }
+        .section-sub { color: var(--text-sub); margin-bottom: 2.5rem; font-size: 0.95rem; }
+
+        /* ── Steps ── */
+        .steps { display: flex; flex-direction: column; gap: 1.5rem; }
+        .step {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 1.6rem 1.8rem;
+            box-shadow: var(--shadow-sm); display: flex; gap: 1.4rem; align-items: flex-start;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .step:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+        .step-num {
+            flex-shrink: 0; width: 2.8rem; height: 2.8rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; font-weight: 800;
+        }
+        .step-body { flex: 1; }
+        .step-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem; }
+        .step-desc { font-size: 0.9rem; color: var(--text-sub); line-height: 1.6; }
+
+        /* ── FAQ Accordion ── */
+        .faq-list { display: flex; flex-direction: column; gap: 0.75rem; }
+        .faq-item {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.2s ease;
+        }
+        .faq-item:hover { box-shadow: var(--shadow); }
+        .faq-question {
+            width: 100%; padding: 1.1rem 1.4rem;
+            background: none; border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+            font-size: 0.95rem; font-weight: 600; color: var(--text);
+            text-align: left; font-family: inherit; line-height: 1.4;
+        }
+        .faq-question:hover { color: var(--primary); }
+        .faq-chevron {
+            flex-shrink: 0; width: 20px; height: 20px;
+            transition: transform 0.3s ease; color: var(--text-muted);
+        }
+        .faq-item.open .faq-chevron { transform: rotate(180deg); }
+        .faq-answer {
+            max-height: 0; overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(.16,1,.3,1), padding 0.35s ease;
+            padding: 0 1.4rem;
+        }
+        .faq-item.open .faq-answer {
+            max-height: 300px;
+            padding: 0 1.4rem 1.2rem;
+        }
+        .faq-answer p {
+            font-size: 0.9rem; color: var(--text-sub); line-height: 1.65;
+        }
+        .faq-answer a { color: var(--primary); text-decoration: underline; }
+
+        /* ── Footer ── */
+        footer {
+            background: var(--bg-alt); border-top: 1px solid var(--border); padding: 2.5rem 0;
+        }
+        .footer-inner { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.6rem 1.5rem; }
+        .footer-copy { font-size: 0.82rem; color: var(--text-muted); width: 100%; text-align: center; margin-bottom: 0.4rem; }
+        .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1.2rem; }
+        .footer-link { font-size: 0.82rem; color: var(--text-sub); font-weight: 500; transition: color 0.15s; }
+        .footer-link:hover { color: var(--primary); }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .hero { padding: 3rem 0 3.5rem; }
+            .step { flex-direction: column; gap: 0.8rem; padding: 1.2rem 1.3rem; }
+            .section { padding: 3rem 0; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+    <div class="container">
+        <div class="nav-inner">
+            <a href="/" class="nav-logo">🎯 MyJobHunter</a>
+            <div class="nav-actions">
+                <a href="/login" class="btn btn-outline">Se connecter</a>
+                <a href="/register" class="btn btn-primary">Créer un compte</a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+    <div class="container hero-content">
+        <h1>FAQ & Guide de démarrage</h1>
+        <p>Tout ce que vous devez savoir pour tirer le meilleur parti de MyJobHunter</p>
+    </div>
+</section>
+
+<!-- ── Guide de démarrage ── -->
+<section class="section">
+    <div class="container">
+        <h2 class="section-title">🚀 Guide de démarrage</h2>
+        <p class="section-sub">6 étapes pour trouver votre prochain poste</p>
+
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-body">
+                    <div class="step-title">Créer un compte</div>
+                    <div class="step-desc">
+                        Rendez-vous sur <a href="/register" style="color:var(--primary);">la page d'inscription</a>.
+                        Choisissez votre domaine de recherche (informatique, droit, commerce, santé, ingénierie…),
+                        renseignez votre email et confirmez-le via le lien reçu par mail.
+                    </div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-body">
+                    <div class="step-title">Importer son CV</div>
+                    <div class="step-desc">
+                        Allez dans <strong>Documents</strong> depuis le menu. Uploadez votre CV au format PDF ou DOCX.
+                        Il sera utilisé par le Match IA pour scorer chaque offre par rapport à votre profil.
+                    </div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-body">
+                    <div class="step-title">Explorer les offres</div>
+                    <div class="step-desc">
+                        Le tableau de bord affiche toutes les offres de votre domaine. Utilisez les filtres :
+                        lieu, type de contrat, entreprise, recherche libre. Triez par score de pertinence ou date.
+                    </div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-body">
+                    <div class="step-title">Lancer le Match IA</div>
+                    <div class="step-desc">
+                        Cliquez sur <strong>Match IA</strong> dans le menu. L'intelligence artificielle compare
+                        votre CV avec chaque offre et attribue un score de compatibilité de 0 à 100 %.
+                        Les offres sont ensuite triables par ce score.
+                    </div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">5</div>
+                <div class="step-body">
+                    <div class="step-title">Suivre ses candidatures</div>
+                    <div class="step-desc">
+                        Pour chaque offre, modifiez le statut (Nouveau, CV envoyé, Relancé, Entretien, Accepté, Refusé…),
+                        ajoutez des notes personnelles et marquez la date d'envoi du CV.
+                    </div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">6</div>
+                <div class="step-body">
+                    <div class="step-title">Générer une lettre de motivation</div>
+                    <div class="step-desc">
+                        Cliquez sur une offre pour voir le détail, puis sur <strong>Générer lettre</strong>.
+                        L'IA crée une lettre personnalisée adaptée à l'offre et à votre profil, prête à être envoyée.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">❓ Questions fréquentes</h2>
+        <p class="section-sub">Cliquez sur une question pour voir la réponse</p>
+
+        <div class="faq-list" id="faq-list">
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    C'est vraiment gratuit ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Oui, 100 % gratuit. Pas de frais cachés, pas de publicité, pas d'abonnement premium. MyJobHunter est un projet open source maintenu bénévolement.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    D'où viennent les offres ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Nos 13 scrapers collectent les offres depuis 9+ sources : France Travail, Welcome to the Jungle, Indeed, La Bonne Alternance, Place de l'Emploi Public, Safran, BPCE/Natixis, SmartRecruiters, Workday, et d'autres. Les offres sont mises à jour chaque jour à 8h.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Comment fonctionne le Match IA ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>L'IA (Claude) analyse le contenu de votre CV et le compare avec la description de chaque offre. Elle attribue un score de 0 à 100 %. Plus le score est élevé, plus l'offre correspond à votre profil, vos compétences et votre expérience.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Mes données sont-elles en sécurité ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Oui. Connexion HTTPS obligatoire, mots de passe hashés avec bcrypt, authentification à deux facteurs (A2F) disponible, documents isolés par utilisateur, et protection CSRF sur tous les formulaires. L'application est conforme RGPD. Consultez notre <a href="/confidentialite">politique de confidentialité</a>.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Combien de matchings IA par semaine ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Les utilisateurs disposent de 1 matching IA et 5 lettres de motivation par semaine. Les quotas se réinitialisent automatiquement. Les administrateurs n'ont pas de limite.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Je ne reçois pas l'email de confirmation ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Vérifiez votre dossier spam/courrier indésirable. L'email est envoyé depuis <em>noreply@myjobhunter.fr</em>. Vous pouvez renvoyer l'email de confirmation depuis la page de connexion en entrant vos identifiants, ou depuis la page d'attente après inscription.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Comment supprimer mon compte ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Allez dans <strong>Mon profil</strong> puis cliquez sur <strong>Supprimer mon compte</strong>. Toutes vos données (documents, candidatures, notes) seront supprimées définitivement et de manière irréversible.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Comment activer l'authentification à deux facteurs (A2F) ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Allez dans <strong>Mon compte</strong>, puis cliquez sur <strong>Activer l'A2F</strong>. Scannez le QR code affiché avec une application comme Google Authenticator ou Authy, puis entrez le code à 6 chiffres pour confirmer l'activation.</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Quels domaines sont disponibles ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>9 domaines sont disponibles : Sysadmin / Infrastructure, Développement, Data / IA, Cybersécurité, Cloud / DevOps, Droit, Commerce / Marketing, Santé et Ingénierie. D'autres domaines seront ajoutés prochainement (RH, finance, communication…).</p>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question" type="button">
+                    Comment signaler un bug ou suggérer une amélioration ?
+                    <svg class="faq-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </button>
+                <div class="faq-answer">
+                    <p>Envoyez un email à <strong>contact@myjobhunter.fr</strong> en décrivant le problème ou votre suggestion. Vous pouvez aussi ouvrir une issue sur <a href="https://github.com/Kiwi6212/JobHunter" target="_blank" rel="noopener noreferrer">le dépôt GitHub</a> du projet.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+    <div class="container">
+        <div class="footer-inner">
+            <span class="footer-copy">© 2026 MyJobHunter — Projet open source par Mathias Quillateau</span>
+            <div class="footer-links">
+                <a href="https://github.com/Kiwi6212/JobHunter" class="footer-link" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="/cgu" class="footer-link">CGU</a>
+                <a href="/confidentialite" class="footer-link">Confidentialité</a>
+                <a href="/mentions-legales" class="footer-link">Mentions légales</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script nonce="{{ csp_nonce }}">
+(function() {
+    "use strict";
+    var items = document.querySelectorAll(".faq-item");
+    for (var i = 0; i < items.length; i++) {
+        (function(item) {
+            var btn = item.querySelector(".faq-question");
+            btn.addEventListener("click", function() {
+                var wasOpen = item.classList.contains("open");
+                // Close all
+                for (var j = 0; j < items.length; j++) {
+                    items[j].classList.remove("open");
+                }
+                // Toggle current
+                if (!wasOpen) {
+                    item.classList.add("open");
+                }
+            });
+        })(items[i]);
+    }
+})();
+</script>
+</body>
+</html>

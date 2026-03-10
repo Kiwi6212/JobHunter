@@ -2735,6 +2735,12 @@ def admin_security_log_clear():
 
 # ── Legal pages (public) ───────────────────────────────────────────────────────
 
+@bp.route('/faq')
+def faq():
+    """FAQ & Guide de démarrage — public page."""
+    return render_template('faq.html')
+
+
 @bp.route('/cgu')
 def cgu():
     """Conditions Générales d'Utilisation — public page."""
