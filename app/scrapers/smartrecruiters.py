@@ -25,6 +25,10 @@ COMPANIES = [
     ("Devoteam", "Devoteam"),
     ("Alten", "Alten"),
     ("Scalian", "Scalian"),
+    # CAC 40 companies
+    ("SaintGobain", "Saint-Gobain"),
+    ("EssilorLuxottica", "EssilorLuxottica"),
+    ("SchneiderElectric1", "Schneider Electric"),
 ]
 
 # Search queries to find alternance/apprenticeship offers

@@ -37,6 +37,9 @@ COMPANIES = [
     # (public career portals use different frontends, but Workday is the backend)
     ("axa", 3, "AXA_External", "AXA"),
     ("loreal", 3, "LOrealExternal", "L'Oréal"),
+    # CAC 40 companies
+    ("sanofi", 3, "SanofiCareers", "Sanofi"),
+    ("stellantis", 3, "External_Career_Site_ID01", "Stellantis"),
 ]
 
 # Search queries combining alternance + domain keywords
