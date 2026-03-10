@@ -30,6 +30,34 @@ def is_viewer():
     return session.get("role") == "viewer"
 
 
+def _check_authenticated_and_active():
+    """Shared auth guard: verify session exists and DB user is still active.
+
+    Returns None if the user is authenticated and active.
+    Returns a Response (redirect or JSON 401/403) if the request must be blocked.
+    """
+    if not session.get("username"):
+        if request.is_json or request.headers.get("Accept") == "application/json":
+            return jsonify({"error": "Authentication required"}), 401
+        return redirect(url_for("main.login", next=request.path))
+    # Re-verify that DB user is still active
+    user_id = session.get("user_id")
+    if user_id is not None:
+        from app.database import SessionLocal
+        from app.models import User
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user or not user.is_active:
+                session.clear()
+                if request.is_json or request.headers.get("Accept") == "application/json":
+                    return jsonify({"error": "Account disabled"}), 403
+                return redirect(url_for("main.login"))
+        finally:
+            db.close()
+    return None
+
+
 def login_required(f):
     """
     Decorator that redirects unauthenticated users to /login.
@@ -38,25 +66,9 @@ def login_required(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("username"):
-            if request.is_json or request.headers.get("Accept") == "application/json":
-                return jsonify({"error": "Authentication required"}), 401
-            return redirect(url_for("main.login", next=request.path))
-        # Re-verify that DB user is still active
-        user_id = session.get("user_id")
-        if user_id is not None:
-            from app.database import SessionLocal
-            from app.models import User
-            db = SessionLocal()
-            try:
-                user = db.query(User).filter(User.id == user_id).first()
-                if not user or not user.is_active:
-                    session.clear()
-                    if request.is_json or request.headers.get("Accept") == "application/json":
-                        return jsonify({"error": "Account disabled"}), 403
-                    return redirect(url_for("main.login"))
-            finally:
-                db.close()
+        denied = _check_authenticated_and_active()
+        if denied is not None:
+            return denied
         return f(*args, **kwargs)
     return decorated
 
@@ -65,14 +77,14 @@ def admin_required(f):
     """
     Decorator that blocks viewer-role (read-only) users from write endpoints.
     Both 'admin' and 'user' roles are allowed through.
+    Re-checks that the user account is still active on every request.
     Returns 403 JSON for AJAX, or redirects to dashboard for HTML.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("username"):
-            if request.is_json or request.headers.get("Accept") == "application/json":
-                return jsonify({"error": "Authentication required"}), 401
-            return redirect(url_for("main.login", next=request.path))
+        denied = _check_authenticated_and_active()
+        if denied is not None:
+            return denied
         if session.get("role") == "viewer":
             if request.is_json or request.headers.get("Accept") == "application/json":
                 return jsonify({"error": "Accès en lecture seule"}), 403
@@ -84,14 +96,14 @@ def admin_required(f):
 def superadmin_required(f):
     """
     Decorator that requires the 'admin' role specifically.
+    Re-checks that the user account is still active on every request.
     Used for the admin panel and user management endpoints.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("username"):
-            if request.is_json or request.headers.get("Accept") == "application/json":
-                return jsonify({"error": "Authentication required"}), 401
-            return redirect(url_for("main.login", next=request.path))
+        denied = _check_authenticated_and_active()
+        if denied is not None:
+            return denied
         if session.get("role") != "admin":
             if request.is_json or request.headers.get("Accept") == "application/json":
                 return jsonify({"error": "Admin access required"}), 403
