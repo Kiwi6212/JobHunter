@@ -34,6 +34,7 @@ def login_required(f):
     """
     Decorator that redirects unauthenticated users to /login.
     For AJAX requests (Accept: application/json), returns 401 JSON instead.
+    Re-checks that the user account is still active on every request.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -41,6 +42,21 @@ def login_required(f):
             if request.is_json or request.headers.get("Accept") == "application/json":
                 return jsonify({"error": "Authentication required"}), 401
             return redirect(url_for("main.login", next=request.path))
+        # Re-verify that DB user is still active
+        user_id = session.get("user_id")
+        if user_id is not None:
+            from app.database import SessionLocal
+            from app.models import User
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user or not user.is_active:
+                    session.clear()
+                    if request.is_json or request.headers.get("Accept") == "application/json":
+                        return jsonify({"error": "Account disabled"}), 403
+                    return redirect(url_for("main.login"))
+            finally:
+                db.close()
         return f(*args, **kwargs)
     return decorated
 

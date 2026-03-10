@@ -223,7 +223,7 @@
 
   function saveTracking(offerId, data) {
     var t0 = performance.now();
-    console.log("[DIAG] fetch START offer=" + offerId, data);
+    // [DIAG] fetch START offer=" + offerId, data);
     fetch("/api/tracking/" + offerId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -231,16 +231,16 @@
     })
       .then(function (r) {
         var t1 = performance.now();
-        console.log("[DIAG] fetch response received offer=" + offerId +
+        // [DIAG] fetch response received offer=" + offerId +
           " status=" + r.status + " (" + (t1 - t0).toFixed(1) + "ms)");
         return r.json();
       })
       .then(function (res) {
         var t2 = performance.now();
-        console.log("[DIAG] json parsed offer=" + offerId +
+        // [DIAG] json parsed offer=" + offerId +
           " (" + (t2 - t0).toFixed(1) + "ms total)");
         if (res.server_ms !== undefined) {
-          console.log("[DIAG] server processing: " + res.server_ms + "ms");
+          // [DIAG] server processing: " + res.server_ms + "ms");
         }
         if (!res.ok) {
           console.error("Save failed", res.error);
@@ -263,12 +263,11 @@
             ? formatShort(res.tracking.follow_up_date) : "";
         }
         var t4 = performance.now();
-        console.log("[DIAG] dom-update offer=" + offerId +
+        // [DIAG] dom-update offer=" + offerId +
           " (" + (t4 - t3).toFixed(1) + "ms)");
       })
       .catch(function (err) {
-        console.error("[DIAG] Network error after " +
-          (performance.now() - t0).toFixed(1) + "ms:", err);
+        console.error("Save failed:", err);
       });
   }
 
@@ -284,12 +283,12 @@
     var target = e.target;
     var row = target.closest(".offer-row");
     if (!row) {
-      console.log("[DIAG] change: no .offer-row (" + (performance.now() - t0).toFixed(1) + "ms)");
+      // [DIAG] change: no .offer-row (" + (performance.now() - t0).toFixed(1) + "ms)");
       return;
     }
     var offerId = row.dataset.offerId;
     var t1 = performance.now();
-    console.log("[DIAG] change: row lookup (" + (t1 - t0).toFixed(1) + "ms)");
+    // [DIAG] change: row lookup (" + (t1 - t0).toFixed(1) + "ms)");
 
     // Status dropdown
     if (target.dataset.field === "status") {
@@ -299,18 +298,18 @@
       if (oldStatus === "Interview" && newStatus !== "Interview") counts.interviews--;
       if (oldStatus !== "Interview" && newStatus === "Interview") counts.interviews++;
       var t2 = performance.now();
-      console.log("[DIAG] change: counter update (" + (t2 - t1).toFixed(1) + "ms)");
+      // [DIAG] change: counter update (" + (t2 - t1).toFixed(1) + "ms)");
 
       renderStats();
       var t3 = performance.now();
-      console.log("[DIAG] change: renderStats (" + (t3 - t2).toFixed(1) + "ms)");
+      // [DIAG] change: renderStats (" + (t3 - t2).toFixed(1) + "ms)");
 
       row.dataset.status = newStatus;
       target.className = "status-select status-color-" +
         newStatus.toLowerCase().replace(/ /g, "-");
       var t4 = performance.now();
-      console.log("[DIAG] change: DOM class update (" + (t4 - t3).toFixed(1) + "ms)");
-      console.log("[DIAG] change TOTAL (status) = " + (t4 - t0).toFixed(1) + "ms → calling fetch");
+      // [DIAG] change: DOM class update (" + (t4 - t3).toFixed(1) + "ms)");
+      // [DIAG] change TOTAL (status) = " + (t4 - t0).toFixed(1) + "ms → calling fetch");
 
       saveTracking(offerId, { status: newStatus });
       return;
@@ -324,20 +323,20 @@
       if (field === "cv_sent")       counts.cv += checked ? 1 : -1;
       if (field === "follow_up_done") counts.fu += checked ? 1 : -1;
       var t2b = performance.now();
-      console.log("[DIAG] change: counter update (" + (t2b - t1).toFixed(1) + "ms)");
+      // [DIAG] change: counter update (" + (t2b - t1).toFixed(1) + "ms)");
 
       renderStats();
       var t3b = performance.now();
-      console.log("[DIAG] change: renderStats (" + (t3b - t2b).toFixed(1) + "ms)");
+      // [DIAG] change: renderStats (" + (t3b - t2b).toFixed(1) + "ms)");
 
       var payload = {};
       payload[field] = checked;
-      console.log("[DIAG] change TOTAL (checkbox) = " + (t3b - t0).toFixed(1) + "ms → calling fetch");
+      // [DIAG] change TOTAL (checkbox) = " + (t3b - t0).toFixed(1) + "ms → calling fetch");
 
       saveTracking(offerId, payload);
       return;
     }
-    console.log("[DIAG] change: unhandled target (" + (performance.now() - t0).toFixed(1) + "ms)");
+    // [DIAG] change: unhandled target (" + (performance.now() - t0).toFixed(1) + "ms)");
   });
 
   // ── Event delegation: one "input" listener for notes (debounced) ───

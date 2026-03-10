@@ -44,7 +44,10 @@
                         {{ session.username }}
                         <span class="nav-user-role">{% if session.role == 'admin' %}(admin){% elif session.role == 'viewer' %}(lecture seule){% else %}(utilisateur){% endif %}</span>
                     </span>
-                    <a href="{{ url_for('main.logout') }}" class="btn-logout">Déconnexion</a>
+                    <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn-logout">Déconnexion</button>
+                    </form>
                 </div>
                 {% endif %}
             </div>

@@ -207,7 +207,7 @@ def _check_and_increment_quota(user_id: int, quota_field: str, limit: int) -> tu
     try:
         db = SessionLocal.session_factory()
         try:
-            user = db.query(User).filter(User.id == user_id).with_for_update().first()
+            user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return True, 0, limit
             if user.role != 'user':
@@ -380,7 +380,7 @@ def login_2fa():
     return render_template("login_2fa.html", error=error)
 
 
-@bp.route('/logout')
+@bp.route('/logout', methods=['GET', 'POST'])
 def logout():
     """Clear session and redirect to login."""
     session.clear()
@@ -411,6 +411,8 @@ def register():
                 errors.append("Nom d'utilisateur requis.")
             elif len(username) > 64:
                 errors.append("Nom d'utilisateur trop long (max 64 caractères).")
+            elif not all(c.isalnum() or c in "-_." for c in username):
+                errors.append("L'identifiant ne peut contenir que des lettres, chiffres, tirets, points et underscores.")
             if not password:
                 errors.append("Mot de passe requis.")
             else:
@@ -1216,7 +1218,8 @@ def _run_cv_matching(method='tfidf', force=False, domain_id=None, user_id=None):
 
 
 @bp.route('/api/cv/upload', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("10 per minute")
 def cv_upload():
     """
     Accept a PDF or plain-text CV file, extract text, save to disk,
@@ -1282,9 +1285,15 @@ def cv_upload():
     if not cv_text.strip():
         return jsonify({'error': 'Could not extract text from CV'}), 400
 
-    # Save to disk
-    CV_DIR.mkdir(parents=True, exist_ok=True)
-    CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
+    # Save to user-specific document directory
+    user_id = session.get("user_id")
+    if user_id is not None:
+        user_cv_dir = DATA_DIR / "documents" / str(user_id)
+        user_cv_dir.mkdir(parents=True, exist_ok=True)
+        (user_cv_dir / filename).write_bytes(raw)
+    else:
+        CV_DIR.mkdir(parents=True, exist_ok=True)
+        CV_TEXT_PATH.write_text(cv_text, encoding='utf-8')
 
     method = request.args.get('method', 'tfidf')
     if method not in ('tfidf', 'claude'):
@@ -1304,7 +1313,8 @@ def cv_upload():
 
 
 @bp.route('/api/cv/rematch', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("5 per minute")
 def cv_rematch():
     """
     Launch CV matching asynchronously in a background thread and return immediately.
@@ -1438,6 +1448,16 @@ def account():
                     user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
                     user.updated_at = datetime.utcnow()
                     db.commit()
+                    # Regenerate session to invalidate old session cookies
+                    _uname = session.get("username")
+                    _role = session.get("role")
+                    _uid = session.get("user_id")
+                    _did = session.get("domain_id")
+                    session.clear()
+                    session["username"] = _uname
+                    session["role"] = _role
+                    session["user_id"] = _uid
+                    session["domain_id"] = _did
                     success = "Mot de passe modifié avec succès."
             finally:
                 db.close()
@@ -1604,7 +1624,9 @@ def account_profile():
 
             elif action == 'change_email':
                 new_email = request.form.get('email', '').strip()
-                if new_email and ('@' not in new_email or '.' not in new_email.split('@')[-1]):
+                import re as _re
+                _email_re = _re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+                if new_email and not _email_re.match(new_email):
                     errors.append("Adresse e-mail invalide.")
                 else:
                     user.email = new_email or None
@@ -1680,7 +1702,8 @@ def documents():
 
 
 @bp.route('/api/documents/upload', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("10 per minute")
 def document_upload():
     """Upload a document file (PDF, TXT, DOCX) with strict validation."""
     if 'file' not in request.files:
@@ -1764,7 +1787,8 @@ def document_delete(filename):
 # ── Cover letter generation ───────────────────────────────────────────────────
 
 @bp.route('/api/cover-letter/<int:offer_id>', methods=['POST'])
-@login_required
+@admin_required
+@limiter.limit("5 per minute")
 def generate_cover_letter(offer_id):
     """
     Generate a tailored cover letter for an offer using Claude.
@@ -2097,11 +2121,8 @@ def forgot_password():
                 User.username == username, User.is_active == True
             ).first()
             if not user:
-                return render_template(
-                    'forgot_password.html', step='1',
-                    error="Nom d'utilisateur introuvable.",
-                    security_questions=SECURITY_QUESTIONS,
-                )
+                # Return same response as email-sent to prevent username enumeration
+                return render_template('forgot_password.html', step='email_sent')
             # ── Email path: user has an email → send reset link directly ──────
             if user.email:
                 db.query(PasswordReset).filter(
@@ -2303,6 +2324,8 @@ def reset_password(token):
                     reset.used = True
                     db.commit()
                     _sec_log("PASSWORD_RESET", user.username)
+                    # Clear any active session for this user (current browser)
+                    session.clear()
                     return redirect(url_for('main.login') + '?ok=password_reset')
         return render_template('reset_password.html', token=token, errors=errors)
     finally:
@@ -2400,9 +2423,7 @@ def health():
         pass
     return jsonify({
         "status": "ok",
-        "uptime": uptime_sec,
         "db": db_status,
-        "offers_count": offers_count,
     })
 
 

@@ -44,7 +44,10 @@
                     <a href="{{ url_for('main.admin_document_download', user_id=target_user.id, filename=f) }}"
                        class="btn btn-small btn-secondary">Télécharger</a>
                     <button class="btn btn-small btn-danger"
-                            onclick="deleteDoc({{ target_user.id }}, '{{ f }}', this, 'doc-row-{{ loop.index }}')">
+                            data-user-id="{{ target_user.id }}"
+                            data-filename="{{ f|tojson }}"
+                            data-row-id="doc-row-{{ loop.index }}"
+                            onclick="deleteDoc(this.dataset.userId, JSON.parse(this.dataset.filename), this, this.dataset.rowId)">
                         Supprimer
                     </button>
                 </td>

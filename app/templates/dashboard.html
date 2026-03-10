@@ -217,7 +217,7 @@
                 {% endif %}
                 <td>
                     {% if role != 'viewer' %}
-                    <a href="{{ offer.url }}" target="_blank" class="btn btn-small btn-view"
+                    <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
                     {% else %}
                     <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>

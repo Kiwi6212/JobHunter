@@ -26,17 +26,18 @@ class Config:
     """Flask application configuration."""
 
     _raw_key = os.getenv("FLASK_SECRET_KEY", "")
+    _debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     if not _raw_key:
-        # Block startup with the insecure default key in non-debug mode
-        _fallback = "dev-secret-key-change-in-production"
-        _debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-        if not _debug_mode:
+        if _debug_mode:
+            SECRET_KEY = "dev-secret-key-change-in-production"
+        else:
             print(
                 "[SECURITY] FLASK_SECRET_KEY is not set. "
-                "Set it to a random 32-byte hex string before running in production.",
+                "Set it to a random 32-byte hex string before running in production.\n"
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"",
                 file=sys.stderr,
             )
-        SECRET_KEY = _fallback
+            sys.exit(1)
     else:
         SECRET_KEY = _raw_key
 

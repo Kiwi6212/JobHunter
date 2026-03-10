@@ -82,15 +82,21 @@ class SmartRecruitersScraper(BaseScraper):
             all_offers.extend(offers)
             self._delay()
 
-        # Deduplicate by external_id
+        # Deduplicate by external_id and URL
         seen_ids = set()
+        seen_urls = set()
         unique_offers = []
         for offer in all_offers:
             eid = offer.get("external_id")
             if eid and eid in seen_ids:
                 continue
+            url = offer.get("url", "")
+            if not eid and url and url in seen_urls:
+                continue
             if eid:
                 seen_ids.add(eid)
+            if url:
+                seen_urls.add(url)
             unique_offers.append(offer)
 
         logger.info(
@@ -135,13 +141,23 @@ class SmartRecruitersScraper(BaseScraper):
 
         return offers
 
+    def close(self):
+        """Close the HTTP session."""
+        self.session.close()
+
     def _fetch_postings(self, company_id, query):
         """Fetch postings from the SmartRecruiters API."""
+        MAX_PAGES = 50
         postings = []
         offset = 0
         limit = 100
+        page = 0
 
         while True:
+            page += 1
+            if page > MAX_PAGES:
+                logger.warning(f"[smartrecruiters] Hit pagination cap ({MAX_PAGES}) for {company_id} q='{query}'")
+                break
             url = f"{API_BASE}/{company_id}/postings"
             params = {"q": query, "limit": limit, "offset": offset}
 

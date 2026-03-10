@@ -302,7 +302,14 @@ function loadStats() {
                 tbody.innerHTML = '';
                 (d.top_pages || []).forEach(function(p) {
                     var tr = document.createElement('tr');
-                    tr.innerHTML = '<td><code>' + p[0] + '</code></td><td>' + p[1].toLocaleString('fr-FR') + '</td>';
+                    var td1 = document.createElement('td');
+                    var code = document.createElement('code');
+                    code.textContent = p[0];
+                    td1.appendChild(code);
+                    var td2 = document.createElement('td');
+                    td2.textContent = p[1].toLocaleString('fr-FR');
+                    tr.appendChild(td1);
+                    tr.appendChild(td2);
                     tbody.appendChild(tr);
                 });
                 document.getElementById('stats-top-pages').style.display = (d.top_pages && d.top_pages.length) ? 'block' : 'none';

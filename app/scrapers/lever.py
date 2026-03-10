@@ -49,6 +49,10 @@ class LeverScraper(BaseScraper):
             "User-Agent": self.config.USER_AGENT,
         })
 
+    def close(self):
+        """Close the HTTP session."""
+        self.session.close()
+
     def collect(self):
         all_offers = []
 

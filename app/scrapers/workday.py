@@ -101,15 +101,21 @@ class WorkdayScraper(BaseScraper):
             all_offers.extend(offers)
             self._delay()
 
-        # Deduplicate by external_id
+        # Deduplicate by external_id and URL
         seen_ids = set()
+        seen_urls = set()
         unique_offers = []
         for offer in all_offers:
             eid = offer.get("external_id")
             if eid and eid in seen_ids:
                 continue
+            url = offer.get("url", "")
+            if not eid and url and url in seen_urls:
+                continue
             if eid:
                 seen_ids.add(eid)
+            if url:
+                seen_urls.add(url)
             unique_offers.append(offer)
 
         logger.info(
@@ -155,13 +161,23 @@ class WorkdayScraper(BaseScraper):
 
         return offers
 
+    def close(self):
+        """Close the HTTP session."""
+        self.session.close()
+
     def _fetch_jobs(self, slug, wd_num, site, query):
         """Fetch jobs from the Workday API with pagination."""
+        MAX_PAGES = 50
         all_jobs = []
         offset = 0
         limit = 20
+        page = 0
 
         while True:
+            page += 1
+            if page > MAX_PAGES:
+                logger.warning(f"[workday] Hit pagination cap ({MAX_PAGES}) for {slug}/{site} q='{query}'")
+                break
             url = (
                 f"https://{slug}.wd{wd_num}.myworkdayjobs.com"
                 f"/wday/cxs/{slug}/{site}/jobs"

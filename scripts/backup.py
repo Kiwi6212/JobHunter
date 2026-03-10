@@ -13,6 +13,7 @@ Cron example (runs every night at 02:00):
 
 import os
 import shutil
+import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,7 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "data" / "jobhunter.db"
 
 # Destination directory (created if it does not exist)
-BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", "/home/ubuntu/backups"))
+_default_backup = str(REPO_ROOT / "backups") if sys.platform == "win32" else "/home/ubuntu/backups"
+BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", _default_backup))
 
 # Number of recent backups to keep (older ones are deleted)
 KEEP_LAST = 7
@@ -45,9 +47,14 @@ def main() -> int:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = BACKUP_DIR / f"jobhunter_{timestamp}.db"
 
-    # Copy the database file atomically (copy then rename would require same fs;
-    # shutil.copy2 preserves metadata and is safe for same-machine copies)
-    shutil.copy2(DB_PATH, dest)
+    # Use SQLite's backup API for a consistent copy (safe even during writes)
+    src_conn = sqlite3.connect(str(DB_PATH))
+    dst_conn = sqlite3.connect(str(dest))
+    try:
+        src_conn.backup(dst_conn)
+    finally:
+        dst_conn.close()
+        src_conn.close()
     print(f"[backup] Backup created: {dest}")
 
     # Purge old backups — keep the KEEP_LAST most recent

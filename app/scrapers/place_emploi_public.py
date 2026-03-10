@@ -11,12 +11,8 @@ import re
 from datetime import datetime
 
 import requests
-import urllib3
 
 from app.scrapers.base_scraper import BaseScraper
-
-# Suppress SSL warnings — the site has a cert issue
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +50,7 @@ class PlaceEmploiPublicScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.session = requests.Session()
+        # Note: SSL verification disabled due to cert issues on choisirleservicepublic.gouv.fr
         self.session.verify = False
         self.session.headers.update({
             "User-Agent": self.config.USER_AGENT,
