@@ -158,6 +158,13 @@
                        autocomplete="username" autofocus required>
             </div>
             <div class="login-field">
+                <label for="email">Adresse email</label>
+                <input type="email" id="email" name="email"
+                       value="{{ request.form.get('email', '') }}"
+                       autocomplete="email" required
+                       placeholder="votre@email.com">
+            </div>
+            <div class="login-field">
                 <label for="password">Mot de passe</label>
                 <input type="password" id="password" name="password"
                        autocomplete="new-password" minlength="12" required>

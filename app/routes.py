@@ -60,7 +60,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from app.database import SessionLocal
-from app.models import Offer, Tracking, Domain, User, UserOffer, PasswordReset
+from app.models import Offer, Tracking, Domain, User, UserOffer, PasswordReset, EmailConfirmation
 from app.auth import login_required, admin_required, superadmin_required, check_credentials, get_current_role
 from app.services.filter_engine import normalize_text
 from config import TARGET_COMPANIES, DATA_DIR
@@ -303,11 +303,21 @@ def login():
         return redirect(url_for("main.dashboard"))
 
     error = None
+    confirm_resend_user_id = None
     if request.method == 'POST':
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role, user_id, domain_id = check_credentials(username, password)
-        if role:
+        if role == "inactive":
+            # user_id is set, domain_id is actually email_confirmed (bool)
+            email_confirmed = domain_id
+            _sec_log("LOGIN_FAIL_INACTIVE", username)
+            if not email_confirmed:
+                error = "Veuillez d'abord confirmer votre adresse email."
+                confirm_resend_user_id = user_id
+            else:
+                error = "Votre compte a été désactivé. Contactez un administrateur."
+        elif role:
             _sec_log("LOGIN_SUCCESS", username, f"role={role}")
             next_url = request.args.get("next", "")
             if not _is_safe_redirect(next_url):
@@ -333,10 +343,12 @@ def login():
             session["user_id"] = user_id
             session["domain_id"] = domain_id
             return redirect(next_url)
-        _sec_log("LOGIN_FAIL", username or "-")
-        error = "Identifiant ou mot de passe incorrect."
+        else:
+            _sec_log("LOGIN_FAIL", username or "-")
+            error = "Identifiant ou mot de passe incorrect."
 
-    return render_template("login.html", error=error)
+    return render_template("login.html", error=error,
+                           confirm_resend_user_id=confirm_resend_user_id)
 
 
 @bp.route('/login/2fa', methods=['GET', 'POST'])
@@ -400,7 +412,9 @@ def register():
         errors = []
 
         if request.method == 'POST':
+            import re as _re
             username = request.form.get("username", "").strip()
+            email = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
             confirm = request.form.get("confirm_password", "")
             domain_id_raw = request.form.get("domain_id", "").strip()
@@ -413,6 +427,12 @@ def register():
                 errors.append("Nom d'utilisateur trop long (max 64 caractères).")
             elif not all(c.isalnum() or c in "-_." for c in username):
                 errors.append("L'identifiant ne peut contenir que des lettres, chiffres, tirets, points et underscores.")
+            if not email:
+                errors.append("Adresse email requise.")
+            elif not _re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                errors.append("Adresse email invalide.")
+            elif len(email) > 255:
+                errors.append("Adresse email trop longue.")
             if not password:
                 errors.append("Mot de passe requis.")
             else:
@@ -439,6 +459,11 @@ def register():
                 if existing:
                     errors.append("Ce nom d'utilisateur est déjà pris.")
                 else:
+                    existing_email = db.query(User).filter(User.email == email).first()
+                    if existing_email:
+                        errors.append("Cette adresse email est déjà utilisée.")
+
+            if not errors:
                     from app import bcrypt
                     pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
                     answer_hash = bcrypt.generate_password_hash(security_answer.lower()).decode("utf-8")
@@ -447,15 +472,110 @@ def register():
                         password_hash=pw_hash,
                         role="user",
                         domain_id=domain_id_raw,
+                        email=email,
+                        is_active=False,
+                        email_confirmed=False,
                         security_question=security_question,
                         security_answer_hash=answer_hash,
                     )
                     db.add(new_user)
+                    db.flush()
+                    # Generate email confirmation token
+                    token = secrets.token_urlsafe(32)
+                    confirmation = EmailConfirmation(
+                        user_id=new_user.id,
+                        token=token,
+                    )
+                    db.add(confirmation)
                     db.commit()
-                    return redirect(url_for("main.login"))
+                    # Send confirmation email
+                    confirm_url = url_for("main.confirm_email", token=token,
+                                          _external=True, _scheme='https')
+                    _send_confirmation_email(email, username, confirm_url)
+                    _sec_log("REGISTER", username, f"email={email}")
+                    return redirect(url_for("main.register_pending", uid=new_user.id))
 
         return render_template("register.html", domains=domains, errors=errors,
                                security_questions=SECURITY_QUESTIONS)
+    finally:
+        db.close()
+
+
+@bp.route('/register/pending')
+@limiter.limit("20 per minute")
+def register_pending():
+    """Post-registration page: email confirmation pending."""
+    uid = request.args.get("uid", type=int)
+    return render_template("register_pending.html", uid=uid)
+
+
+@bp.route('/confirm-email/<token>')
+@limiter.limit("10 per minute")
+def confirm_email(token):
+    """Confirm a user's email address via the token sent at registration."""
+    db = SessionLocal()
+    try:
+        confirmation = db.query(EmailConfirmation).filter(
+            EmailConfirmation.token == token,
+            EmailConfirmation.used == False,
+        ).first()
+        if not confirmation:
+            return render_template("confirm_email.html",
+                                   error="Lien invalide ou déjà utilisé.")
+        # Check 24h expiry
+        from datetime import timezone as _tz
+        age = datetime.now(_tz.utc) - confirmation.created_at.replace(tzinfo=_tz.utc)
+        if age > timedelta(hours=24):
+            confirmation.used = True
+            db.commit()
+            return render_template("confirm_email.html",
+                                   error="Ce lien a expiré (validité 24 heures). Veuillez vous réinscrire.")
+        user = db.query(User).filter(User.id == confirmation.user_id).first()
+        if not user:
+            return render_template("confirm_email.html",
+                                   error="Compte introuvable.")
+        user.is_active = True
+        user.email_confirmed = True
+        confirmation.used = True
+        db.commit()
+        _sec_log("EMAIL_CONFIRMED", user.username)
+        return redirect(url_for("main.login") + "?ok=email_confirmed")
+    finally:
+        db.close()
+
+
+@bp.route('/api/resend-confirmation', methods=['POST'])
+@limiter.limit("1 per minute")
+def resend_confirmation():
+    """Resend email confirmation (rate limited to 1/min)."""
+    if request.is_json:
+        uid = request.json.get("user_id")
+    else:
+        uid = request.form.get("user_id", type=int)
+    if not uid:
+        return jsonify({"error": "Paramètre manquant"}), 400
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == uid).first()
+        if not user or user.email_confirmed or user.is_active:
+            # Don't reveal whether user exists
+            return jsonify({"ok": True, "message": "Si le compte existe, un email a été envoyé."})
+        if not user.email:
+            return jsonify({"error": "Aucune adresse email associée à ce compte."}), 400
+        # Invalidate old tokens
+        db.query(EmailConfirmation).filter(
+            EmailConfirmation.user_id == uid,
+            EmailConfirmation.used == False,
+        ).update({"used": True})
+        # Create new token
+        token = secrets.token_urlsafe(32)
+        confirmation = EmailConfirmation(user_id=uid, token=token)
+        db.add(confirmation)
+        db.commit()
+        confirm_url = url_for("main.confirm_email", token=token,
+                              _external=True, _scheme='https')
+        _send_confirmation_email(user.email, user.username, confirm_url)
+        return jsonify({"ok": True, "message": "Email de confirmation renvoyé."})
     finally:
         db.close()
 
@@ -1977,6 +2097,9 @@ def admin_toggle_user(user_id):
         if user.username == session.get("username"):
             return jsonify({'error': 'Impossible de désactiver votre propre compte'}), 400
         user.is_active = not user.is_active
+        # When admin manually activates, also mark email as confirmed
+        if user.is_active:
+            user.email_confirmed = True
         db.commit()
         return jsonify({'ok': True, 'is_active': user.is_active})
     except Exception as e:
@@ -2287,6 +2410,85 @@ def _send_reset_email(to_email: str, username: str, reset_url: str) -> None:
         mail.send(msg)
     except Exception as exc:
         logger.error("Failed to send reset email to %s: %s", to_email, exc)
+
+
+def _send_confirmation_email(to_email: str, username: str, confirm_url: str) -> None:
+    """Send an email confirmation link after registration. Silently logs on failure."""
+    import html as _html
+    from flask_mail import Message
+    from app import mail
+    safe_username = _html.escape(username)
+    safe_confirm_url = _html.escape(confirm_url)
+    html_body = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;">
+        <tr>
+          <td style="background:#2563eb;padding:28px 40px;text-align:center;">
+            <span style="font-size:2.2rem;">&#127919;</span>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:1.4rem;font-weight:700;letter-spacing:-.3px;">
+              MyJobHunter
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <h2 style="margin:0 0 12px;font-size:1.15rem;color:#0f172a;">
+              Confirmez votre adresse email
+            </h2>
+            <p style="margin:0 0 16px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bonjour <strong>{safe_username}</strong>,
+            </p>
+            <p style="margin:0 0 24px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bienvenue sur MyJobHunter ! Pour activer votre compte, veuillez confirmer
+              votre adresse email en cliquant sur le bouton ci-dessous.
+            </p>
+            <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+              <tr>
+                <td align="center">
+                  <a href="{safe_confirm_url}"
+                     style="display:inline-block;background:#2563eb;color:#ffffff;
+                            text-decoration:none;padding:14px 36px;border-radius:8px;
+                            font-size:1rem;font-weight:600;letter-spacing:-.2px;">
+                    Confirmer mon email &#8594;
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Ce lien est valable <strong>24 heures</strong> et ne peut être utilisé qu'une seule fois.
+            </p>
+            <p style="margin:0;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Si vous n'avez pas créé de compte sur MyJobHunter, ignorez cet email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;
+                     border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:.78rem;">
+              &copy; 2026 MyJobHunter &middot; Cet email est automatique, ne pas répondre.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    try:
+        msg = Message(
+            subject="MyJobHunter - Confirmez votre adresse email",
+            recipients=[to_email],
+            html=html_body,
+        )
+        mail.send(msg)
+    except Exception as exc:
+        logger.error("Failed to send confirmation email to %s: %s", to_email, exc)
 
 
 @bp.route('/reset/<token>', methods=['GET', 'POST'])

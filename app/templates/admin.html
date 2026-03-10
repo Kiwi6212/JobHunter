@@ -56,6 +56,7 @@
                 <th>Inscription</th>
                 <th>Dernière connexion</th>
                 <th>Statut</th>
+                <th>Email</th>
                 <th>Offres suivies</th>
                 <th>Matchings IA</th>
                 <th>Tokens Claude</th>
@@ -100,6 +101,13 @@
                     <span id="status-badge-{{ u.id }}" class="badge-status {{ 'badge-active' if u.is_active else 'badge-inactive' }}">
                         {{ 'Actif' if u.is_active else 'Désactivé' }}
                     </span>
+                </td>
+                <td>
+                    {% if u.email_confirmed %}
+                    <span class="badge-status badge-active" style="font-size:0.78em;">Confirmé</span>
+                    {% else %}
+                    <span class="badge-status badge-inactive" style="font-size:0.78em;">En attente</span>
+                    {% endif %}
                 </td>
                 {# ── Offres suivies ── #}
                 <td style="font-size:0.88em;text-align:center;">

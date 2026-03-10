@@ -124,6 +124,7 @@ class User(Base):
     role = Column(String(20), nullable=False, default="user")  # admin, user, viewer
     domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    email_confirmed = Column(Boolean, nullable=False, default=True)
 
     # Two-factor authentication (TOTP / Google Authenticator)
     totp_secret = Column(String(64), nullable=True, default=None)
@@ -156,6 +157,7 @@ class User(Base):
     domain = relationship("Domain", back_populates="users")
     user_offers = relationship("UserOffer", back_populates="user", cascade="all, delete-orphan")
     password_resets = relationship("PasswordReset", back_populates="user", cascade="all, delete-orphan")
+    email_confirmations = relationship("EmailConfirmation", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}')>"
@@ -208,3 +210,20 @@ class PasswordReset(Base):
 
     def __repr__(self):
         return f"<PasswordReset(user_id={self.user_id}, used={self.used})>"
+
+
+class EmailConfirmation(Base):
+    """Single-use, time-limited email confirmation tokens for registration."""
+
+    __tablename__ = "email_confirmations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    used = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User", back_populates="email_confirmations")
+
+    def __repr__(self):
+        return f"<EmailConfirmation(user_id={self.user_id}, used={self.used})>"

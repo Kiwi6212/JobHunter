@@ -117,7 +117,9 @@ def check_credentials(username, password):
     Validate username/password against DB users only (bcrypt).
 
     Returns:
-        (role, user_id, domain_id) on success, or (None, None, None) on failure.
+        (role, user_id, domain_id) on success.
+        ("inactive", user_id, email_confirmed) when password is correct but account is inactive.
+        (None, None, None) on failure.
     """
     from app.database import SessionLocal
     from app.models import User
@@ -127,7 +129,7 @@ def check_credentials(username, password):
         user = db.query(User).filter(User.username == username).first()
         if user and bcrypt.check_password_hash(user.password_hash, password):
             if not user.is_active:
-                return None, None, None  # Account disabled
+                return "inactive", user.id, user.email_confirmed
             return user.role, user.id, user.domain_id
     except Exception:
         pass

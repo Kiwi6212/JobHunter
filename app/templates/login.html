@@ -102,12 +102,28 @@
         </div>
 
         {% if error %}
-        <div class="login-error">{{ error }}</div>
+        <div class="login-error">
+            {{ error }}
+            {% if confirm_resend_user_id %}
+            <div style="margin-top:0.5rem;">
+                <a href="{{ url_for('main.register_pending', uid=confirm_resend_user_id) }}"
+                   style="color:#2563eb;font-size:0.88rem;">
+                    Renvoyer l'email de confirmation
+                </a>
+            </div>
+            {% endif %}
+        </div>
         {% endif %}
         {% if request.args.get('ok') == 'password_reset' %}
         <div style="background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;
                     padding:.65rem .85rem;font-size:.9rem;margin-bottom:1.25rem;">
-            ✓ Mot de passe réinitialisé avec succès. Connectez-vous avec votre nouveau mot de passe.
+            Mot de passe réinitialisé avec succès. Connectez-vous avec votre nouveau mot de passe.
+        </div>
+        {% endif %}
+        {% if request.args.get('ok') == 'email_confirmed' %}
+        <div style="background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;
+                    padding:.65rem .85rem;font-size:.9rem;margin-bottom:1.25rem;">
+            Email confirmé avec succès ! Vous pouvez maintenant vous connecter.
         </div>
         {% endif %}
 

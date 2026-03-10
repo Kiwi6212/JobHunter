@@ -189,6 +189,14 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "email_confirmed" not in user_cols:
+            print("[MIGRATE] Adding email_confirmed column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN email_confirmed BOOLEAN NOT NULL DEFAULT 1"
+                ))
+            print("[MIGRATE] Done.")
+
         # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
         _migrate_totp_secrets()
 
