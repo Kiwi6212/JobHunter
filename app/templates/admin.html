@@ -57,6 +57,7 @@
                 <th>Dernière connexion</th>
                 <th>Statut</th>
                 <th>Email</th>
+                <th>A2F</th>
                 <th>Offres suivies</th>
                 <th>Matchings IA</th>
                 <th>Tokens Claude</th>
@@ -107,6 +108,13 @@
                     <span class="badge-status badge-active" style="font-size:0.78em;">Confirmé</span>
                     {% else %}
                     <span class="badge-status badge-inactive" style="font-size:0.78em;">En attente</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u.totp_enabled %}
+                    <span class="badge-status badge-active" style="font-size:0.78em;">Activée</span>
+                    {% else %}
+                    <span class="badge-status badge-inactive" style="font-size:0.78em;background:#fee2e2;color:#991b1b;">Inactive</span>
                     {% endif %}
                 </td>
                 {# ── Offres suivies ── #}
@@ -421,6 +429,10 @@ setInterval(loadStats, 30000);
 [data-theme="dark"] .badge-inactive {
     background: #374151;
     color: #9ca3af;
+}
+[data-theme="dark"] .badge-2fa-off {
+    background: #7f1d1d;
+    color: #fecaca;
 }
 .btn-danger {
     background: #dc2626;

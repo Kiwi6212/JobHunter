@@ -60,10 +60,12 @@
 .alert-error   { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
 .alert-success { background:#dcfce7; color:#166534; border:1px solid #86efac; }
 .alert-info    { background:#eff6ff; color:#1e40af; border:1px solid #93c5fd; }
+.alert-warning { background:#fefce8; color:#854d0e; border:1px solid #fde047; }
 
 [data-theme="dark"] .alert-error   { background:#3b0f0f; color:#fca5a5; border-color:#7f1d1d; }
 [data-theme="dark"] .alert-success { background:#052e16; color:#86efac; border-color:#14532d; }
 [data-theme="dark"] .alert-info    { background:#0c1a3b; color:#93c5fd; border-color:#1e3a8a; }
+[data-theme="dark"] .alert-warning { background:#422006; color:#fde68a; border-color:#713f12; }
 
 .totp-status {
     display: inline-flex;
@@ -121,6 +123,18 @@
 {% block content %}
 <div class="account-page">
     <h2 style="margin-bottom:1.5rem;">Mon compte</h2>
+
+    {% if not totp_enabled and has_db_user %}
+    <div class="alert alert-warning" style="font-weight:600;">
+        🔒 L'authentification à deux facteurs est obligatoire pour utiliser MyJobHunter. Activez-la ci-dessous.
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
 
     {% set err_param = request.args.get('err') %}
     {% set ok_param  = request.args.get('ok') %}

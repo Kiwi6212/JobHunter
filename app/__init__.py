@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, g
+from flask import Flask, g, session, redirect, url_for, flash, request
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -72,6 +72,40 @@ def create_app(config_class=Config):
     @app.context_processor
     def _inject_csp_nonce():
         return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
+    # ── Enforce mandatory 2FA ────────────────────────────────────────────────
+    _2FA_EXEMPT_ENDPOINTS = {
+        "main.account", "main.account_setup_2fa", "main.account_confirm_2fa",
+        "main.account_disable_2fa", "main.account_delete",
+        "main.logout", "main.login", "main.login_2fa", "main.register",
+        "main.register_pending", "main.confirm_email", "main.resend_confirmation",
+        "main.landing", "main.faq", "main.cgu",
+        "main.confidentialite", "main.mentions_legales",
+        "main.forgot_password",
+        "static",
+    }
+
+    @app.before_request
+    def _enforce_mandatory_2fa():
+        # Only check authenticated users with a user_id in session
+        user_id = session.get("user_id")
+        if not user_id:
+            return
+        # Allow exempt routes (account, 2FA setup, logout, static)
+        endpoint = request.endpoint or ""
+        if endpoint in _2FA_EXEMPT_ENDPOINTS or endpoint.startswith("static"):
+            return
+        # Check totp_enabled from DB
+        from app.database import SessionLocal
+        from app.models import User
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and not user.totp_enabled:
+                flash("Pour la sécurité de votre compte, l'activation de l'A2F est obligatoire.", "warning")
+                return redirect(url_for("main.account"))
+        finally:
+            db.close()
 
     # ── Security headers ─────────────────────────────────────────────────────
     @app.after_request
