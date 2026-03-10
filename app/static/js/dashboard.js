@@ -231,16 +231,14 @@
     })
       .then(function (r) {
         var t1 = performance.now();
-        // [DIAG] fetch response received offer=" + offerId +
-          " status=" + r.status + " (" + (t1 - t0).toFixed(1) + "ms)");
+        // [DIAG] fetch response offer=" + offerId + " status=" + r.status + " (" + (t1 - t0).toFixed(1) + "ms)"
         return r.json();
       })
       .then(function (res) {
         var t2 = performance.now();
-        // [DIAG] json parsed offer=" + offerId +
-          " (" + (t2 - t0).toFixed(1) + "ms total)");
+        // [DIAG] json parsed offer=" + offerId + " (" + (t2 - t0).toFixed(1) + "ms total)"
         if (res.server_ms !== undefined) {
-          // [DIAG] server processing: " + res.server_ms + "ms");
+          // [DIAG] server processing: " + res.server_ms + "ms"
         }
         if (!res.ok) {
           console.error("Save failed", res.error);
@@ -263,8 +261,7 @@
             ? formatShort(res.tracking.follow_up_date) : "";
         }
         var t4 = performance.now();
-        // [DIAG] dom-update offer=" + offerId +
-          " (" + (t4 - t3).toFixed(1) + "ms)");
+        // [DIAG] dom-update offer=" + offerId + " (" + (t4 - t3).toFixed(1) + "ms)"
       })
       .catch(function (err) {
         console.error("Save failed:", err);
@@ -423,10 +420,10 @@
     var end   = start + PAGE_SIZE;
 
     for (var i = 0; i < allRows.length; i++) {
-      allRows[i].style.display = "none";
+      allRows[i].classList.add("hidden");
     }
     for (var j = start; j < end && j < filteredRows.length; j++) {
-      filteredRows[j].style.display = "";
+      filteredRows[j].classList.remove("hidden");
     }
 
     if (visibleCount) visibleCount.textContent = filteredRows.length;
@@ -658,7 +655,10 @@
   }
 
   function _showProgress(show) {
-    if (cvMatchProgress) cvMatchProgress.style.display = show ? "block" : "none";
+    if (cvMatchProgress) {
+      if (show) { cvMatchProgress.classList.remove("hidden"); }
+      else      { cvMatchProgress.classList.add("hidden"); }
+    }
   }
 
   function _updateProgressBar(scored, total) {

@@ -132,7 +132,7 @@
                     {% endif %}
                 </div>
                 <span id="letter-status" class="save-msg" style="display:block;margin-top:0.5rem;"></span>
-                <div id="letter-result" style="display:none;margin-top:1rem;">
+                <div id="letter-result" class="hidden" style="margin-top:1rem;">
                     <textarea id="letter-text" class="notes-textarea letter-output" rows="16" readonly></textarea>
                     <div class="tracking-actions" style="margin-top:0.75rem;">
                         <button id="btn-dl-letter" class="btn btn-secondary">Télécharger</button>
@@ -222,7 +222,7 @@
             btnGen.disabled = true;
             letterStatus.textContent = "Génération en cours…";
             letterStatus.className = "save-msg";
-            letterResult.style.display = "none";
+            letterResult.classList.add("hidden");
 
             fetch("/api/cover-letter/{{ offer.id }}", {
                 method: "POST",
@@ -262,7 +262,7 @@
                     letterStatus.className = "save-msg save-msg--ok";
                     letterText.value = res.text;
                     savedFilename = res.filename || "lettre_motivation.txt";
-                    letterResult.style.display = "";
+                    letterResult.classList.remove("hidden");
                 } else {
                     letterStatus.textContent = "Erreur : " + (res.error || "unknown");
                     letterStatus.className = "save-msg save-msg--err";

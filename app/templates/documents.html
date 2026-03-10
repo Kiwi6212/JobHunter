@@ -14,7 +14,7 @@
         <h3>Importer un document</h3>
         <div class="upload-form">
             <label for="doc-file-input" class="btn btn-primary">Choisir un fichier</label>
-            <input type="file" id="doc-file-input" accept=".pdf,.txt,.docx" style="display:none">
+            <input type="file" id="doc-file-input" accept=".pdf,.txt,.docx" class="hidden">
             <span id="doc-filename" class="file-label">Aucun fichier sélectionné</span>
             <button id="btn-doc-upload" class="btn btn-secondary" disabled>Uploader</button>
         </div>
@@ -137,7 +137,7 @@
                     // Show empty state if no rows left
                     var tbody = document.getElementById("docs-tbody");
                     if (tbody && tbody.querySelectorAll(".doc-row").length === 0) {
-                        tbody.closest("table").style.display = "none";
+                        tbody.closest("table").classList.add("hidden");
                         var p = document.createElement("p");
                         p.className = "text-muted empty-docs";
                         p.textContent = "Aucun document importé pour l'instant.";

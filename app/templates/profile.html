@@ -124,7 +124,6 @@
 }
 
 .domain-warning {
-    display: none;
     background: #fef9c3;
     border: 1px solid #fde047;
     border-radius: 8px;
@@ -239,7 +238,7 @@
     <!-- ── 2. Change domain ─────────────────────────────────── -->
     <div class="account-section">
         <h3>Changer de domaine</h3>
-        <div class="domain-warning" id="domain-warning">
+        <div class="domain-warning hidden" id="domain-warning">
             ⚠️ Changer de domaine réinitialisera tous vos scores Match IA — les offres filtrées changeront.
         </div>
         <form method="POST" action="{{ url_for('main.account_profile') }}">
@@ -247,7 +246,7 @@
             <input type="hidden" name="action" value="change_domain">
             <div class="form-field">
                 <label for="domain_id">Domaine métier</label>
-                <select id="domain_id" name="domain_id" onchange="document.getElementById('domain-warning').style.display='block'">
+                <select id="domain_id" name="domain_id">
                     <option value="">— Tous les domaines —</option>
                     {% for d in domains %}
                     <option value="{{ d.id }}" {{ 'selected' if user.domain_id == d.id else '' }}>{{ d.name }}</option>
@@ -335,6 +334,15 @@ function confirmDelete() {
         .catch(function() {
             errEl.textContent = 'Erreur réseau.';
         });
+}
+
+// Show domain warning on change
+var domainSelect = document.getElementById('domain_id');
+if (domainSelect) {
+    domainSelect.addEventListener('change', function () {
+        var warn = document.getElementById('domain-warning');
+        if (warn) warn.classList.remove('hidden');
+    });
 }
 </script>
 {% endblock %}

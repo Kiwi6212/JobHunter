@@ -5,6 +5,9 @@
     box-sizing: border-box;
 }
 
+/* Utility: hide elements via class toggle (CSP-safe alternative to style.display) */
+.hidden { display: none !important; }
+
 :root {
     --primary-color: #2563eb;
     --secondary-color: #64748b;
