@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, g
+from flask import Flask, g, request, render_template
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -63,6 +63,19 @@ def create_app(config_class=Config):
     mail.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
+
+    # ── Maintenance mode ────────────────────────────────────────────────────
+    # Touch /home/ubuntu/JobHunter/maintenance_on (prod) or data/maintenance_on
+    # (dev) to enable.  Remove the file to disable.
+    _maintenance_prod = Path("/home/ubuntu/JobHunter/maintenance_on")
+    _maintenance_dev = Path(__file__).resolve().parent.parent / "data" / "maintenance_on"
+
+    @app.before_request
+    def _check_maintenance():
+        if _maintenance_prod.exists() or _maintenance_dev.exists():
+            if request.path.startswith("/static") or request.path == "/health":
+                return None
+            return render_template("maintenance.html"), 503
 
     # ── Per-request CSP nonce ────────────────────────────────────────────────
     @app.before_request
