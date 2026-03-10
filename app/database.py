@@ -5,7 +5,7 @@ Handles SQLite database initialization and provides session factory.
 
 import os
 from pathlib import Path
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.orm import sessionmaker, scoped_session
 from app.models import Base
 
@@ -16,12 +16,22 @@ from config import Config
 DATA_DIR = Path(Config.DATABASE_PATH).parent
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create SQLite engine
+# Create SQLite engine with 30s timeout to avoid "database is locked" errors
 engine = create_engine(
     Config.SQLALCHEMY_DATABASE_URI,
     echo=False,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
+
+
+# Enable WAL mode and busy timeout for concurrent read/write support
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.close()
+
 
 # Session factory
 SessionLocal = scoped_session(sessionmaker(
