@@ -12,6 +12,23 @@
     {% if role != 'viewer' %}
     <div class="card-section">
         <h3>Importer un document</h3>
+
+        {% if not is_admin %}
+        <div class="quota-section" style="margin-bottom:1rem;">
+            {% set pct = (quota_used / quota_max * 100) if quota_max else 0 %}
+            {% set used_mb = quota_used / (1024 * 1024) %}
+            {% set max_mb = quota_max / (1024 * 1024) %}
+            <div style="display:flex;align-items:center;gap:0.8rem;flex-wrap:wrap;">
+                <span style="font-size:.9rem;color:#475569;">{{ "%.1f"|format(used_mb)|replace(".", ",") }} Mo / {{ max_mb|int }} Mo utilisés</span>
+            </div>
+            <div class="quota-bar" style="background:#e2e8f0;border-radius:6px;height:8px;margin-top:0.4rem;overflow:hidden;">
+                <div class="quota-bar-fill" style="height:100%;border-radius:6px;transition:width .3s;
+                    width:{{ pct|round(1) }}%;
+                    background:{% if pct >= 90 %}#ef4444{% elif pct >= 70 %}#f59e0b{% else %}#2563eb{% endif %};"></div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="upload-form">
             <label for="doc-file-input" class="btn btn-primary">Choisir un fichier</label>
             <input type="file" id="doc-file-input" accept=".pdf,.txt,.docx" class="hidden">

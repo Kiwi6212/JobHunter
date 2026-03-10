@@ -672,7 +672,8 @@ def _try_start_task(user_id, initial_state: dict) -> bool:
     return True
 
 # ── Document upload validation ────────────────────────────────────────────────
-MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024   # 5 MB
+MAX_USER_STORAGE = 20 * 1024 * 1024  # 20 MB per-user quota (admin exempt)
 
 # Exact MIME types accepted per extension (whitelist)
 _ALLOWED_MIMES: dict[str, set[str]] = {
@@ -719,6 +720,61 @@ def _user_docs_dir():
     user_id = session.get("user_id")
     folder = str(user_id) if user_id is not None else "legacy_admin"
     return DATA_DIR / "documents" / folder
+
+
+def _dir_total_size(directory: Path) -> int:
+    """Return total size in bytes of all files in *directory* (non-recursive)."""
+    if not directory.exists():
+        return 0
+    return sum(f.stat().st_size for f in directory.iterdir() if f.is_file())
+
+
+# ── Document content relevance keywords ──────────────────────────────────────
+_DOC_KEYWORDS = {
+    'cv', 'curriculum', 'expérience', 'experience', 'formation', 'compétences',
+    'competences', 'diplôme', 'diplome', 'poste', 'entreprise', 'stage',
+    'alternance', 'motivation', 'candidature', 'profil', 'lettre', 'madame',
+    'monsieur', 'emploi', 'mission',
+}
+_DOC_KEYWORDS_MIN = 3  # minimum distinct keywords required
+
+
+def _extract_text_from_bytes(raw: bytes, ext: str) -> str | None:
+    """Extract plain text from raw file bytes.  Returns None on failure."""
+    try:
+        if ext == '.pdf':
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(raw))
+            text = "\n".join(p.extract_text() or "" for p in reader.pages)
+            return text.strip() or None
+        elif ext == '.docx':
+            from docx import Document as _DocxDoc
+            doc = _DocxDoc(io.BytesIO(raw))
+            text = "\n".join(p.text for p in doc.paragraphs)
+            return text.strip() or None
+        elif ext == '.txt':
+            try:
+                return raw.decode('utf-8').strip() or None
+            except UnicodeDecodeError:
+                return raw.decode('latin-1', errors='replace').strip() or None
+    except Exception as exc:
+        logger.warning("_extract_text_from_bytes failed (%s): %s", ext, exc)
+    return None
+
+
+def _check_doc_relevance(raw: bytes, ext: str) -> str | None:
+    """Return an error message if the document is not job-search related, else None."""
+    text = _extract_text_from_bytes(raw, ext)
+    if text is None:
+        return None  # can't extract → don't block
+    sample = text[:5000].lower()
+    found = sum(1 for kw in _DOC_KEYWORDS if kw in sample)
+    if found < _DOC_KEYWORDS_MIN:
+        return (
+            "Ce document ne semble pas être un CV ou une lettre de motivation. "
+            "Seuls les documents liés à votre recherche d'emploi sont acceptés."
+        )
+    return None
 
 
 _CV_ALLOWED_EXTS = {'.pdf', '.docx', '.txt'}
@@ -1913,9 +1969,14 @@ def documents():
     docs_dir = _user_docs_dir()
     docs_dir.mkdir(parents=True, exist_ok=True)
     files = sorted(f.name for f in docs_dir.iterdir() if f.is_file())
+    used = _dir_total_size(docs_dir)
+    is_admin_user = (get_current_role() == "admin")
     return render_template('documents.html', files=files,
                            role=get_current_role(),
-                           username=session.get("username"))
+                           username=session.get("username"),
+                           quota_used=used,
+                           quota_max=MAX_USER_STORAGE,
+                           is_admin=is_admin_user)
 
 
 @bp.route('/api/documents/upload', methods=['POST'])
@@ -1966,6 +2027,23 @@ def document_upload():
     raw = file.read()
     if not _check_magic_bytes(raw, ext):
         return jsonify({'error': f'Le contenu du fichier ne correspond pas à l\'extension {ext}'}), 400
+
+    is_admin_user = (get_current_role() == "admin")
+
+    # 7. Per-user storage quota (admin exempt)
+    if not is_admin_user:
+        docs_dir = _user_docs_dir()
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        used = _dir_total_size(docs_dir)
+        if used + len(raw) > MAX_USER_STORAGE:
+            return jsonify({'error': 'Quota de stockage dépassé (20 Mo max). '
+                                     'Supprimez des documents pour libérer de l\'espace.'}), 400
+
+    # 8. Content relevance check (admin exempt)
+    if not is_admin_user:
+        relevance_err = _check_doc_relevance(raw, ext)
+        if relevance_err:
+            return jsonify({'error': relevance_err}), 400
 
     docs_dir = _user_docs_dir()
     docs_dir.mkdir(parents=True, exist_ok=True)
