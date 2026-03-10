@@ -1012,6 +1012,40 @@ def update_tracking(offer_id):
         db.close()
 
 
+@bp.route('/api/tracking/<int:offer_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(offer_id):
+    """Toggle the is_favorite flag for a user's offer."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return jsonify({'error': 'Non disponible'}), 400
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    db = SessionLocal()
+    try:
+        uo = db.query(UserOffer).filter(
+            UserOffer.user_id == user_id,
+            UserOffer.offer_id == offer_id,
+        ).first()
+        if not uo:
+            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+            if not offer_exists:
+                return jsonify({'error': 'Offer not found'}), 404
+            uo = UserOffer(user_id=user_id, offer_id=offer_id, status='New', is_favorite=True)
+            db.add(uo)
+        else:
+            uo.is_favorite = not uo.is_favorite
+        uo.updated_at = datetime.utcnow()
+        db.commit()
+        return jsonify({'ok': True, 'is_favorite': uo.is_favorite})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
 @bp.route('/offer/<int:offer_id>')
 @login_required
 def offer_detail(offer_id):
@@ -1084,12 +1118,33 @@ def stats():
             count = _uo().filter(status_col == status).count()
             status_counts[status] = count
 
+        # Interviews count for response rate
+        interviews = status_counts.get('Interview', 0) + status_counts.get('Accepted', 0)
+        response_rate = round(interviews / cv_sent * 100, 1) if cv_sent > 0 else 0
+
+        # Average CV match score
+        avg_cv_score = 0.0
+        high_score_count = 0
+        if user_id is not None:
+            avg_row = db.query(func.avg(UserOffer.cv_match_score)).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.cv_match_score.isnot(None),
+            ).scalar()
+            avg_cv_score = round(float(avg_row or 0), 1)
+            high_score_count = db.query(func.count(UserOffer.id)).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.cv_match_score >= 70,
+            ).scalar() or 0
+
         stats_data = {
             'total_offers': total_offers,
             'tracked': tracked_offers,
             'cv_sent': cv_sent,
             'follow_ups': follow_ups,
             'status_counts': status_counts,
+            'response_rate': response_rate,
+            'avg_cv_score': avg_cv_score,
+            'high_score_count': high_score_count,
         }
 
         # ── Chart data ────────────────────────────────────────────────
@@ -1144,12 +1199,54 @@ def stats():
                 bucket = min(int(s // 10), 9)
                 cv_score_buckets[bucket] += 1
 
+        # Weekly application timeline (date_sent grouped by ISO week)
+        weekly_data = {}
+        if user_id is not None:
+            date_col = UserOffer.date_sent
+            weekly_rows = db.query(UserOffer.date_sent).filter(
+                UserOffer.user_id == user_id,
+                UserOffer.date_sent.isnot(None),
+            ).all()
+        else:
+            weekly_rows = db.query(Tracking.date_sent).filter(
+                Tracking.date_sent.isnot(None),
+            ).all()
+        for (dt,) in weekly_rows:
+            if dt:
+                week_key = dt.strftime('%Y-W%W')
+                weekly_data[week_key] = weekly_data.get(week_key, 0) + 1
+        # Sort by week and keep last 12 weeks max
+        weekly_sorted = sorted(weekly_data.items())[-12:]
+        weekly_labels = [w[0] for w in weekly_sorted]
+        weekly_values = [w[1] for w in weekly_sorted]
+
+        # Contract type distribution
+        contract_counts = {}
+        for o in offer_query.with_entities(Offer.contract_type).all():
+            ct = (o[0] or '').strip().lower()
+            if 'cdi' in ct:
+                key = 'CDI'
+            elif 'cdd' in ct:
+                key = 'CDD'
+            elif 'alternance' in ct or 'apprenti' in ct:
+                key = 'Alternance'
+            elif 'stage' in ct:
+                key = 'Stage'
+            elif ct:
+                key = 'Autre'
+            else:
+                key = 'Non précisé'
+            contract_counts[key] = contract_counts.get(key, 0) + 1
+
         chart_data = {
             'sources':         source_counts,
             'companies':       top_companies,
             'scores':          score_buckets,
             'statuses':        status_counts,
             'cv_scores':       cv_score_buckets,
+            'weekly_labels':   weekly_labels,
+            'weekly_values':   weekly_values,
+            'contracts':       contract_counts,
         }
 
         return render_template(

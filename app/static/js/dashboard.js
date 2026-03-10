@@ -49,6 +49,7 @@
       filter_search_ph:   "Rechercher titre, entreprise...",
       filter_all_offers:  "Afficher toutes les offres",
       filter_recruiters:  "Afficher les recruteurs potentiels",
+      filter_favorites:   "Favoris uniquement",
       btn_reset:          "Réinitialiser",
       col_title:          "Titre",
       col_company:        "Entreprise",
@@ -99,6 +100,7 @@
       filter_search_ph:   "Search title, company...",
       filter_all_offers:  "Show all offers",
       filter_recruiters:  "Show potential recruiters",
+      filter_favorites:   "Favorites only",
       btn_reset:          "Reset",
       col_title:          "Title",
       col_company:        "Company",
@@ -336,6 +338,38 @@
     // [DIAG] change: unhandled target (" + (performance.now() - t0).toFixed(1) + "ms)");
   });
 
+  // ── Event delegation: favorite star toggle ────────────────────────
+
+  tbody.addEventListener("click", function (e) {
+    var btn = e.target.closest(".btn-fav");
+    if (!btn) return;
+    var row = btn.closest(".offer-row");
+    if (!row) return;
+    var offerId = row.dataset.offerId;
+
+    // Optimistic UI toggle
+    var isFav = row.dataset.favorite === "1";
+    row.dataset.favorite = isFav ? "0" : "1";
+    btn.textContent = isFav ? "\u2606" : "\u2605";
+    btn.classList.toggle("fav-active", !isFav);
+
+    fetch("/api/tracking/" + offerId + "/favorite", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) {
+          // Revert on error
+          row.dataset.favorite = isFav ? "1" : "0";
+          btn.textContent = isFav ? "\u2605" : "\u2606";
+          btn.classList.toggle("fav-active", isFav);
+        }
+      })
+      .catch(function () {
+        row.dataset.favorite = isFav ? "1" : "0";
+        btn.textContent = isFav ? "\u2605" : "\u2606";
+        btn.classList.toggle("fav-active", isFav);
+      });
+  });
+
   // ── Event delegation: one "input" listener for notes (debounced) ───
 
   tbody.addEventListener("input", function (e) {
@@ -368,6 +402,7 @@
   var filterSearch   = document.getElementById("filter-search");
   var showRecruiters = document.getElementById("show-recruiters");
   var showAllOffers  = document.getElementById("show-all-offers");
+  var showFavorites  = document.getElementById("show-favorites");
   var visibleCount   = document.getElementById("visible-count");
   var pageInfo       = document.getElementById("page-info");
   var pageNext       = document.getElementById("page-next");
@@ -383,6 +418,7 @@
     var search   = filterSearch   ? filterSearch.value.toLowerCase().trim()   : "";
     var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
     var showAll           = showAllOffers  ? showAllOffers.checked  : false;
+    var onlyFavorites     = showFavorites  ? showFavorites.checked  : false;
 
     filteredRows = [];
     for (var i = 0; i < allRows.length; i++) {
@@ -399,6 +435,7 @@
       if (show && company  && row.dataset.company.indexOf(company) === -1)            show = false;
       if (show && location && row.dataset.location.indexOf(location) === -1)         show = false;
       if (show && contract && row.dataset.contractType !== contract)                 show = false;
+      if (show && onlyFavorites && row.dataset.favorite !== "1")            show = false;
       if (show && search) {
         var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
         if (text.indexOf(search) === -1) show = false;
@@ -441,6 +478,7 @@
   if (filterSearch)   filterSearch.addEventListener("input",    applyFilters);
   if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
   if (showAllOffers)  showAllOffers.addEventListener("change",  applyFilters);
+  if (showFavorites)  showFavorites.addEventListener("change",  applyFilters);
 
   if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); saveState(); });
   if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); saveState(); });
@@ -457,6 +495,7 @@
       if (filterSearch)   filterSearch.value   = "";
       if (showRecruiters) showRecruiters.checked = false;
       if (showAllOffers)  showAllOffers.checked  = false;
+      if (showFavorites)  showFavorites.checked  = false;
       currentSort.col = null;
       currentSort.asc = true;
       sortHeaders.forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
@@ -533,6 +572,7 @@
         search:         filterSearch   ? filterSearch.value    : "",
         showRecruiters: showRecruiters ? showRecruiters.checked : false,
         showAll:        showAllOffers  ? showAllOffers.checked  : false,
+        showFavorites:  showFavorites  ? showFavorites.checked  : false,
         sortCol:        currentSort.col,
         sortAsc:        currentSort.asc,
         page:           currentPage,
@@ -551,6 +591,7 @@
     if (filterSearch   && state.search   !== undefined) filterSearch.value    = state.search;
     if (showRecruiters && state.showRecruiters !== undefined) showRecruiters.checked = state.showRecruiters;
     if (showAllOffers  && state.showAll        !== undefined) showAllOffers.checked  = state.showAll;
+    if (showFavorites  && state.showFavorites  !== undefined) showFavorites.checked  = state.showFavorites;
     if (state.sortCol) {
       currentSort.col = state.sortCol;
       currentSort.asc = state.sortAsc !== false;
@@ -764,6 +805,14 @@
     applyFilters();
   }
   applyLang(currentLang);
+
+  // Initialize favorite star styles
+  allRows.forEach(function (row) {
+    if (row.dataset.favorite === "1") {
+      var favBtn = row.querySelector(".btn-fav");
+      if (favBtn) favBtn.classList.add("fav-active");
+    }
+  });
 
   // Auto-resume polling if a matching job is already running (e.g. page refresh)
   if (hasCv) {

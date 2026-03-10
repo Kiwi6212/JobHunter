@@ -210,6 +210,13 @@ def _migrate_columns():
                     "ALTER TABLE user_offers ADD COLUMN cv_match_score FLOAT"
                 ))
             print("[MIGRATE] Done.")
+        if "is_favorite" not in uo_cols:
+            print("[MIGRATE] Adding is_favorite column to user_offers table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE user_offers ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
 
     # Fix company names that are actually descriptions (> 50 chars of prose)
     with engine.begin() as conn:

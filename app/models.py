@@ -183,6 +183,9 @@ class UserOffer(Base):
     # Per-user CV match score (replaces Offer.cv_match_score for DB users)
     cv_match_score = Column(Float, nullable=True, default=None)
 
+    # Favorites
+    is_favorite = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 

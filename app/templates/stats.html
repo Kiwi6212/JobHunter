@@ -10,6 +10,52 @@
     color: var(--text-primary);
 }
 
+/* KPI cards row */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+}
+.kpi-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 1.4rem 1.2rem;
+    text-align: center;
+    border-top: 3px solid var(--primary-color);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+[data-theme="dark"] .kpi-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.kpi-card--response   { border-top-color: #10b981; }
+.kpi-card--score      { border-top-color: #8b5cf6; }
+.kpi-card--tracked    { border-top-color: #2563eb; }
+.kpi-card--high       { border-top-color: #f59e0b; }
+.kpi-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+.kpi-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 0.3rem;
+}
+.kpi-card--response .kpi-value { color: #10b981; }
+.kpi-card--score .kpi-value    { color: #8b5cf6; }
+.kpi-card--tracked .kpi-value  { color: #2563eb; }
+.kpi-card--high .kpi-value     { color: #f59e0b; }
+.kpi-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
 .charts-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -57,14 +103,34 @@
 <div class="stats-page">
     <h2 data-i18n="page_title">Statistiques de candidature</h2>
 
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-card--response">
+            <div class="kpi-icon">📊</div>
+            <div class="kpi-value">{{ stats.response_rate }}%</div>
+            <div class="kpi-label" data-i18n="kpi_response">Taux de réponse</div>
+        </div>
+        <div class="kpi-card kpi-card--score">
+            <div class="kpi-icon">🎯</div>
+            <div class="kpi-value">{{ stats.avg_cv_score }}%</div>
+            <div class="kpi-label" data-i18n="kpi_avg_score">Score moyen Match IA</div>
+        </div>
+        <div class="kpi-card kpi-card--tracked">
+            <div class="kpi-icon">📋</div>
+            <div class="kpi-value">{{ stats.tracked }}</div>
+            <div class="kpi-label" data-i18n="kpi_tracked">Offres suivies</div>
+        </div>
+        <div class="kpi-card kpi-card--high">
+            <div class="kpi-icon">⭐</div>
+            <div class="kpi-value">{{ stats.high_score_count }}</div>
+            <div class="kpi-label" data-i18n="kpi_high_score">Score &gt; 70%</div>
+        </div>
+    </div>
+
     <div class="stats-grid">
         <div class="stat-card large">
             <span class="stat-number">{{ stats.total_offers }}</span>
             <span class="stat-label" data-i18n="stat_total">Total offres trouvées</span>
-        </div>
-        <div class="stat-card large">
-            <span class="stat-number">{{ stats.tracked }}</span>
-            <span class="stat-label" data-i18n="stat_tracked">Offres suivies</span>
         </div>
         <div class="stat-card large">
             <span class="stat-number">{{ stats.cv_sent }}</span>
@@ -77,38 +143,50 @@
     </div>
 
     <div class="charts-grid">
+        <!-- Chart 1: Status distribution (pie) -->
         <div class="chart-card">
-            <h3 data-i18n="chart_source">Offres par source</h3>
-            <div class="chart-wrapper">
-                <canvas id="chart-source"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <h3 data-i18n="chart_status">Statuts de candidature</h3>
+            <h3 data-i18n="chart_status">Répartition par statut</h3>
             <div class="chart-wrapper">
                 <canvas id="chart-status"></canvas>
             </div>
         </div>
+        <!-- Chart 2: Weekly timeline (line) -->
+        <div class="chart-card">
+            <h3 data-i18n="chart_weekly">Candidatures par semaine</h3>
+            <div class="chart-wrapper">
+                <canvas id="chart-weekly"></canvas>
+            </div>
+        </div>
+        <!-- Chart 3: Top 10 companies (horizontal bar) -->
         <div class="chart-card">
             <h3 data-i18n="chart_companies">Top 10 entreprises</h3>
             <div class="chart-wrapper tall">
                 <canvas id="chart-companies"></canvas>
             </div>
         </div>
+        <!-- Chart 4: Source distribution (pie) -->
         <div class="chart-card">
-            <h3 data-i18n="chart_scores">Répartition des scores de pertinence</h3>
+            <h3 data-i18n="chart_source">Répartition par source</h3>
             <div class="chart-wrapper">
-                <canvas id="chart-scores"></canvas>
+                <canvas id="chart-source"></canvas>
             </div>
         </div>
+        <!-- Chart 5: CV Match score histogram -->
         {% if has_cv %}
-        <div class="chart-card chart-card--full">
-            <h3 data-i18n="chart_cv_scores">Répartition des scores de matching CV</h3>
+        <div class="chart-card">
+            <h3 data-i18n="chart_cv_scores">Distribution scores Match IA</h3>
             <div class="chart-wrapper">
                 <canvas id="chart-cv-scores"></canvas>
             </div>
         </div>
         {% endif %}
+        <!-- Chart 6: Contract type distribution (pie) -->
+        <div class="chart-card">
+            <h3 data-i18n="chart_contracts">Répartition par type de contrat</h3>
+            <div class="chart-wrapper">
+                <canvas id="chart-contracts"></canvas>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -124,7 +202,6 @@
     var CHART_DATA = {{ chart_data | tojson }};
     var HAS_CV = {{ 'true' if has_cv else 'false' }};
 
-    // ── Color palette ───────────────────────────────────────────────
     var PALETTE = [
         "#2563eb", "#8b5cf6", "#10b981", "#f59e0b",
         "#ef4444", "#14b8a6", "#f97316", "#6366f1",
@@ -141,7 +218,15 @@
         "No response": "#94a3b8",
     };
 
-    // ── Read CSS variables for current theme ────────────────────────
+    var CONTRACT_COLORS = {
+        "CDI":        "#2563eb",
+        "CDD":        "#f59e0b",
+        "Alternance": "#10b981",
+        "Stage":      "#8b5cf6",
+        "Autre":      "#64748b",
+        "Non précisé":"#cbd5e1",
+    };
+
     function cssVar(name) {
         return getComputedStyle(document.documentElement)
             .getPropertyValue(name).trim();
@@ -156,7 +241,6 @@
         };
     }
 
-    // ── Chart registry (to destroy before rebuilding) ───────────────
     var charts = {};
 
     function destroyAll() {
@@ -164,7 +248,6 @@
         charts = {};
     }
 
-    // ── Build all charts ────────────────────────────────────────────
     function buildCharts() {
         destroyAll();
         var c = themeColors();
@@ -173,28 +256,99 @@
         Chart.defaults.borderColor = c.border;
         Chart.defaults.font        = { family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", size: 12 };
 
-        buildSourceChart(c);
         buildStatusChart(c);
+        buildWeeklyChart(c);
         buildCompaniesChart(c);
-        buildScoresChart(c);
+        buildSourceChart(c);
         if (HAS_CV) buildCvScoresChart(c);
+        buildContractsChart(c);
     }
 
-    // (a) Doughnut — offers per source
+    // (1) Doughnut — status distribution
+    function buildStatusChart(c) {
+        var allStatuses = ["New", "Applied", "Followed up", "Interview", "Accepted", "Rejected", "No response"];
+        var labels = [], data = [], colors = [];
+        allStatuses.forEach(function (s) {
+            var count = CHART_DATA.statuses[s] || 0;
+            if (count > 0) { labels.push(s); data.push(count); colors.push(STATUS_COLORS[s] || "#94a3b8"); }
+        });
+        if (data.length === 0) { labels = ["Aucune donnée"]; data = [1]; colors = [c.border]; }
+
+        charts.status = new Chart(document.getElementById("chart-status"), {
+            type: "doughnut",
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: c.card }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: "right", labels: { color: c.text, boxWidth: 14, padding: 12 } } },
+                cutout: "60%"
+            }
+        });
+    }
+
+    // (2) Line — weekly applications
+    function buildWeeklyChart(c) {
+        var labels = CHART_DATA.weekly_labels || [];
+        var values = CHART_DATA.weekly_values || [];
+        if (labels.length === 0) { labels = ["—"]; values = [0]; }
+
+        charts.weekly = new Chart(document.getElementById("chart-weekly"), {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "Candidatures",
+                    data: values,
+                    borderColor: "#2563eb",
+                    backgroundColor: "rgba(37,99,235,0.1)",
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: "#2563eb",
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: c.sub }, grid: { display: false }, border: { color: c.border } },
+                    y: { ticks: { color: c.sub, precision: 0 }, grid: { color: c.border }, border: { color: c.border }, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // (3) Horizontal bar — top 10 companies
+    function buildCompaniesChart(c) {
+        var companies = Object.keys(CHART_DATA.companies);
+        var counts    = companies.map(function (k) { return CHART_DATA.companies[k]; });
+        charts.companies = new Chart(document.getElementById("chart-companies"), {
+            type: "bar",
+            data: {
+                labels: companies,
+                datasets: [{ label: "Offres", data: counts, backgroundColor: "rgba(37,99,235,0.75)", borderColor: "#2563eb", borderWidth: 1, borderRadius: 6 }]
+            },
+            options: {
+                indexAxis: "y", responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: c.sub, precision: 0 }, grid: { color: c.border }, border: { color: c.border } },
+                    y: { ticks: { color: c.text }, grid: { display: false }, border: { color: c.border } }
+                }
+            }
+        });
+    }
+
+    // (4) Doughnut — source distribution
     function buildSourceChart(c) {
         var labels = Object.keys(CHART_DATA.sources);
         var data   = labels.map(function (k) { return CHART_DATA.sources[k]; });
         var colors = labels.map(function (_, i) { return PALETTE[i % PALETTE.length]; });
-
         charts.source = new Chart(document.getElementById("chart-source"), {
             type: "doughnut",
-            data: {
-                labels: labels,
-                datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: c.card }]
-            },
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: c.card }] },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
+                responsive: true, maintainAspectRatio: false,
                 plugins: {
                     legend: { position: "right", labels: { color: c.text, boxWidth: 14, padding: 12 } },
                     tooltip: { callbacks: {
@@ -210,213 +364,99 @@
         });
     }
 
-    // (b) Doughnut — application statuses
-    function buildStatusChart(c) {
-        var allStatuses = ["New", "Applied", "Followed up", "Interview", "Accepted", "Rejected", "No response"];
-        var labels = [], data = [], colors = [];
+    // (5) Bar — CV match score histogram (5 buckets)
+    function buildCvScoresChart(c) {
+        var canvas = document.getElementById("chart-cv-scores");
+        if (!canvas) return;
+        // Group 10 buckets into 5: 0-20, 20-40, 40-60, 60-80, 80-100
+        var raw = CHART_DATA.cv_scores || [];
+        var buckets = [
+            (raw[0] || 0) + (raw[1] || 0),
+            (raw[2] || 0) + (raw[3] || 0),
+            (raw[4] || 0) + (raw[5] || 0),
+            (raw[6] || 0) + (raw[7] || 0),
+            (raw[8] || 0) + (raw[9] || 0),
+        ];
+        var labels = ["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"];
+        var barColors = ["#94a3b8", "#60a5fa", "#fbbf24", "#34d399", "#10b981"];
 
-        allStatuses.forEach(function (s) {
-            var count = CHART_DATA.statuses[s] || 0;
-            if (count > 0) {
-                labels.push(s);
-                data.push(count);
-                colors.push(STATUS_COLORS[s] || "#94a3b8");
-            }
-        });
-
-        // If no tracking data yet, show placeholder
-        if (data.length === 0) {
-            labels = ["No data"];
-            data   = [1];
-            colors = [c.border];
-        }
-
-        charts.status = new Chart(document.getElementById("chart-status"), {
-            type: "doughnut",
+        charts.cvScores = new Chart(canvas, {
+            type: "bar",
             data: {
                 labels: labels,
-                datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: c.card }]
+                datasets: [{ label: "Offres", data: buckets, backgroundColor: barColors, borderWidth: 1, borderRadius: 6 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: "right", labels: { color: c.text, boxWidth: 14, padding: 12 } },
-                },
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: c.sub }, grid: { display: false }, border: { color: c.border } },
+                    y: { ticks: { color: c.sub, precision: 0 }, grid: { color: c.border }, border: { color: c.border } }
+                }
+            }
+        });
+    }
+
+    // (6) Doughnut — contract type distribution
+    function buildContractsChart(c) {
+        var labels = Object.keys(CHART_DATA.contracts || {});
+        var data   = labels.map(function (k) { return CHART_DATA.contracts[k]; });
+        var colors = labels.map(function (k) { return CONTRACT_COLORS[k] || "#94a3b8"; });
+        if (data.length === 0) { labels = ["Aucune donnée"]; data = [1]; colors = [c.border]; }
+
+        charts.contracts = new Chart(document.getElementById("chart-contracts"), {
+            type: "doughnut",
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: c.card }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: "right", labels: { color: c.text, boxWidth: 14, padding: 12 } } },
                 cutout: "60%"
             }
         });
     }
 
-    // (c) Horizontal bar — top 10 companies
-    function buildCompaniesChart(c) {
-        var companies = Object.keys(CHART_DATA.companies);
-        var counts    = companies.map(function (k) { return CHART_DATA.companies[k]; });
-
-        charts.companies = new Chart(document.getElementById("chart-companies"), {
-            type: "bar",
-            data: {
-                labels: companies,
-                datasets: [{
-                    label: "Offres",
-                    data: counts,
-                    backgroundColor: "rgba(37, 99, 235, 0.75)",
-                    borderColor: "#2563eb",
-                    borderWidth: 1,
-                    borderRadius: 6,
-                }]
-            },
-            options: {
-                indexAxis: "y",
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: {
-                        ticks: { color: c.sub, precision: 0 },
-                        grid:  { color: c.border },
-                        border: { color: c.border }
-                    },
-                    y: {
-                        ticks: { color: c.text },
-                        grid:  { display: false },
-                        border: { color: c.border }
-                    }
-                }
-            }
-        });
-    }
-
-    // (d) Bar — score distribution
-    function buildScoresChart(c) {
-        var bucketLabels = [
-            "0–10", "10–20", "20–30", "30–40", "40–50",
-            "50–60", "60–70", "70–80", "80–90", "90–100"
-        ];
-
-        // Color gradient: gray → blue as score increases
-        var barColors = bucketLabels.map(function (_, i) {
-            var opacity = 0.35 + (i / 9) * 0.65;
-            return "rgba(37, 99, 235, " + opacity.toFixed(2) + ")";
-        });
-
-        charts.scores = new Chart(document.getElementById("chart-scores"), {
-            type: "bar",
-            data: {
-                labels: bucketLabels,
-                datasets: [{
-                    label: "Offres",
-                    data: CHART_DATA.scores,
-                    backgroundColor: barColors,
-                    borderColor: "#2563eb",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: {
-                        ticks: { color: c.sub },
-                        grid:  { display: false },
-                        border: { color: c.border }
-                    },
-                    y: {
-                        ticks: { color: c.sub, precision: 0 },
-                        grid:  { color: c.border },
-                        border: { color: c.border }
-                    }
-                }
-            }
-        });
-    }
-
-    // (e) Bar — CV match score distribution (green gradient, conditional)
-    function buildCvScoresChart(c) {
-        var canvas = document.getElementById("chart-cv-scores");
-        if (!canvas) return;
-
-        var bucketLabels = [
-            "0–10", "10–20", "20–30", "30–40", "40–50",
-            "50–60", "60–70", "70–80", "80–90", "90–100"
-        ];
-
-        // Color gradient: gray → green as score increases
-        var barColors = bucketLabels.map(function (_, i) {
-            var opacity = 0.30 + (i / 9) * 0.70;
-            return "rgba(16, 185, 129, " + opacity.toFixed(2) + ")";
-        });
-
-        charts.cvScores = new Chart(canvas, {
-            type: "bar",
-            data: {
-                labels: bucketLabels,
-                datasets: [{
-                    label: "Offres",
-                    data: CHART_DATA.cv_scores,
-                    backgroundColor: barColors,
-                    borderColor: "#10b981",
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: {
-                        ticks: { color: c.sub },
-                        grid:  { display: false },
-                        border: { color: c.border }
-                    },
-                    y: {
-                        ticks: { color: c.sub, precision: 0 },
-                        grid:  { color: c.border },
-                        border: { color: c.border }
-                    }
-                }
-            }
-        });
-    }
-
-    // ── Build on load ───────────────────────────────────────────────
     buildCharts();
 
-    // ── Rebuild when dark/light theme is toggled ────────────────────
+    // Rebuild when theme toggles
     new MutationObserver(function (mutations) {
         mutations.forEach(function (m) {
             if (m.attributeName === "data-theme") buildCharts();
         });
     }).observe(document.documentElement, { attributes: true });
 
-    // ── Stats page translations ─────────────────────────────────────
+    // ── Translations ─────────────────────────────────────────────────
     var STATS_T = {
         fr: {
-            page_title:     "Statistiques de candidature",
-            stat_total:     "Total offres trouvées",
-            stat_tracked:   "Offres suivies",
-            stat_cv:        "CV envoyés",
-            stat_followup:  "Relances effectuées",
-            chart_source:   "Offres par source",
-            chart_status:   "Statuts de candidature",
-            chart_companies:"Top 10 entreprises",
-            chart_scores:    "Répartition des scores de pertinence",
-            chart_cv_scores: "Répartition des scores de matching CV",
+            page_title:      "Statistiques de candidature",
+            stat_total:      "Total offres trouvées",
+            stat_cv:         "CV envoyés",
+            stat_followup:   "Relances effectuées",
+            kpi_response:    "Taux de réponse",
+            kpi_avg_score:   "Score moyen Match IA",
+            kpi_tracked:     "Offres suivies",
+            kpi_high_score:  "Score > 70%",
+            chart_source:    "Répartition par source",
+            chart_status:    "Répartition par statut",
+            chart_companies: "Top 10 entreprises",
+            chart_weekly:    "Candidatures par semaine",
+            chart_cv_scores: "Distribution scores Match IA",
+            chart_contracts: "Répartition par type de contrat",
         },
         en: {
-            page_title:     "Application Statistics",
-            stat_total:     "Total Offers Found",
-            stat_tracked:   "Offers Tracked",
-            stat_cv:        "CVs Sent",
-            stat_followup:  "Follow-ups Done",
-            chart_source:   "Offers by source",
-            chart_status:   "Application statuses",
-            chart_companies:"Top 10 companies",
-            chart_scores:    "Relevance score distribution",
-            chart_cv_scores: "CV matching score distribution",
+            page_title:      "Application Statistics",
+            stat_total:      "Total Offers Found",
+            stat_cv:         "CVs Sent",
+            stat_followup:   "Follow-ups Done",
+            kpi_response:    "Response rate",
+            kpi_avg_score:   "Avg AI Match score",
+            kpi_tracked:     "Offers tracked",
+            kpi_high_score:  "Score > 70%",
+            chart_source:    "Distribution by source",
+            chart_status:    "Distribution by status",
+            chart_companies: "Top 10 companies",
+            chart_weekly:    "Applications per week",
+            chart_cv_scores: "AI Match score distribution",
+            chart_contracts: "Distribution by contract type",
         }
     };
 
@@ -429,10 +469,7 @@
         }
     }
 
-    // Apply saved language on load
     applyStatsLang(localStorage.getItem("jh-lang") || "fr");
-
-    // React to language toggle from navbar
     document.addEventListener("jh-lang-change", function (e) {
         applyStatsLang(e.detail.lang);
     });

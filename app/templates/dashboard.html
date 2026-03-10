@@ -103,6 +103,10 @@
             <input type="checkbox" id="show-recruiters">
             <span data-i18n="filter_recruiters">Recruteurs potentiels</span>
         </label>
+        <label class="filter-toggle">
+            <input type="checkbox" id="show-favorites">
+            <span data-i18n="filter_favorites">Favoris uniquement</span>
+        </label>
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">
@@ -185,8 +189,10 @@
                 data-offer-type="{{ offer.offer_type or 'job' }}"
                 data-target="{{ '1' if offer.id in target_ids else '0' }}"
                 data-domain-id="{{ offer.domain_id or '' }}"
-                data-contract-type="{% set ct = (offer.contract_type or '')|lower %}{% if 'cdi' in ct %}CDI{% elif 'cdd' in ct %}CDD{% elif 'alternance' in ct or 'apprenti' in ct %}Alternance{% elif 'stage' in ct %}Stage{% elif ct %}Autre{% else %}Autre{% endif %}">
+                data-contract-type="{% set ct = (offer.contract_type or '')|lower %}{% if 'cdi' in ct %}CDI{% elif 'cdd' in ct %}CDD{% elif 'alternance' in ct or 'apprenti' in ct %}Alternance{% elif 'stage' in ct %}Stage{% elif ct %}Autre{% else %}Autre{% endif %}"
+                data-favorite="{{ '1' if (uo and uo.__class__.__name__ == 'UserOffer' and uo.is_favorite) else '0' }}">
                 <td class="col-title">
+                    {% if role != 'viewer' %}<button class="btn-fav" data-field="favorite" title="Favori">{{ '★' if (uo and uo.__class__.__name__ == 'UserOffer' and uo.is_favorite) else '☆' }}</button>{% endif %}
                     <a href="{{ url_for('main.offer_detail', offer_id=offer.id) }}" class="offer-title">{{ offer.title }}</a>{% if offer.found_date and offer.found_date >= cutoff_new %}<span class="badge-new">NEW</span>{% endif %}
                 </td>
                 <td class="col-company">{{ offer.company }}{% if offer.id in target_ids %}<span class="target-badge" title="Entreprise cible">⭐</span>{% endif %}</td>
