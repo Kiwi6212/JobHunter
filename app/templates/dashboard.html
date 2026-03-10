@@ -6,23 +6,28 @@
 <div class="dashboard-header">
     <h2 data-i18n="dashboard_title">Tableau de bord des offres</h2>
     <div class="stats-summary">
-        <div class="stat-card">
+        <div class="stat-card stat-card--total">
+            <span class="stat-icon">📋</span>
             <span class="stat-number">{{ stats.total_offers }}</span>
             <span class="stat-label" data-i18n="stat_total">Total offres</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--cv">
+            <span class="stat-icon">📨</span>
             <span class="stat-number" id="stat-cv-sent">{{ stats.cv_sent }}</span>
             <span class="stat-label" data-i18n="stat_cv">CV envoyés</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--followup">
+            <span class="stat-icon">🔄</span>
             <span class="stat-number" id="stat-follow-ups">{{ stats.follow_ups }}</span>
             <span class="stat-label" data-i18n="stat_followup">Relances</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--interviews">
+            <span class="stat-icon">🤝</span>
             <span class="stat-number" id="stat-interviews">{{ stats.interviews }}</span>
             <span class="stat-label" data-i18n="stat_interviews">Entretiens</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card--targets">
+            <span class="stat-icon">🎯</span>
             <span class="stat-number">{{ target_ids|length }}</span>
             <span class="stat-label" data-i18n="stat_targets">Offres cibles</span>
         </div>
@@ -101,23 +106,35 @@
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">
-        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">Réinitialiser</button>
+        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">🔄 Réinitialiser</button>
         {% if role != 'viewer' %}
-        <button class="btn btn-primary btn-small" id="export-csv" data-i18n="btn_export_csv">Exporter CSV</button>
-        <a href="{{ url_for('main.documents') }}" class="btn btn-secondary btn-small">Gérer mes documents</a>
+        <button class="btn btn-accent btn-small" id="export-csv" data-i18n="btn_export_csv">📥 Exporter CSV</button>
+        <a href="{{ url_for('main.documents') }}" class="btn btn-secondary btn-small">📄 Gérer mes documents</a>
         {% if has_cv %}
-        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">Recalculer</button>
-        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">Match IA</button>
+        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">🔃 Recalculer</button>
+        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">🤖 Match IA</button>
         {% else %}
         <span class="cv-no-hint">Importez votre CV dans <a href="{{ url_for('main.documents') }}">Documents</a> pour activer le matching</span>
         {% endif %}
         {% endif %}
         <span id="cv-upload-status" class="cv-status-msg"></span>
         {% if user_quota %}
-        <span class="quota-badge" title="Quotas hebdomadaires (réinitialisés chaque lundi)">
-            Match IA : {{ user_quota.matches_limit - user_quota.matches_used }}/{{ user_quota.matches_limit }} &nbsp;|&nbsp;
-            Lettres : {{ user_quota.letters_limit - user_quota.letters_used }}/{{ user_quota.letters_limit }}
-        </span>
+        <div class="quota-container" title="Quotas hebdomadaires (réinitialisés chaque lundi)">
+            <div class="quota-item">
+                <span class="quota-label">🤖 Match IA</span>
+                <div class="quota-bar-track">
+                    <div class="quota-bar-fill quota-bar-fill--ia" style="width: {{ ((user_quota.matches_limit - user_quota.matches_used) / user_quota.matches_limit * 100) if user_quota.matches_limit else 0 }}%"></div>
+                </div>
+                <span class="quota-count">{{ user_quota.matches_limit - user_quota.matches_used }}/{{ user_quota.matches_limit }}</span>
+            </div>
+            <div class="quota-item">
+                <span class="quota-label">✉️ Lettres</span>
+                <div class="quota-bar-track">
+                    <div class="quota-bar-fill quota-bar-fill--letters" style="width: {{ ((user_quota.letters_limit - user_quota.letters_used) / user_quota.letters_limit * 100) if user_quota.letters_limit else 0 }}%"></div>
+                </div>
+                <span class="quota-count">{{ user_quota.letters_limit - user_quota.letters_used }}/{{ user_quota.letters_limit }}</span>
+            </div>
+        </div>
         {% endif %}
     </div>
     <!-- Progress bar (visible only during matching) -->
