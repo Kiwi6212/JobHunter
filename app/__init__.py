@@ -162,12 +162,20 @@ def create_app(config_class=Config):
         except Exception:
             pass  # DB not initialised yet (first run) — let init_db() handle it
 
-    # ── 500 / unhandled-exception monitoring ─────────────────────────────────
+    # ── Custom error pages ──────────────────────────────────────────────────
     from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(404)
+    def page_not_found(exc):
+        from flask import render_template as _rt
+        return _rt("404.html"), 404
+
+    # ── 500 / unhandled-exception monitoring ─────────────────────────────────
 
     @app.errorhandler(Exception)
     def handle_unhandled_exception(exc):
-        # Let Werkzeug handle normal HTTP errors (404, 403, 400, …) unchanged
+        # Let Werkzeug handle normal HTTP errors (403, 400, …) unchanged
+        # (404 is handled above by its own handler)
         if isinstance(exc, HTTPException):
             return exc
 
