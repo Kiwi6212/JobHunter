@@ -1369,6 +1369,50 @@ def toggle_favorite(offer_id):
         db.close()
 
 
+@bp.route('/api/tracking/<int:offer_id>/apply', methods=['POST'])
+@login_required
+def quick_apply(offer_id):
+    """Mark an offer as applied: set status=Applied, cv_sent=True, date_sent=now."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return jsonify({'error': 'Non disponible'}), 400
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    db = SessionLocal()
+    try:
+        uo = db.query(UserOffer).filter(
+            UserOffer.user_id == user_id,
+            UserOffer.offer_id == offer_id,
+        ).first()
+        if not uo:
+            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+            if not offer_exists:
+                return jsonify({'error': 'Offer not found'}), 404
+            uo = UserOffer(user_id=user_id, offer_id=offer_id, status='Applied')
+            db.add(uo)
+        else:
+            uo.status = 'Applied'
+        uo.cv_sent = True
+        if not uo.date_sent:
+            uo.date_sent = datetime.utcnow()
+        uo.updated_at = datetime.utcnow()
+        db.commit()
+        return jsonify({
+            'ok': True,
+            'tracking': {
+                'status': uo.status,
+                'cv_sent': uo.cv_sent,
+                'date_sent': uo.date_sent.strftime('%Y-%m-%d') if uo.date_sent else None,
+            }
+        })
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
 @bp.route('/offer/<int:offer_id>')
 @login_required
 def offer_detail(offer_id):

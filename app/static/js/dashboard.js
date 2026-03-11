@@ -340,6 +340,59 @@
       });
   });
 
+  // ── Event delegation: quick apply button ─────────────────────────────
+
+  tbody.addEventListener("click", function (e) {
+    var btn = e.target.closest(".btn-apply");
+    if (!btn || btn.disabled) return;
+    var row = btn.closest(".offer-row");
+    if (!row) return;
+    var offerId = row.dataset.offerId;
+    var url = btn.getAttribute("data-url");
+
+    // Open the offer URL in a new tab
+    window.open(url, "_blank", "noopener,noreferrer");
+
+    // Mark as applied
+    btn.disabled = true;
+    btn.innerHTML = "\u2026"; // ellipsis while loading
+
+    fetch("/api/tracking/" + offerId + "/apply", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.ok) {
+          btn.innerHTML = "\u2713"; // checkmark
+          btn.classList.add("btn-applied");
+          row.classList.add("row-applied");
+          // Update the row's status + cv_sent
+          row.dataset.status = "Applied";
+          var statusSel = row.querySelector('[data-field="status"]');
+          if (statusSel) {
+            statusSel.value = "Applied";
+            statusSel.className = "status-select status-color-applied";
+          }
+          var cvCb = row.querySelector('[data-field="cv_sent"]');
+          if (cvCb && !cvCb.checked) {
+            cvCb.checked = true;
+            counts.cv++;
+            renderStats();
+          }
+          // Update date label
+          if (res.tracking && res.tracking.date_sent) {
+            var dateLabel = cvCb ? cvCb.closest("td").querySelector(".date-label") : null;
+            if (dateLabel) dateLabel.textContent = formatShort(res.tracking.date_sent);
+          }
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = "Postuler \u2197";
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.innerHTML = "Postuler \u2197";
+      });
+  });
+
   // ── Event delegation: notes (debounced AJAX) ───────────────────────
 
   tbody.addEventListener("input", function (e) {

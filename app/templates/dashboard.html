@@ -260,10 +260,15 @@
                     {% endif %}
                 </td>
                 {% endif %}
-                <td>
+                <td class="col-actions">
                     {% if role != 'viewer' %}
                     <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-small btn-view"
                        data-i18n="btn_view" title="View original offer">Voir</a>
+                    <button type="button" class="btn btn-small btn-apply{% if uo and uo.cv_sent %} btn-applied{% endif %}"
+                            data-url="{{ offer.url }}" data-offer-id="{{ offer.id }}"
+                            {% if uo and uo.cv_sent %}disabled{% endif %}>
+                        {{ '&#10003;' if uo and uo.cv_sent else 'Postuler &#8599;' }}
+                    </button>
                     {% else %}
                     <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>
                     {% endif %}

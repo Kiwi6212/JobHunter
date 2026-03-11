@@ -144,7 +144,15 @@
 
         <!-- ── Actions ──────────────────────────────────────────── -->
         <div class="offer-actions">
-            <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Voir l'offre originale</a>
+            {% if role != 'viewer' %}
+            {% set already_applied = user_offer and user_offer.cv_sent %}
+            <button type="button" id="btn-quick-apply" class="btn btn-primary{% if already_applied %} btn-applied{% endif %}"
+                    data-url="{{ offer.url }}" data-offer-id="{{ offer.id }}"
+                    {% if already_applied %}disabled{% endif %}>
+                {{ '&#10003; Postul&eacute;' if already_applied else 'Postuler &#8599;' }}
+            </button>
+            {% endif %}
+            <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Voir l'offre originale</a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary" id="btn-back-dashboard">Retour au dashboard</a>
         </div>
     </div>
@@ -163,6 +171,35 @@
         if (saved) {
             btnBack.href = btnBack.href.split("?")[0] + saved;
         }
+    }
+
+    // ── Quick apply ─────────────────────────────────────────────────────
+    var btnApply = document.getElementById("btn-quick-apply");
+    if (btnApply) {
+        btnApply.addEventListener("click", function () {
+            var url = btnApply.getAttribute("data-url");
+            var offerId = btnApply.getAttribute("data-offer-id");
+            // Open the offer URL in a new tab
+            window.open(url, "_blank", "noopener,noreferrer");
+            // Mark as applied in the background
+            btnApply.disabled = true;
+            fetch("/api/tracking/" + offerId + "/apply", { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        btnApply.innerHTML = "&#10003; Postul\u00e9";
+                        btnApply.classList.add("btn-applied");
+                        // Update the tracking form on this page
+                        var sel = document.getElementById("t-status");
+                        if (sel) { sel.value = "Applied"; sel.className = "status-select status-color-applied"; }
+                        var cb = document.getElementById("t-cv-sent");
+                        if (cb) cb.checked = true;
+                    } else {
+                        btnApply.disabled = false;
+                    }
+                })
+                .catch(function () { btnApply.disabled = false; });
+        });
     }
 
     // ── Tracking save ──────────────────────────────────────────────────

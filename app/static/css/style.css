@@ -1010,6 +1010,37 @@ body {
     background-color: #1d4ed8;
 }
 
+/* Quick apply button */
+.btn-apply {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-apply:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-apply.btn-applied,
+.btn-applied {
+    background-color: #6b7280;
+    color: #d1d5db;
+    cursor: default;
+    pointer-events: none;
+}
+
+.col-actions {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.row-applied {
+    opacity: 0.85;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
