@@ -1413,6 +1413,152 @@ def quick_apply(offer_id):
         db.close()
 
 
+@bp.route('/api/export/pdf')
+@login_required
+def export_pdf():
+    """Generate a PDF with the user's top 50 offers sorted by Match IA score."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from sqlalchemy import func
+
+    db = SessionLocal()
+    user_id = session.get("user_id")
+    domain_id = session.get("domain_id")
+    role = get_current_role()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({"ok": False, "error": "Utilisateur introuvable"}), 404
+
+        # Build query — admin sees all, user sees their domain
+        query = db.query(Offer)
+        if role != "admin" and domain_id:
+            query = query.filter(Offer.domain_id == domain_id)
+        query = query.filter(Offer.is_active.is_(True))
+
+        # Join UserOffer for cv_match_score
+        query = query.outerjoin(
+            UserOffer,
+            (UserOffer.offer_id == Offer.id) & (UserOffer.user_id == user_id),
+        )
+
+        match_score = func.coalesce(UserOffer.cv_match_score, Offer.cv_match_score)
+        query = query.add_columns(match_score.label("match_score"))
+        query = query.order_by(match_score.desc().nullslast())
+        query = query.limit(50)
+
+        results = query.all()
+
+        # Build PDF
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                                leftMargin=15 * mm, rightMargin=15 * mm,
+                                topMargin=15 * mm, bottomMargin=15 * mm)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Header
+        header_style = ParagraphStyle("Header", parent=styles["Heading1"],
+                                      fontSize=18, alignment=TA_CENTER,
+                                      spaceAfter=4)
+        sub_style = ParagraphStyle("Sub", parent=styles["Normal"],
+                                   fontSize=10, alignment=TA_CENTER,
+                                   textColor=colors.HexColor("#475569"),
+                                   spaceAfter=12)
+
+        domain_name = ""
+        if user.domain_id:
+            d = db.query(Domain).filter(Domain.id == user.domain_id).first()
+            domain_name = d.name if d else ""
+
+        elements.append(Paragraph("&#127919; MyJobHunter — Export PDF", header_style))
+        meta_parts = [datetime.utcnow().strftime("%d/%m/%Y"), user.username]
+        if domain_name:
+            meta_parts.append(domain_name)
+        elements.append(Paragraph(" | ".join(meta_parts), sub_style))
+        elements.append(Spacer(1, 6))
+
+        # Table data
+        col_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8,
+                                   leading=10)
+        title_style = ParagraphStyle("TitleCell", parent=col_style, fontName="Helvetica-Bold")
+
+        header_row = ["#", "Titre", "Entreprise", "Lieu", "Contrat", "Score IA", "Source"]
+        data = [header_row]
+
+        for idx, row in enumerate(results, 1):
+            offer = row[0] if hasattr(row, '__getitem__') else row.Offer if hasattr(row, 'Offer') else row
+            score = row[-1] if hasattr(row, '__getitem__') else getattr(row, 'match_score', None)
+            if hasattr(offer, 'title'):
+                o = offer
+            else:
+                o = row[0]
+                score = row[1] if len(row) > 1 else None
+
+            title_text = (o.title or "Sans titre")[:60]
+            company_text = (o.company or "—")[:30]
+            location_text = (o.location or "—")[:25]
+            contract_text = (o.contract_type or "—")[:15]
+            score_text = f"{score:.0f}%" if score is not None else "—"
+            source_text = (o.source or "—")[:15]
+
+            data.append([
+                str(idx),
+                Paragraph(title_text, col_style),
+                Paragraph(company_text, col_style),
+                Paragraph(location_text, col_style),
+                contract_text,
+                score_text,
+                source_text,
+            ])
+
+        col_widths = [20, 220, 100, 80, 60, 50, 60]
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("TOPPADDING", (0, 1), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (5, 0), (5, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        elements.append(table)
+
+        # Footer
+        elements.append(Spacer(1, 16))
+        footer_style = ParagraphStyle("Footer", parent=styles["Normal"],
+                                      fontSize=8, alignment=TA_CENTER,
+                                      textColor=colors.HexColor("#94a3b8"))
+        elements.append(Paragraph(
+            "G&eacute;n&eacute;r&eacute; par MyJobHunter — https://myjobhunter.fr",
+            footer_style
+        ))
+
+        doc.build(elements)
+        buf.seek(0)
+
+        filename = f"jobhunter-{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+        return send_file(
+            buf,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename,
+        )
+    finally:
+        db.close()
+
+
 @bp.route('/offer/<int:offer_id>')
 @login_required
 def offer_detail(offer_id):

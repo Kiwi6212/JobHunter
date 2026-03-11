@@ -23,7 +23,12 @@
                 <h1>JobHunter</h1>
                 <p class="tagline">Automated Job Search Assistant</p>
             </div>
-            <ul class="nav-menu">
+            <button type="button" class="hamburger" id="hamburger-btn" aria-label="Menu">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+            <ul class="nav-menu" id="nav-menu">
                 <li><a href="{{ url_for('main.dashboard') }}" class="nav-link" data-i18n="nav_dashboard">Dashboard</a></li>
                 <li><a href="{{ url_for('main.stats') }}" class="nav-link" data-i18n="nav_stats">Statistics</a></li>
                 <li><a href="{{ url_for('main.documents') }}" class="nav-link">Documents</a></li>
@@ -33,6 +38,15 @@
                 {% if session.role and session.role != 'viewer' %}
                 <li><a href="{{ url_for('main.account') }}" class="nav-link">Mon compte</a></li>
                 <li><a href="{{ url_for('main.account_profile') }}" class="nav-link">Profil</a></li>
+                {% endif %}
+                <li><a href="/faq" class="nav-link nav-link--mobile-only">FAQ</a></li>
+                {% if session.username %}
+                <li class="nav-mobile-logout">
+                    <form method="POST" action="{{ url_for('main.logout') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="nav-link" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0;">Déconnexion</button>
+                    </form>
+                </li>
                 {% endif %}
             </ul>
             <div class="nav-controls">
@@ -132,6 +146,20 @@
             }
             return _origFetch.call(this, url, opts);
         };
+    })();
+    </script>
+
+    <script nonce="{{ csp_nonce }}">
+    // ── Hamburger menu toggle ──────────────────────────────
+    (function () {
+        var btn = document.getElementById("hamburger-btn");
+        var menu = document.getElementById("nav-menu");
+        if (btn && menu) {
+            btn.addEventListener("click", function () {
+                menu.classList.toggle("nav-menu--open");
+                btn.classList.toggle("hamburger--open");
+            });
+        }
     })();
     </script>
 

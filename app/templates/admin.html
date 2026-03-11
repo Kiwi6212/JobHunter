@@ -447,5 +447,14 @@ setInterval(loadStats, 30000);
 #admin-users-table th {
     white-space: nowrap;
 }
+@media (max-width: 768px) {
+    .stats-kpis { grid-template-columns: repeat(2, 1fr); }
+    .stat-kpi-val { font-size: 1.4rem; }
+    #admin-users-table th, #admin-users-table td { font-size: 0.8rem; padding: 0.35rem 0.3rem; }
+}
+@media (max-width: 480px) {
+    .stats-kpis { grid-template-columns: 1fr; }
+    .admin-stats-section { padding: 1rem; }
+}
 </style>
 {% endblock %}

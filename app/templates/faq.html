@@ -169,10 +169,21 @@
         .footer-link:hover { color: var(--primary); }
 
         /* ── Responsive ── */
-        @media (max-width: 640px) {
-            .hero { padding: 3rem 0 3.5rem; }
-            .step { flex-direction: column; gap: 0.8rem; padding: 1.2rem 1.3rem; }
-            .section { padding: 3rem 0; }
+        @media (max-width: 768px) {
+            .nav-actions .btn { padding: 0.5rem 1rem; font-size: 0.82rem; }
+            .container { padding: 0 1rem; }
+        }
+        @media (max-width: 480px) {
+            .hero { padding: 2.5rem 0 3rem; }
+            .hero h1 { font-size: 1.5rem; }
+            .hero p { font-size: 0.9rem; }
+            .step { flex-direction: column; gap: 0.8rem; padding: 1rem 1rem; }
+            .step-num { width: 2.2rem; height: 2.2rem; font-size: 0.95rem; }
+            .section { padding: 2.5rem 0; }
+            .faq-question { padding: 0.85rem 1rem; font-size: 0.88rem; }
+            .faq-answer p { font-size: 0.85rem; }
+            .nav-actions { gap: 0.4rem; }
+            .nav-actions .btn { padding: 0.45rem 0.8rem; font-size: 0.78rem; }
         }
     </style>
 </head>
