@@ -157,6 +157,9 @@ class User(Base):
     # Onboarding
     has_seen_guide = Column(Boolean, nullable=False, default=False)
 
+    # Email preferences
+    email_weekly = Column(Boolean, nullable=False, default=True)
+
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 

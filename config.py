@@ -77,6 +77,9 @@ class Config:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", "noreply@myjobhunter.fr")
 
+    # Public base URL (used for email links)
+    BASE_URL = os.getenv("BASE_URL", "https://myjobhunter.fr")
+
     # Scheduler
     SCHEDULER_API_ENABLED = True
     SCRAPER_SCHEDULE_HOUR = int(os.getenv("SCRAPER_SCHEDULE_HOUR", "8"))

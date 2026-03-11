@@ -341,6 +341,17 @@ been inactive for more than 90 days (no login), along with all associated data
 0 4 1 * * cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/cleanup_inactive_users.py >> /home/ubuntu/logs/cleanup_users.log 2>&1
 ```
 
+### Weekly email digest (cron)
+
+`scripts/weekly_email.py` sends a weekly email digest to subscribed users
+with the top 10 job offers (Match IA > 50%) from the last 7 days. Users
+can unsubscribe via a one-click link in the email or from their profile.
+Add this to your crontab to run every Monday at 09:00 UTC:
+
+```cron
+0 9 * * 1 cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/weekly_email.py >> /home/ubuntu/logs/weekly_email.log 2>&1
+```
+
 You can override the backup directory via the `BACKUP_DIR` environment variable:
 
 ```bash

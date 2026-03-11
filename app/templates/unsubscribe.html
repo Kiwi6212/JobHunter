@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Désabonnement — JobHunter{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:3rem auto;text-align:center;">
+    {% if success %}
+    <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;
+                padding:2.5rem 2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+        <div style="font-size:2.5rem;margin-bottom:1rem;">&#9989;</div>
+        <h2 style="margin:0 0 0.75rem;font-size:1.25rem;color:var(--text-primary);">
+            Désabonnement confirmé
+        </h2>
+        <p style="color:var(--text-secondary);font-size:.95rem;line-height:1.6;margin:0 0 1.5rem;">
+            <strong>{{ username }}</strong>, vous ne recevrez plus d'emails hebdomadaires
+            de MyJobHunter.
+        </p>
+        <p style="color:var(--text-secondary);font-size:.88rem;line-height:1.5;margin:0;">
+            Vous pouvez vous réabonner à tout moment depuis
+            <a href="{{ url_for('main.account_profile') }}" style="color:var(--primary-color);">votre profil</a>.
+        </p>
+    </div>
+    {% else %}
+    <div style="background:var(--card-bg);border:1px solid #fca5a5;border-radius:12px;
+                padding:2.5rem 2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+        <div style="font-size:2.5rem;margin-bottom:1rem;">&#10060;</div>
+        <h2 style="margin:0 0 0.75rem;font-size:1.25rem;color:#dc2626;">
+            Erreur
+        </h2>
+        <p style="color:var(--text-secondary);font-size:.95rem;line-height:1.6;margin:0;">
+            {{ error }}
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

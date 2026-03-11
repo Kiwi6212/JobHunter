@@ -274,7 +274,26 @@
         </form>
     </div>
 
-    <!-- ── 4. Personal data export ─────────────────────────── -->
+    <!-- ── 4. Email preferences ─────────────────────────────── -->
+    {% if user.email %}
+    <div class="account-section">
+        <h3>Notifications email</h3>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:.95rem;color:var(--text-primary);">
+                <input type="checkbox" id="toggle-weekly"
+                       {{ 'checked' if user.email_weekly }}
+                       style="width:18px;height:18px;cursor:pointer;">
+                Recevoir un digest hebdomadaire des meilleures offres
+            </label>
+        </div>
+        <p style="font-size:.82rem;color:var(--text-secondary);margin-top:0.5rem;">
+            Chaque lundi, recevez par email vos offres avec le meilleur score Match IA.
+        </p>
+        <span id="weekly-save-msg" style="font-size:.85rem;"></span>
+    </div>
+    {% endif %}
+
+    <!-- ── 5. Personal data export (GDPR) ───────────────────── -->
     <div class="account-section">
         <h3>Mes données personnelles</h3>
         <p style="font-size:.88rem;color:var(--text-secondary);margin-bottom:1rem;">
@@ -287,7 +306,7 @@
         </form>
     </div>
 
-    <!-- ── 5. Delete account ────────────────────────────────── -->
+    <!-- ── 6. Delete account ────────────────────────────────── -->
     <div class="delete-section">
         <h3>Supprimer mon compte</h3>
         <p>
@@ -342,6 +361,32 @@ if (domainSelect) {
     domainSelect.addEventListener('change', function () {
         var warn = document.getElementById('domain-warning');
         if (warn) warn.classList.remove('hidden');
+    });
+}
+
+// Weekly email toggle
+var toggleWeekly = document.getElementById('toggle-weekly');
+if (toggleWeekly) {
+    toggleWeekly.addEventListener('change', function () {
+        var msg = document.getElementById('weekly-save-msg');
+        fetch('/api/account/toggle-weekly', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res.ok) {
+                    msg.textContent = res.email_weekly ? 'Abonnement activé' : 'Désabonné';
+                    msg.style.color = res.email_weekly ? '#15803d' : '#94a3b8';
+                } else {
+                    msg.textContent = 'Erreur';
+                    msg.style.color = '#dc2626';
+                    toggleWeekly.checked = !toggleWeekly.checked;
+                }
+                setTimeout(function () { msg.textContent = ''; }, 3000);
+            })
+            .catch(function () {
+                msg.textContent = 'Erreur réseau';
+                msg.style.color = '#dc2626';
+                toggleWeekly.checked = !toggleWeekly.checked;
+            });
     });
 }
 </script>

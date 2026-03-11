@@ -2289,6 +2289,61 @@ def guide_seen():
         db.close()
 
 
+@bp.route('/api/account/toggle-weekly', methods=['POST'])
+@login_required
+def toggle_weekly_email():
+    """Toggle weekly email subscription on/off for the current user."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Non autorisé'}), 403
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'ok': False, 'error': 'Utilisateur introuvable'}), 404
+        user.email_weekly = not user.email_weekly
+        db.commit()
+        return jsonify({'ok': True, 'email_weekly': user.email_weekly})
+    finally:
+        db.close()
+
+
+@bp.route('/api/account/unsubscribe-weekly')
+def unsubscribe_weekly():
+    """One-click unsubscribe from weekly emails via signed token (no login required)."""
+    import hashlib
+    import hmac as _hmac
+
+    uid = request.args.get('user_id', type=int)
+    token = request.args.get('token', '')
+    if not uid or not token:
+        return render_template('unsubscribe.html', success=False,
+                               error="Lien invalide."), 400
+
+    # Verify HMAC token
+    from config import Config as _Cfg
+    secret = _Cfg.SECRET_KEY or "fallback-secret"
+    expected = _hmac.new(secret.encode(),
+                         f"unsubscribe-weekly:{uid}".encode(),
+                         hashlib.sha256).hexdigest()
+    if not _hmac.compare_digest(token, expected):
+        return render_template('unsubscribe.html', success=False,
+                               error="Lien invalide ou expiré."), 403
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == uid).first()
+        if not user:
+            return render_template('unsubscribe.html', success=False,
+                                   error="Utilisateur introuvable."), 404
+        user.email_weekly = False
+        db.commit()
+        return render_template('unsubscribe.html', success=True,
+                               username=user.username)
+    finally:
+        db.close()
+
+
 # ── Document management ───────────────────────────────────────────────────────
 
 @bp.route('/documents')
