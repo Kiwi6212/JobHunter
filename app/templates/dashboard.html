@@ -34,89 +34,96 @@
     </div>
 </div>
 
-{% if offers %}
-<!-- Filters bar -->
+{% if stats.total_offers > 0 %}
+<!-- Filters bar (GET form — no CSRF needed) -->
+<form id="filters-form" method="GET" action="{{ url_for('main.dashboard') }}">
+<input type="hidden" name="sort" value="{{ filters.sort }}" id="sort-input">
+<input type="hidden" name="order" value="{{ filters.order }}" id="order-input">
 <div class="filters-bar">
     <!-- Row 1: filters + toggles -->
     <div class="filters-row">
         <div class="filter-group">
             <label for="filter-status" data-i18n="filter_status">Statut</label>
-            <select id="filter-status">
+            <select id="filter-status" name="status">
                 <option value="" data-i18n="filter_all">Tous</option>
                 {% for s in statuses %}
-                <option value="{{ s }}">{{ s }}</option>
+                <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="filter-group">
             <label for="filter-source" data-i18n="filter_source">Source</label>
-            <select id="filter-source">
+            <select id="filter-source" name="source">
                 <option value="" data-i18n="filter_all">Tous</option>
                 {% for src in sources %}
-                <option value="{{ src }}">{{ src }}</option>
+                <option value="{{ src }}" {{ 'selected' if filters.source == src }}>{{ src }}</option>
                 {% endfor %}
             </select>
         </div>
         {% if admin_domains %}
         <div class="filter-group">
             <label for="filter-domain" data-i18n="filter_domain">Domaine</label>
-            <select id="filter-domain">
+            <select id="filter-domain" name="domain">
                 <option value="" data-i18n="filter_all">Tous</option>
                 {% for d in admin_domains %}
-                <option value="{{ d.id }}">{{ d.name }}</option>
+                <option value="{{ d.id }}" {{ 'selected' if filters.domain == d.id|string }}>{{ d.name }}</option>
                 {% endfor %}
             </select>
         </div>
         {% endif %}
         <div class="filter-group">
             <label for="filter-company" data-i18n="filter_company">Entreprise</label>
-            <input type="text" id="filter-company"
+            <input type="text" id="filter-company" name="company"
+                   value="{{ filters.company }}"
                    data-i18n-placeholder="filter_company_ph"
                    placeholder="Filtrer par entreprise...">
         </div>
         <div class="filter-group">
             <label for="filter-location">Lieu</label>
-            <input type="text" id="filter-location" placeholder="Filtrer par lieu...">
+            <input type="text" id="filter-location" name="location"
+                   value="{{ filters.location }}"
+                   placeholder="Filtrer par lieu...">
         </div>
         <div class="filter-group">
             <label for="filter-contract">Type de contrat</label>
-            <select id="filter-contract">
+            <select id="filter-contract" name="contract">
                 <option value="">Tous</option>
-                <option value="CDI">CDI</option>
-                <option value="CDD">CDD</option>
-                <option value="Alternance">Alternance</option>
-                <option value="Stage">Stage</option>
-                <option value="Autre">Autre</option>
+                <option value="CDI" {{ 'selected' if filters.contract == 'CDI' }}>CDI</option>
+                <option value="CDD" {{ 'selected' if filters.contract == 'CDD' }}>CDD</option>
+                <option value="Alternance" {{ 'selected' if filters.contract == 'Alternance' }}>Alternance</option>
+                <option value="Stage" {{ 'selected' if filters.contract == 'Stage' }}>Stage</option>
+                <option value="Autre" {{ 'selected' if filters.contract == 'Autre' }}>Autre</option>
             </select>
         </div>
         <div class="filter-group">
             <label for="filter-search" data-i18n="filter_search">Recherche</label>
-            <input type="text" id="filter-search"
+            <input type="text" id="filter-search" name="search"
+                   value="{{ filters.search }}"
                    data-i18n-placeholder="filter_search_ph"
                    placeholder="Rechercher titre, entreprise...">
         </div>
         <label class="filter-toggle">
-            <input type="checkbox" id="show-all-offers">
+            <input type="checkbox" id="show-all-offers" name="show_all" value="1" {{ 'checked' if filters.show_all }}>
             <span data-i18n="filter_all_offers">Toutes les offres</span>
         </label>
         <label class="filter-toggle">
-            <input type="checkbox" id="show-recruiters">
+            <input type="checkbox" id="show-recruiters" name="show_recruiters" value="1" {{ 'checked' if filters.show_recruiters }}>
             <span data-i18n="filter_recruiters">Recruteurs potentiels</span>
         </label>
         <label class="filter-toggle">
-            <input type="checkbox" id="show-favorites">
+            <input type="checkbox" id="show-favorites" name="favorites" value="1" {{ 'checked' if filters.favorites }}>
             <span data-i18n="filter_favorites">Favoris uniquement</span>
         </label>
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">
-        <button class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">🔄 Réinitialiser</button>
+        <button type="button" class="btn btn-secondary btn-small" id="filters-reset" data-i18n="btn_reset">🔄 Réinitialiser</button>
         {% if role != 'viewer' %}
-        <button class="btn btn-accent btn-small" id="export-csv" data-i18n="btn_export_csv">📥 Exporter CSV</button>
+        <button type="button" class="btn btn-accent btn-small" id="export-csv" data-i18n="btn_export_csv">📥 Exporter CSV</button>
         <a href="{{ url_for('main.documents') }}" class="btn btn-secondary btn-small">📄 Gérer mes documents</a>
         {% if has_cv %}
-        <button class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">🔃 Recalculer</button>
-        <button class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">🤖 Match IA</button>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-rematch-cv" data-i18n="btn_rematch_cv">🔃 Recalculer</button>
+        <button type="button" class="btn btn-primary btn-small" id="btn-rematch-claude" data-i18n="btn_rematch_claude">🤖 Match IA</button>
         {% else %}
         <span class="cv-no-hint">Importez votre CV dans <a href="{{ url_for('main.documents') }}">Documents</a> pour activer le matching</span>
         {% endif %}
@@ -151,23 +158,34 @@
     </div>
     {% endif %}
 </div>
+</form>
 
 <div class="table-container">
+    <div class="table-info">
+        <span>Offres {{ start_item }}–{{ end_item }} sur {{ total_offers }}</span>
+    </div>
     <div class="table-scroll">
     <table class="offers-table" id="offers-table" data-has-cv="{{ 'true' if has_cv else 'false' }}">
         <thead>
             <tr>
-                <th class="sortable" data-col="title"><span data-i18n="col_title">Titre</span> <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="company"><span data-i18n="col_company">Entreprise</span> <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="location"><span data-i18n="col_location">Lieu</span> <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="source"><span data-i18n="col_source">Source</span> <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="date"><span data-i18n="col_date">Publié</span> <span class="sort-icon"></span></th>
-                <th class="sortable" data-col="score"><span data-i18n="col_score">Score</span> <span class="sort-icon"></span></th>
+                {% macro sort_header(col, label, i18n_key=None) %}
+                {% set is_active = filters.sort == col %}
+                {% set new_order = ('asc' if filters.order == 'desc' else 'desc') if is_active else ('desc' if col in ('score', 'cv_score', 'date') else 'asc') %}
+                <th class="sortable {% if is_active %}sort-{{ filters.order }}{% endif %}" data-col="{{ col }}" data-new-order="{{ new_order }}">
+                    <span {% if i18n_key %}data-i18n="{{ i18n_key }}"{% endif %}>{{ label }}</span> <span class="sort-icon"></span>
+                </th>
+                {% endmacro %}
+                {{ sort_header('title', 'Titre', 'col_title') }}
+                {{ sort_header('company', 'Entreprise', 'col_company') }}
+                {{ sort_header('location', 'Lieu', 'col_location') }}
+                {{ sort_header('source', 'Source', 'col_source') }}
+                {{ sort_header('date', 'Publié', 'col_date') }}
+                {{ sort_header('score', 'Score', 'col_score') }}
                 <th data-i18n="col_status">Statut</th>
                 <th data-i18n="col_cv">CV envoyé</th>
                 <th data-i18n="col_followup">Relance</th>
                 <th data-i18n="col_notes">Notes</th>
-                {% if has_cv %}<th class="sortable" data-col="cv_score"><span data-i18n="col_cv_match">Match CV</span> <span class="sort-icon"></span></th>{% endif %}
+                {% if has_cv %}{{ sort_header('cv_score', 'Match CV', 'col_cv_match') }}{% endif %}
                 <th data-i18n="col_link">Lien</th>
             </tr>
         </thead>
@@ -251,16 +269,33 @@
         </tbody>
     </table>
     </div>
+    {% if total_pages > 1 %}
+    <nav class="pagination-bar">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if pagination_params %}&{{ pagination_params }}{% endif %}" class="btn btn-small">&laquo; Précédent</a>
+        {% else %}
+        <span class="btn btn-small btn-disabled">&laquo; Précédent</span>
+        {% endif %}
+
+        {% for p in page_range %}
+            {% if p is none %}
+            <span class="pagination-ellipsis">&hellip;</span>
+            {% elif p == page %}
+            <span class="btn btn-small btn-primary pagination-current">{{ p }}</span>
+            {% else %}
+            <a href="?page={{ p }}{% if pagination_params %}&{{ pagination_params }}{% endif %}" class="btn btn-small">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{% if pagination_params %}&{{ pagination_params }}{% endif %}" class="btn btn-small">Suivant &raquo;</a>
+        {% else %}
+        <span class="btn btn-small btn-disabled">Suivant &raquo;</span>
+        {% endif %}
+    </nav>
+    {% endif %}
     <div class="table-footer">
-        <span>
-            <span id="visible-count">{{ offers|length }}</span> / {{ offers|length }}
-            <span data-i18n="offers_count">offres</span>
-        </span>
-        <span class="pagination-controls">
-            <button class="btn btn-small" id="page-prev" disabled>&laquo; Prev</button>
-            <span id="page-info">Page 1</span>
-            <button class="btn btn-small" id="page-next">Next &raquo;</button>
-        </span>
+        <span>Offres {{ start_item }}–{{ end_item }} sur {{ total_offers }}</span>
     </div>
 </div>
 {% else %}

@@ -95,6 +95,15 @@ def _migrate_columns():
             ))
         print("[MIGRATE] Done.")
 
+    # Add index on offers.domain_id for fast dashboard filtering
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_offers_domain_id ON offers(domain_id)"
+            ))
+        except Exception:
+            pass  # Index may already exist
+
     # Migrate users table
     if "users" in insp.get_table_names():
         user_cols = [c["name"] for c in insp.get_columns("users")]

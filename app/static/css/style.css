@@ -577,6 +577,47 @@ body {
     cursor: default;
 }
 
+/* ── Server-side pagination bar ─────────────────────────── */
+
+.table-info {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.pagination-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.8rem 1rem;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.pagination-bar .btn-small {
+    min-width: 2.2rem;
+    text-align: center;
+    text-decoration: none;
+}
+
+.pagination-bar .btn-disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.pagination-bar .pagination-current {
+    pointer-events: none;
+    font-weight: 700;
+}
+
+.pagination-ellipsis {
+    padding: 0 0.3rem;
+    color: var(--text-secondary);
+}
+
 /* ── Sortable columns ────────────────────────────────────── */
 
 .sortable {

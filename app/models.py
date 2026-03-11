@@ -46,7 +46,7 @@ class Offer(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
     # Domain (for multi-user filtering)
-    domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True)
+    domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True, index=True)
     domain = relationship("Domain", back_populates="offers")
 
     # Relationships

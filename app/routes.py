@@ -6,6 +6,7 @@ Handles all web interface endpoints and API endpoints for AJAX updates.
 import io
 import json
 import logging
+import math
 import os
 import secrets
 import time
@@ -14,7 +15,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlencode, urlparse, urljoin
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ except ImportError:
     _HAS_FCNTL = False
 
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import joinedload
 
 from werkzeug.utils import secure_filename
@@ -890,27 +891,176 @@ def landing():
 @login_required
 def dashboard():
     """
-    Main dashboard view.
-    Displays all job offers with their tracking status in an interactive table.
+    Main dashboard view with server-side filtering and pagination.
+    Accepts GET params: page, per_page, status, source, domain, company,
+    location, contract, search, show_all, show_recruiters, favorites, sort, order.
     """
     db = SessionLocal()
     user_id = session.get("user_id")
     domain_id = session.get("domain_id")
     try:
-        # Filter offers by domain if the user has one
+        # ── Parse pagination ───────────────────────────────────────────
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(10, request.args.get('per_page', 50, type=int)))
+
+        # ── Parse filters ──────────────────────────────────────────────
+        f_status = request.args.get('status', '').strip()
+        f_source = request.args.get('source', '').strip()
+        f_domain_filter = request.args.get('domain', '').strip()
+        f_company = request.args.get('company', '').strip()
+        f_location = request.args.get('location', '').strip()
+        f_contract = request.args.get('contract', '').strip()
+        f_search = request.args.get('search', '').strip()
+        f_show_all = request.args.get('show_all', '') == '1'
+        f_show_recruiters = request.args.get('show_recruiters', '') == '1'
+        f_favorites = request.args.get('favorites', '') == '1'
+        f_sort = request.args.get('sort', 'score')
+        f_order = request.args.get('order', 'desc')
+
+        # Validate
+        if f_status and f_status not in VALID_STATUSES:
+            f_status = ''
+        if f_sort not in ('title', 'company', 'location', 'source', 'date', 'score', 'cv_score'):
+            f_sort = 'score'
+        if f_order not in ('asc', 'desc'):
+            f_order = 'desc'
+
+        # ── Base query with tracking join ──────────────────────────────
         query = db.query(Offer)
         if domain_id:
             query = query.filter(Offer.domain_id == domain_id)
 
-        # Build user_offers_map: offer_id -> tracking object
+        if user_id is not None:
+            query = query.outerjoin(
+                UserOffer,
+                (UserOffer.offer_id == Offer.id) & (UserOffer.user_id == user_id)
+            )
+        else:
+            query = query.outerjoin(Tracking)
+
+        # ── Compute target IDs (lightweight query) ─────────────────────
+        targets_norm = [normalize_text(c) for c in TARGET_COMPANIES]
+        company_q = db.query(Offer.id, Offer.company)
+        if domain_id:
+            company_q = company_q.filter(Offer.domain_id == domain_id)
+        target_ids = set()
+        for oid, comp in company_q:
+            co = normalize_text(comp or "")
+            for t in targets_norm:
+                if t in co:
+                    target_ids.add(oid)
+                    break
+
+        # ── Apply filters ──────────────────────────────────────────────
+        if not f_show_recruiters:
+            query = query.filter(Offer.offer_type != 'recruiter')
+
+        if not f_show_all:
+            if target_ids:
+                query = query.filter(Offer.id.in_(target_ids))
+            else:
+                query = query.filter(Offer.id == -1)
+
+        if f_source:
+            query = query.filter(Offer.source == f_source)
+
+        if f_domain_filter:
+            try:
+                query = query.filter(Offer.domain_id == int(f_domain_filter))
+            except ValueError:
+                pass
+
+        if f_company:
+            query = query.filter(Offer.company.ilike(f'%{f_company}%'))
+
+        if f_location:
+            query = query.filter(Offer.location.ilike(f'%{f_location}%'))
+
+        if f_contract:
+            if f_contract == 'CDI':
+                query = query.filter(Offer.contract_type.ilike('%cdi%'))
+            elif f_contract == 'CDD':
+                query = query.filter(Offer.contract_type.ilike('%cdd%'))
+            elif f_contract == 'Alternance':
+                query = query.filter(
+                    or_(Offer.contract_type.ilike('%altern%'),
+                        Offer.contract_type.ilike('%apprenti%'))
+                )
+            elif f_contract == 'Stage':
+                query = query.filter(Offer.contract_type.ilike('%stage%'))
+            elif f_contract == 'Autre':
+                query = query.filter(
+                    Offer.contract_type.isnot(None),
+                    ~Offer.contract_type.ilike('%cdi%'),
+                    ~Offer.contract_type.ilike('%cdd%'),
+                    ~Offer.contract_type.ilike('%altern%'),
+                    ~Offer.contract_type.ilike('%apprenti%'),
+                    ~Offer.contract_type.ilike('%stage%'),
+                )
+
+        if f_search:
+            pattern = f'%{f_search}%'
+            query = query.filter(
+                or_(Offer.title.ilike(pattern),
+                    Offer.company.ilike(pattern),
+                    Offer.location.ilike(pattern))
+            )
+
+        if f_status:
+            if user_id is not None:
+                if f_status == 'New':
+                    query = query.filter(or_(UserOffer.status == 'New', UserOffer.status.is_(None)))
+                else:
+                    query = query.filter(UserOffer.status == f_status)
+            else:
+                if f_status == 'New':
+                    query = query.filter(or_(Tracking.status == 'New', Tracking.status.is_(None)))
+                else:
+                    query = query.filter(Tracking.status == f_status)
+
+        if f_favorites and user_id is not None:
+            query = query.filter(UserOffer.is_favorite == True)
+
+        # ── Count + pagination ─────────────────────────────────────────
+        total_offers = query.count()
+        total_pages = max(1, math.ceil(total_offers / per_page))
+        if page > total_pages:
+            page = total_pages
+
+        # ── Sort ───────────────────────────────────────────────────────
+        sort_map = {
+            'title': Offer.title,
+            'company': Offer.company,
+            'location': Offer.location,
+            'source': Offer.source,
+            'date': Offer.posted_date,
+            'score': Offer.relevance_score,
+        }
+        if f_sort == 'cv_score':
+            sort_col = UserOffer.cv_match_score if user_id is not None else Offer.cv_match_score
+        else:
+            sort_col = sort_map.get(f_sort, Offer.relevance_score)
+
+        if f_order == 'desc':
+            query = query.order_by(sort_col.desc(), Offer.id.desc())
+        else:
+            query = query.order_by(sort_col.asc(), Offer.id.asc())
+
+        # ── Fetch page ─────────────────────────────────────────────────
+        offset = (page - 1) * per_page
+        offers = query.offset(offset).limit(per_page).all()
+
+        # ── Build user_offers_map for current page ─────────────────────
+        offer_ids = [o.id for o in offers]
         if user_id is None:
-            # Config/legacy user (admin): load via Offer.tracking relationship
-            offers = query.options(joinedload(Offer.tracking)).all()
+            if offer_ids:
+                tracked = db.query(Offer).options(
+                    joinedload(Offer.tracking)
+                ).filter(Offer.id.in_(offer_ids)).all()
+                offers_dict = {o.id: o for o in tracked}
+                offers = [offers_dict[oid] for oid in offer_ids if oid in offers_dict]
             user_offers_map = {o.id: o.tracking for o in offers if o.tracking}
         else:
-            # DB user: load UserOffer rows for this user
-            offers = query.all()
-            offer_ids = [o.id for o in offers]
             if offer_ids:
                 user_offer_rows = db.query(UserOffer).filter(
                     UserOffer.user_id == user_id,
@@ -920,43 +1070,85 @@ def dashboard():
                 user_offer_rows = []
             user_offers_map = {uo.offer_id: uo for uo in user_offer_rows}
 
-        total_offers = len(offers)
+        # ── Stats (domain-wide, not affected by filters) ───────────────
+        total_domain_count = db.query(func.count(Offer.id))
+        if domain_id:
+            total_domain_count = total_domain_count.filter(Offer.domain_id == domain_id)
+        total_domain_count = total_domain_count.scalar()
 
-        # Stats — same fields regardless of tracking backend
-        uo_values = list(user_offers_map.values())
-        cv_sent_count = sum(1 for uo in uo_values if uo.cv_sent)
-        follow_up_count = sum(1 for uo in uo_values if uo.follow_up_done)
-        interview_count = sum(1 for uo in uo_values if uo.status == 'Interview')
+        if user_id is not None:
+            stats_q = db.query(UserOffer).filter(UserOffer.user_id == user_id)
+            if domain_id:
+                stats_q = stats_q.join(Offer).filter(Offer.domain_id == domain_id)
+            cv_sent_count = stats_q.filter(UserOffer.cv_sent == True).count()
+            follow_up_count = stats_q.filter(UserOffer.follow_up_done == True).count()
+            interview_count = stats_q.filter(UserOffer.status == 'Interview').count()
+        else:
+            stats_q = db.query(Tracking)
+            if domain_id:
+                stats_q = stats_q.join(Offer).filter(Offer.domain_id == domain_id)
+            cv_sent_count = stats_q.filter(Tracking.cv_sent == True).count()
+            follow_up_count = stats_q.filter(Tracking.follow_up_done == True).count()
+            interview_count = stats_q.filter(Tracking.status == 'Interview').count()
 
         stats = {
-            'total_offers': total_offers,
+            'total_offers': total_domain_count,
             'cv_sent': cv_sent_count,
             'follow_ups': follow_up_count,
             'interviews': interview_count,
         }
 
-        # Collect unique sources for filter dropdown
-        sources = sorted(set(o.source for o in offers))
-
-        # Mark target company offers
-        targets_norm = [normalize_text(c) for c in TARGET_COMPANIES]
-        target_ids = set()
-        for o in offers:
-            co = normalize_text(o.company or "")
-            for t in targets_norm:
-                if t in co:
-                    target_ids.add(o.id)
-                    break
+        # ── Sources for dropdown (domain-scoped, unfiltered) ───────────
+        sources_q = db.query(Offer.source).distinct()
+        if domain_id:
+            sources_q = sources_q.filter(Offer.domain_id == domain_id)
+        sources = sorted([r[0] for r in sources_q.all()])
 
         has_cv = _has_cv_file(user_id)
         cutoff_new = datetime.utcnow() - timedelta(hours=24)
 
-        # Pass domain list to template only for admins (no domain scoping)
         admin_domains = []
         if not domain_id:
             admin_domains = db.query(Domain).order_by(Domain.name).all()
 
         user_quota = _get_user_quota(user_id)
+
+        # ── Filters dict for template ──────────────────────────────────
+        filters = {
+            'status': f_status,
+            'source': f_source,
+            'domain': f_domain_filter,
+            'company': f_company,
+            'location': f_location,
+            'contract': f_contract,
+            'search': f_search,
+            'show_all': f_show_all,
+            'show_recruiters': f_show_recruiters,
+            'favorites': f_favorites,
+            'sort': f_sort,
+            'order': f_order,
+        }
+
+        # Query string for pagination links (all params except page)
+        pagination_params = urlencode({k: v for k, v in {
+            'per_page': str(per_page) if per_page != 50 else '',
+            'status': f_status,
+            'source': f_source,
+            'domain': f_domain_filter,
+            'company': f_company,
+            'location': f_location,
+            'contract': f_contract,
+            'search': f_search,
+            'show_all': '1' if f_show_all else '',
+            'show_recruiters': '1' if f_show_recruiters else '',
+            'favorites': '1' if f_favorites else '',
+            'sort': f_sort if f_sort != 'score' else '',
+            'order': f_order if f_order != 'desc' else '',
+        }.items() if v})
+
+        page_range = _make_page_range(page, total_pages)
+        start_item = (page - 1) * per_page + 1 if total_offers > 0 else 0
+        end_item = min(page * per_page, total_offers)
 
         return render_template(
             'dashboard.html',
@@ -972,9 +1164,35 @@ def dashboard():
             username=session.get("username"),
             admin_domains=admin_domains,
             user_quota=user_quota,
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            total_offers=total_offers,
+            filters=filters,
+            pagination_params=pagination_params,
+            page_range=page_range,
+            start_item=start_item,
+            end_item=end_item,
         )
     finally:
         db.close()
+
+
+def _make_page_range(page, total_pages, window=2):
+    """Generate page numbers to display with None for gaps (ellipsis)."""
+    if total_pages <= 1:
+        return [1]
+    pages = {1, total_pages}
+    for i in range(max(1, page - window), min(total_pages, page + window) + 1):
+        pages.add(i)
+    result = []
+    prev = 0
+    for p in sorted(pages):
+        if p > prev + 1:
+            result.append(None)
+        result.append(p)
+        prev = p
+    return result
 
 
 @bp.route('/api/tracking/<int:offer_id>', methods=['PUT'])

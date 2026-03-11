@@ -1,6 +1,7 @@
 /**
- * JobHunter Dashboard - Interactive tracking, AJAX save, filtering & sorting.
- * Uses event delegation for performance (3 listeners instead of 1200+).
+ * JobHunter Dashboard - AJAX tracking, server-side filtering & pagination.
+ * Filters/sorting submit a GET form; pagination uses server-rendered links.
+ * AJAX save, favorites, notes, CV matching, CSV export remain client-side.
  */
 
 (function () {
@@ -8,7 +9,6 @@
 
   // ── Translations ────────────────────────────────────────────────────
 
-  // Status value → display label map (values stay in English for DB)
   var STATUS_LABELS = {
     fr: {
       "New":         "Nouveau",
@@ -141,30 +141,23 @@
     var t = TRANSLATIONS[lang] || TRANSLATIONS.fr;
     currentLang = lang;
 
-    // Update text content for all data-i18n elements
     var els = document.querySelectorAll("[data-i18n]");
     for (var i = 0; i < els.length; i++) {
       var key = els[i].getAttribute("data-i18n");
       if (t[key] !== undefined) els[i].textContent = t[key];
     }
 
-    // Update placeholder attributes
     var pls = document.querySelectorAll("[data-i18n-placeholder]");
     for (var j = 0; j < pls.length; j++) {
       var pkey = pls[j].getAttribute("data-i18n-placeholder");
       if (t[pkey] !== undefined) pls[j].placeholder = t[pkey];
     }
 
-    // Translate status select options (value stays English, label changes)
     translateStatusSelects(lang);
-
-    // Re-render pagination label in current language
-    renderPage();
   }
 
   function translateStatusSelects(lang) {
     var labels = STATUS_LABELS[lang] || STATUS_LABELS.en;
-    // Covers the filter dropdown (#filter-status) and all per-row status selects
     var selects = document.querySelectorAll('[data-field="status"], #filter-status');
     for (var i = 0; i < selects.length; i++) {
       var opts = selects[i].options;
@@ -177,12 +170,11 @@
     }
   }
 
-  // Listen for language change events dispatched by base.html
   document.addEventListener("jh-lang-change", function (e) {
     applyLang(e.detail.lang);
   });
 
-  // ── Guard: early return if no table (non-dashboard pages) ───────────
+  // ── Guard: early return if no table ─────────────────────────────────
 
   var tbody = document.querySelector("#offers-table tbody");
   if (!tbody) {
@@ -190,7 +182,7 @@
     return;
   }
 
-  // ── Stats counters (optimistic: update before AJAX) ────────────────
+  // ── Stats counters (optimistic UI updates) ──────────────────────────
 
   var statCvSent    = document.getElementById("stat-cv-sent");
   var statFollowUps = document.getElementById("stat-follow-ups");
@@ -224,29 +216,17 @@
   var noteTimers = {};
 
   function saveTracking(offerId, data) {
-    var t0 = performance.now();
-    // [DIAG] fetch START offer=" + offerId, data);
     fetch("/api/tracking/" + offerId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
-      .then(function (r) {
-        var t1 = performance.now();
-        // [DIAG] fetch response offer=" + offerId + " status=" + r.status + " (" + (t1 - t0).toFixed(1) + "ms)"
-        return r.json();
-      })
+      .then(function (r) { return r.json(); })
       .then(function (res) {
-        var t2 = performance.now();
-        // [DIAG] json parsed offer=" + offerId + " (" + (t2 - t0).toFixed(1) + "ms total)"
-        if (res.server_ms !== undefined) {
-          // [DIAG] server processing: " + res.server_ms + "ms"
-        }
         if (!res.ok) {
           console.error("Save failed", res.error);
           return;
         }
-        var t3 = performance.now();
         var row = tbody.querySelector('tr[data-offer-id="' + offerId + '"]');
         if (!row) return;
 
@@ -262,8 +242,6 @@
           fuLabel.textContent = res.tracking.follow_up_date
             ? formatShort(res.tracking.follow_up_date) : "";
         }
-        var t4 = performance.now();
-        // [DIAG] dom-update offer=" + offerId + " (" + (t4 - t3).toFixed(1) + "ms)"
       })
       .catch(function (err) {
         console.error("Save failed:", err);
@@ -278,16 +256,10 @@
   // ── Event delegation: one "change" listener on tbody ───────────────
 
   tbody.addEventListener("change", function (e) {
-    var t0 = performance.now();
     var target = e.target;
     var row = target.closest(".offer-row");
-    if (!row) {
-      // [DIAG] change: no .offer-row (" + (performance.now() - t0).toFixed(1) + "ms)");
-      return;
-    }
+    if (!row) return;
     var offerId = row.dataset.offerId;
-    var t1 = performance.now();
-    // [DIAG] change: row lookup (" + (t1 - t0).toFixed(1) + "ms)");
 
     // Status dropdown
     if (target.dataset.field === "status") {
@@ -296,19 +268,11 @@
 
       if (oldStatus === "Interview" && newStatus !== "Interview") counts.interviews--;
       if (oldStatus !== "Interview" && newStatus === "Interview") counts.interviews++;
-      var t2 = performance.now();
-      // [DIAG] change: counter update (" + (t2 - t1).toFixed(1) + "ms)");
 
       renderStats();
-      var t3 = performance.now();
-      // [DIAG] change: renderStats (" + (t3 - t2).toFixed(1) + "ms)");
-
       row.dataset.status = newStatus;
       target.className = "status-select status-color-" +
         newStatus.toLowerCase().replace(/ /g, "-");
-      var t4 = performance.now();
-      // [DIAG] change: DOM class update (" + (t4 - t3).toFixed(1) + "ms)");
-      // [DIAG] change TOTAL (status) = " + (t4 - t0).toFixed(1) + "ms → calling fetch");
 
       saveTracking(offerId, { status: newStatus });
       return;
@@ -321,21 +285,14 @@
 
       if (field === "cv_sent")       counts.cv += checked ? 1 : -1;
       if (field === "follow_up_done") counts.fu += checked ? 1 : -1;
-      var t2b = performance.now();
-      // [DIAG] change: counter update (" + (t2b - t1).toFixed(1) + "ms)");
 
       renderStats();
-      var t3b = performance.now();
-      // [DIAG] change: renderStats (" + (t3b - t2b).toFixed(1) + "ms)");
 
       var payload = {};
       payload[field] = checked;
-      // [DIAG] change TOTAL (checkbox) = " + (t3b - t0).toFixed(1) + "ms → calling fetch");
-
       saveTracking(offerId, payload);
       return;
     }
-    // [DIAG] change: unhandled target (" + (performance.now() - t0).toFixed(1) + "ms)");
   });
 
   // ── Event delegation: favorite star toggle ────────────────────────
@@ -347,7 +304,6 @@
     if (!row) return;
     var offerId = row.dataset.offerId;
 
-    // Optimistic UI toggle
     var isFav = row.dataset.favorite === "1";
     row.dataset.favorite = isFav ? "0" : "1";
     btn.textContent = isFav ? "\u2606" : "\u2605";
@@ -357,7 +313,6 @@
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res.ok) {
-          // Revert on error
           row.dataset.favorite = isFav ? "1" : "0";
           btn.textContent = isFav ? "\u2605" : "\u2606";
           btn.classList.toggle("fav-active", isFav);
@@ -370,7 +325,7 @@
       });
   });
 
-  // ── Event delegation: one "input" listener for notes (debounced) ───
+  // ── Event delegation: notes (debounced AJAX) ───────────────────────
 
   tbody.addEventListener("input", function (e) {
     var target = e.target;
@@ -386,231 +341,65 @@
     }, 600);
   });
 
-  // ── Filtering + Pagination ─────────────────────────────────────────
+  // ── Filter form submission ──────────────────────────────────────────
 
-  var PAGE_SIZE    = 25;
-  var currentPage  = 0;
-  var filteredRows = [];
-  var allRows      = Array.from(tbody.querySelectorAll(".offer-row"));
+  var filtersForm = document.getElementById("filters-form");
 
-  var filterStatus   = document.getElementById("filter-status");
-  var filterSource   = document.getElementById("filter-source");
-  var filterDomain   = document.getElementById("filter-domain");
-  var filterCompany  = document.getElementById("filter-company");
-  var filterLocation = document.getElementById("filter-location");
-  var filterContract = document.getElementById("filter-contract");
-  var filterSearch   = document.getElementById("filter-search");
-  var showRecruiters = document.getElementById("show-recruiters");
-  var showAllOffers  = document.getElementById("show-all-offers");
-  var showFavorites  = document.getElementById("show-favorites");
-  var visibleCount   = document.getElementById("visible-count");
-  var pageInfo       = document.getElementById("page-info");
-  var pageNext       = document.getElementById("page-next");
-  var pagePrev       = document.getElementById("page-prev");
-
-  function applyFilters() {
-    var status   = filterStatus   ? filterStatus.value                        : "";
-    var source   = filterSource   ? filterSource.value                        : "";
-    var domain   = filterDomain   ? filterDomain.value                        : "";
-    var company  = filterCompany  ? filterCompany.value.toLowerCase().trim()  : "";
-    var location = filterLocation ? filterLocation.value.toLowerCase().trim() : "";
-    var contract = filterContract ? filterContract.value                      : "";
-    var search   = filterSearch   ? filterSearch.value.toLowerCase().trim()   : "";
-    var includeRecruiters = showRecruiters ? showRecruiters.checked : false;
-    var showAll           = showAllOffers  ? showAllOffers.checked  : false;
-    var onlyFavorites     = showFavorites  ? showFavorites.checked  : false;
-
-    filteredRows = [];
-    for (var i = 0; i < allRows.length; i++) {
-      var row  = allRows[i];
-      var show = true;
-
-      // Hide recruiters unless toggle is checked
-      if (!includeRecruiters && row.dataset.offerType === "recruiter") show = false;
-      // By default show only target companies; show all when toggle is checked
-      if (show && !showAll && row.dataset.target !== "1") show = false;
-      if (show && status  && row.dataset.status !== status)                          show = false;
-      if (show && source  && row.dataset.source !== source)                          show = false;
-      if (show && domain  && row.dataset.domainId !== domain)                        show = false;
-      if (show && company  && row.dataset.company.indexOf(company) === -1)            show = false;
-      if (show && location && row.dataset.location.indexOf(location) === -1)         show = false;
-      if (show && contract && row.dataset.contractType !== contract)                 show = false;
-      if (show && onlyFavorites && row.dataset.favorite !== "1")            show = false;
-      if (show && search) {
-        var text = row.dataset.title + " " + row.dataset.company + " " + row.dataset.location;
-        if (text.indexOf(search) === -1) show = false;
-      }
-
-      if (show) filteredRows.push(row);
-    }
-
-    currentPage = 0;
-    renderPage();
-    saveState();
+  function submitFilters() {
+    if (filtersForm) filtersForm.submit();
   }
 
-  function renderPage() {
-    var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
-    var totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-    if (currentPage >= totalPages) currentPage = totalPages - 1;
-    var start = currentPage * PAGE_SIZE;
-    var end   = start + PAGE_SIZE;
+  // Select/checkbox filters → submit immediately
+  var autoSubmitIds = [
+    "filter-status", "filter-source", "filter-domain", "filter-contract",
+    "show-all-offers", "show-recruiters", "show-favorites"
+  ];
+  autoSubmitIds.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("change", submitFilters);
+  });
 
-    for (var i = 0; i < allRows.length; i++) {
-      allRows[i].classList.add("hidden");
+  // Text filters → submit on Enter
+  var textFilterIds = ["filter-company", "filter-location", "filter-search"];
+  textFilterIds.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitFilters();
+        }
+      });
     }
-    for (var j = start; j < end && j < filteredRows.length; j++) {
-      filteredRows[j].classList.remove("hidden");
-    }
+  });
 
-    if (visibleCount) visibleCount.textContent = filteredRows.length;
-    if (pageInfo) pageInfo.textContent = t.page_label + " " + (currentPage + 1) + " / " + totalPages;
-    if (pagePrev) pagePrev.disabled = currentPage === 0;
-    if (pageNext) pageNext.disabled = currentPage >= totalPages - 1;
-  }
-
-  if (filterStatus)   filterStatus.addEventListener("change",  applyFilters);
-  if (filterSource)   filterSource.addEventListener("change",  applyFilters);
-  if (filterDomain)   filterDomain.addEventListener("change",  applyFilters);
-  if (filterCompany)  filterCompany.addEventListener("input",   applyFilters);
-  if (filterLocation) filterLocation.addEventListener("input",  applyFilters);
-  if (filterContract) filterContract.addEventListener("change", applyFilters);
-  if (filterSearch)   filterSearch.addEventListener("input",    applyFilters);
-  if (showRecruiters) showRecruiters.addEventListener("change", applyFilters);
-  if (showAllOffers)  showAllOffers.addEventListener("change",  applyFilters);
-  if (showFavorites)  showFavorites.addEventListener("change",  applyFilters);
-
-  if (pageNext) pageNext.addEventListener("click", function () { currentPage++; renderPage(); saveState(); });
-  if (pagePrev) pagePrev.addEventListener("click", function () { currentPage--; renderPage(); saveState(); });
-
+  // Reset button → navigate to bare dashboard URL
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
     resetBtn.addEventListener("click", function () {
-      if (filterStatus)   filterStatus.value   = "";
-      if (filterSource)   filterSource.value   = "";
-      if (filterDomain)   filterDomain.value   = "";
-      if (filterCompany)  filterCompany.value  = "";
-      if (filterLocation) filterLocation.value = "";
-      if (filterContract) filterContract.value = "";
-      if (filterSearch)   filterSearch.value   = "";
-      if (showRecruiters) showRecruiters.checked = false;
-      if (showAllOffers)  showAllOffers.checked  = false;
-      if (showFavorites)  showFavorites.checked  = false;
-      currentSort.col = null;
-      currentSort.asc = true;
-      sortHeaders.forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
-      try { sessionStorage.removeItem(STATE_KEY); } catch (e) {}
-      applyFilters();
+      window.location.href = window.location.pathname;
     });
   }
 
-  // ── Column sorting ─────────────────────────────────────────────────
+  // ── Sort headers → update hidden inputs + submit form ──────────────
 
-  var currentSort = { col: null, asc: true };
+  var sortInput = document.getElementById("sort-input");
+  var orderInput = document.getElementById("order-input");
   var sortHeaders = document.querySelectorAll(".sortable");
 
   sortHeaders.forEach(function (th) {
+    th.style.cursor = "pointer";
     th.addEventListener("click", function () {
       var col = this.dataset.col;
-      if (currentSort.col === col) {
-        currentSort.asc = !currentSort.asc;
-      } else {
-        currentSort.col = col;
-        currentSort.asc = true;
-      }
+      var newOrder = this.dataset.newOrder || "asc";
 
-      sortHeaders.forEach(function (h) {
-        h.classList.remove("sort-asc", "sort-desc");
-      });
-      this.classList.add(currentSort.asc ? "sort-asc" : "sort-desc");
-
-      sortTable(col, currentSort.asc);
+      if (sortInput) sortInput.value = col;
+      if (orderInput) orderInput.value = newOrder;
+      submitFilters();
     });
   });
 
-  function sortTable(col, asc) {
-    function cmp(a, b) {
-      var va, vb;
-      if (col === "score") {
-        va = parseFloat(a.dataset.score) || 0;
-        vb = parseFloat(b.dataset.score) || 0;
-        return asc ? va - vb : vb - va;
-      }
-      if (col === "cv_score") {
-        va = parseFloat(a.dataset.cvScore) || 0;
-        vb = parseFloat(b.dataset.cvScore) || 0;
-        return asc ? va - vb : vb - va;
-      }
-      va = a.dataset[col] || "";
-      vb = b.dataset[col] || "";
-      if (va < vb) return asc ? -1 : 1;
-      if (va > vb) return asc ? 1 : -1;
-      return 0;
-    }
-
-    allRows.sort(cmp);
-    for (var i = 0; i < allRows.length; i++) {
-      tbody.appendChild(allRows[i]);
-    }
-
-    applyFilters();
-  }
-
-  // ── State persistence (sessionStorage) ─────────────────────────────
-
-  var STATE_KEY = "jh-dash-state";
-
-  function saveState() {
-    try {
-      sessionStorage.setItem(STATE_KEY, JSON.stringify({
-        status:         filterStatus   ? filterStatus.value    : "",
-        source:         filterSource   ? filterSource.value    : "",
-        domain:         filterDomain   ? filterDomain.value    : "",
-        location:       filterLocation ? filterLocation.value  : "",
-        contract:       filterContract ? filterContract.value  : "",
-        company:        filterCompany  ? filterCompany.value   : "",
-        search:         filterSearch   ? filterSearch.value    : "",
-        showRecruiters: showRecruiters ? showRecruiters.checked : false,
-        showAll:        showAllOffers  ? showAllOffers.checked  : false,
-        showFavorites:  showFavorites  ? showFavorites.checked  : false,
-        sortCol:        currentSort.col,
-        sortAsc:        currentSort.asc,
-        page:           currentPage,
-      }));
-    } catch (e) {}
-  }
-
-  function restoreState(state) {
-    if (!state) return false;
-    if (filterStatus   && state.status   !== undefined) filterStatus.value    = state.status;
-    if (filterSource   && state.source   !== undefined) filterSource.value    = state.source;
-    if (filterDomain   && state.domain   !== undefined) filterDomain.value    = state.domain;
-    if (filterCompany  && state.company  !== undefined) filterCompany.value   = state.company;
-    if (filterLocation && state.location !== undefined) filterLocation.value  = state.location;
-    if (filterContract && state.contract !== undefined) filterContract.value  = state.contract;
-    if (filterSearch   && state.search   !== undefined) filterSearch.value    = state.search;
-    if (showRecruiters && state.showRecruiters !== undefined) showRecruiters.checked = state.showRecruiters;
-    if (showAllOffers  && state.showAll        !== undefined) showAllOffers.checked  = state.showAll;
-    if (showFavorites  && state.showFavorites  !== undefined) showFavorites.checked  = state.showFavorites;
-    if (state.sortCol) {
-      currentSort.col = state.sortCol;
-      currentSort.asc = state.sortAsc !== false;
-      sortHeaders.forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
-      var activeHdr = document.querySelector('.sortable[data-col="' + state.sortCol + '"]');
-      if (activeHdr) activeHdr.classList.add(currentSort.asc ? "sort-asc" : "sort-desc");
-      sortTable(state.sortCol, currentSort.asc);
-    } else {
-      applyFilters();
-    }
-    if (state.page > 0) {
-      currentPage = state.page;
-      renderPage();
-      saveState();
-    }
-    return true;
-  }
-
-  // ── CSV Export ─────────────────────────────────────────────────────
+  // ── CSV Export (current page) ───────────────────────────────────────
 
   var exportBtn = document.getElementById("export-csv");
   if (exportBtn) {
@@ -621,7 +410,6 @@
     var t = TRANSLATIONS[currentLang] || TRANSLATIONS.fr;
     var labels = STATUS_LABELS[currentLang] || STATUS_LABELS.en;
 
-    // CSV headers in current UI language
     var headers = [
       t.col_title, t.col_company, t.col_location, t.col_source,
       t.col_date, t.col_score, t.col_status, t.col_cv, t.col_followup,
@@ -629,11 +417,12 @@
     ];
 
     var rows = [headers];
+    var allRows = tbody.querySelectorAll(".offer-row");
 
-    // Export ALL filtered rows (not just current page)
-    for (var i = 0; i < filteredRows.length; i++) {
-      var row = filteredRows[i];
+    for (var i = 0; i < allRows.length; i++) {
+      var row = allRows[i];
       var statusVal = row.dataset.status;
+      var viewLink = row.querySelector(".btn-view");
 
       rows.push([
         row.querySelector(".offer-title").textContent.trim(),
@@ -646,11 +435,10 @@
         row.querySelector('[data-field="cv_sent"]').checked ? "1" : "0",
         row.querySelector('[data-field="follow_up_done"]').checked ? "1" : "0",
         row.querySelector(".notes-input").value,
-        row.querySelector(".btn-view").href,
+        viewLink ? viewLink.href : "",
       ]);
     }
 
-    // Build CSV with proper quoting
     var csv = rows.map(function (r) {
       return r.map(function (cell) {
         var s = String(cell === null || cell === undefined ? "" : cell);
@@ -661,7 +449,6 @@
       }).join(",");
     }).join("\n");
 
-    // BOM + download trigger (BOM ensures correct UTF-8 in Excel)
     var blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     var blobUrl = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -682,7 +469,7 @@
   var cvProgressFill   = document.getElementById("cv-progress-fill");
   var cvProgressText   = document.getElementById("cv-progress-text");
 
-  var _matchingInterval = null;  // setInterval handle for polling
+  var _matchingInterval = null;
 
   function cvSetStatus(msg, isError) {
     if (!cvStatusMsg) return;
@@ -733,7 +520,6 @@
         } else if (data.status === "running") {
           _updateProgressBar(data.scored || 0, data.total || 0);
         } else if (data.status === "none") {
-          // No task — stop polling silently
           _stopPolling();
           _showProgress(false);
           _setMatchButtons(false);
@@ -763,9 +549,8 @@
           cvSetStatus(t.cv_match_running, false);
           _updateProgressBar(data.scored || 0, data.total || 0);
         }
-        // Start polling regardless (started or already_running)
         _stopPolling();
-        _pollMatchingStatus();  // immediate first poll
+        _pollMatchingStatus();
         _matchingInterval = setInterval(_pollMatchingStatus, 2000);
       })
       .catch(function (err) {
@@ -790,23 +575,11 @@
   // ── Initial render ─────────────────────────────────────────────────
   var tableEl = document.getElementById("offers-table");
   var hasCv   = tableEl && tableEl.dataset.hasCv === "true";
-  var savedState = null;
-  try { savedState = JSON.parse(sessionStorage.getItem(STATE_KEY) || "null"); } catch (e) {}
 
-  if (savedState) {
-    restoreState(savedState);
-  } else if (hasCv) {
-    currentSort.col = "cv_score";
-    currentSort.asc = false;
-    var cvHdr = document.querySelector('.sortable[data-col="cv_score"]');
-    if (cvHdr) cvHdr.classList.add("sort-desc");
-    sortTable("cv_score", false);
-  } else {
-    applyFilters();
-  }
   applyLang(currentLang);
 
   // Initialize favorite star styles
+  var allRows = Array.from(tbody.querySelectorAll(".offer-row"));
   allRows.forEach(function (row) {
     if (row.dataset.favorite === "1") {
       var favBtn = row.querySelector(".btn-fav");
@@ -814,7 +587,7 @@
     }
   });
 
-  // Auto-resume polling if a matching job is already running (e.g. page refresh)
+  // Auto-resume polling if a matching job is already running
   if (hasCv) {
     fetch("/api/cv/matching-status")
       .then(function (r) { return r.json(); })
