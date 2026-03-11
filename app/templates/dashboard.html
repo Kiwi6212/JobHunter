@@ -309,8 +309,151 @@
     <code>python scripts/run_scrapers.py</code>
 </div>
 {% endif %}
+<!-- Welcome guide modal -->
+<div id="guide-modal" class="guide-overlay hidden">
+    <div class="guide-modal">
+        <button type="button" class="guide-skip" id="guide-skip">Passer</button>
+        <div class="guide-slides">
+            <div class="guide-slide" data-slide="0">
+                <div class="guide-icon">&#127919;</div>
+                <h2>Bienvenue sur MyJobHunter !</h2>
+                <p>Votre assistant de recherche d'emploi intelligent.<br>
+                   Parcourez les offres correspondant &agrave; votre domaine, suivez vos candidatures et laissez l'IA vous aider &agrave; trouver le poste id&eacute;al.</p>
+            </div>
+            <div class="guide-slide hidden" data-slide="1">
+                <div class="guide-icon">&#128196;</div>
+                <h2>Importez votre CV</h2>
+                <p>Rendez-vous dans <strong>Documents</strong> pour uploader votre CV.<br>
+                   Le <em>Match IA</em> l'utilisera pour scorer chaque offre par rapport &agrave; votre profil.</p>
+            </div>
+            <div class="guide-slide hidden" data-slide="2">
+                <div class="guide-icon">&#128269;</div>
+                <h2>Explorez les offres</h2>
+                <p>Utilisez les filtres (lieu, type de contrat, entreprise, recherche libre) pour trouver les offres qui vous correspondent.</p>
+            </div>
+            <div class="guide-slide hidden" data-slide="3">
+                <div class="guide-icon">&#129302;</div>
+                <h2>Lancez le Match IA</h2>
+                <p>Cliquez sur <strong>Match IA</strong> pour obtenir un score 0-100% sur chaque offre par rapport &agrave; votre CV. Triez ensuite par score pour voir les meilleures en premier.</p>
+            </div>
+            <div class="guide-slide hidden" data-slide="4">
+                <div class="guide-icon">&#128203;</div>
+                <h2>Suivez vos candidatures</h2>
+                <p>Changez le statut, ajoutez des notes, marquez les CV envoy&eacute;s et les relances.<br>
+                   <strong>Bonne recherche !</strong></p>
+            </div>
+        </div>
+        <div class="guide-dots" id="guide-dots"></div>
+        <div class="guide-nav">
+            <button type="button" class="btn btn-secondary" id="guide-prev" disabled>Pr&eacute;c&eacute;dent</button>
+            <button type="button" class="btn btn-primary" id="guide-next">Suivant</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style nonce="{{ csp_nonce }}">
+.guide-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:opacity .3s}
+.guide-overlay.hidden{display:none}
+.guide-modal{position:relative;background:linear-gradient(135deg,#1e3a5f 0%,#4c1d95 100%);color:#fff;border-radius:1.2rem;max-width:520px;width:92%;padding:2.5rem 2rem 2rem;box-shadow:0 25px 60px rgba(0,0,0,.4);text-align:center;overflow:hidden}
+.guide-skip{position:absolute;top:.8rem;right:1rem;background:none;border:none;color:rgba(255,255,255,.7);font-size:.85rem;cursor:pointer;text-decoration:underline}
+.guide-skip:hover{color:#fff}
+.guide-icon{font-size:3rem;margin-bottom:.5rem;line-height:1}
+.guide-slide h2{margin:.5rem 0;font-size:1.35rem}
+.guide-slide p{font-size:.95rem;line-height:1.55;color:rgba(255,255,255,.88);margin:.8rem 0 0}
+.guide-slide{animation:guideFadeIn .35s ease}
+@keyframes guideFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.guide-dots{display:flex;justify-content:center;gap:.45rem;margin:1.4rem 0 .8rem}
+.guide-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35);transition:background .25s,transform .25s}
+.guide-dot.active{background:#fff;transform:scale(1.25)}
+.guide-nav{display:flex;gap:.8rem;justify-content:center}
+.guide-nav .btn{min-width:110px;border-radius:.5rem;font-size:.9rem;padding:.55rem 1.2rem}
+.guide-nav .btn-secondary{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)}
+.guide-nav .btn-secondary:hover{background:rgba(255,255,255,.25)}
+.guide-nav .btn-secondary:disabled{opacity:.4;cursor:not-allowed}
+.guide-nav .btn-primary{background:#fff;color:#4c1d95;border:none;font-weight:600}
+.guide-nav .btn-primary:hover{background:rgba(255,255,255,.9)}
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    "use strict";
+    var TOTAL_SLIDES = 5;
+    var current = 0;
+    var overlay = document.getElementById("guide-modal");
+    var slides  = overlay ? overlay.querySelectorAll(".guide-slide") : [];
+    var prevBtn = document.getElementById("guide-prev");
+    var nextBtn = document.getElementById("guide-next");
+    var skipBtn = document.getElementById("guide-skip");
+    var dotsEl  = document.getElementById("guide-dots");
+    var showBtn = document.getElementById("btn-show-guide");
+
+    if (!overlay || slides.length === 0) return;
+
+    // Build dots
+    for (var i = 0; i < TOTAL_SLIDES; i++) {
+        var dot = document.createElement("span");
+        dot.className = "guide-dot" + (i === 0 ? " active" : "");
+        dotsEl.appendChild(dot);
+    }
+
+    function goTo(idx) {
+        if (idx < 0 || idx >= TOTAL_SLIDES) return;
+        for (var j = 0; j < slides.length; j++) {
+            slides[j].classList.toggle("hidden", j !== idx);
+        }
+        var dots = dotsEl.querySelectorAll(".guide-dot");
+        for (var k = 0; k < dots.length; k++) {
+            dots[k].classList.toggle("active", k === idx);
+        }
+        current = idx;
+        prevBtn.disabled = (idx === 0);
+        nextBtn.textContent = (idx === TOTAL_SLIDES - 1) ? "Terminer" : "Suivant";
+    }
+
+    function closeGuide(markSeen) {
+        overlay.classList.add("hidden");
+        if (markSeen) {
+            fetch("/api/account/guide-seen", { method: "POST" }).catch(function(){});
+        }
+    }
+
+    function openGuide() {
+        current = 0;
+        goTo(0);
+        overlay.classList.remove("hidden");
+    }
+
+    prevBtn.addEventListener("click", function() { goTo(current - 1); });
+    nextBtn.addEventListener("click", function() {
+        if (current === TOTAL_SLIDES - 1) { closeGuide(true); }
+        else { goTo(current + 1); }
+    });
+    skipBtn.addEventListener("click", function() { closeGuide(true); });
+
+    // Close on backdrop click
+    overlay.addEventListener("click", function(e) {
+        if (e.target === overlay) closeGuide(true);
+    });
+
+    // "?" button in navbar — always re-opens (without marking seen again)
+    if (showBtn) {
+        showBtn.addEventListener("click", function() { openGuide(); });
+    }
+
+    // Auto-show for first-time users or when triggered from another page
+    var forceGuide = sessionStorage.getItem("jh-show-guide");
+    if (forceGuide) {
+        sessionStorage.removeItem("jh-show-guide");
+        openGuide();
+    }
+    {% if show_guide %}
+    else { openGuide(); }
+    {% endif %}
+})();
+</script>
 {% endblock %}

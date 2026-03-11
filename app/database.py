@@ -224,6 +224,14 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "has_seen_guide" not in user_cols:
+            print("[MIGRATE] Adding has_seen_guide column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN has_seen_guide BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+
         # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
         _migrate_totp_secrets()
 

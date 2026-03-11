@@ -40,6 +40,7 @@
                 <button id="theme-toggle" class="nav-icon-btn" title="Toggle dark mode">🌙</button>
                 {% if session.username %}
                 <div class="nav-user">
+                    <button type="button" id="btn-show-guide" class="nav-icon-btn" title="Guide de bienvenue">?</button>
                     <span class="nav-user-badge nav-user-badge--{{ session.role }}">
                         {{ session.username }}
                         <span class="nav-user-role">{% if session.role == 'admin' %}(admin){% elif session.role == 'viewer' %}(lecture seule){% else %}(utilisateur){% endif %}</span>
@@ -131,6 +132,21 @@
             }
             return _origFetch.call(this, url, opts);
         };
+    })();
+    </script>
+
+    <script nonce="{{ csp_nonce }}">
+    // "?" guide button: on non-dashboard pages, navigate to dashboard with guide flag
+    (function() {
+        var btn = document.getElementById("btn-show-guide");
+        if (!btn) return;
+        // If there's no guide-modal on this page, redirect to dashboard
+        if (!document.getElementById("guide-modal")) {
+            btn.addEventListener("click", function() {
+                sessionStorage.setItem("jh-show-guide", "1");
+                window.location.href = "/dashboard";
+            });
+        }
     })();
     </script>
 

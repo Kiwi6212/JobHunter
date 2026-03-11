@@ -1148,6 +1148,13 @@ def dashboard():
 
         user_quota = _get_user_quota(user_id)
 
+        # ── Show welcome guide for new users ───────────────────────────
+        show_guide = False
+        if user_id is not None:
+            _u = db.query(User).filter(User.id == user_id).first()
+            if _u and not _u.has_seen_guide:
+                show_guide = True
+
         # ── Filters dict for template ──────────────────────────────────
         filters = {
             'status': f_status,
@@ -1210,6 +1217,7 @@ def dashboard():
             page_range=page_range,
             start_item=start_item,
             end_item=end_item,
+            show_guide=show_guide,
         )
     finally:
         db.close()
@@ -2213,6 +2221,24 @@ def account_delete():
 
     session.clear()
     return jsonify({'ok': True})
+
+
+@bp.route('/api/account/guide-seen', methods=['POST'])
+@login_required
+def guide_seen():
+    """Mark the welcome guide as seen for the current user."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Non autorisé'}), 403
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.has_seen_guide = True
+            db.commit()
+        return jsonify({'ok': True})
+    finally:
+        db.close()
 
 
 # ── Document management ───────────────────────────────────────────────────────
