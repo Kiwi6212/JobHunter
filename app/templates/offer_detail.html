@@ -149,7 +149,7 @@
             <button type="button" id="btn-quick-apply" class="btn btn-primary{% if already_applied %} btn-applied{% endif %}"
                     data-url="{{ offer.url }}" data-offer-id="{{ offer.id }}"
                     {% if already_applied %}disabled{% endif %}>
-                {{ '&#10003; Postul&eacute;' if already_applied else 'Postuler &#8599;' }}
+                {{ '✓ Postulé' if already_applied else 'Postuler ↗' }}
             </button>
             {% endif %}
             <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Voir l'offre originale</a>
@@ -187,7 +187,7 @@
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
                     if (res.ok) {
-                        btnApply.innerHTML = "&#10003; Postul\u00e9";
+                        btnApply.textContent = "✓ Postulé";
                         btnApply.classList.add("btn-applied");
                         // Update the tracking form on this page
                         var sel = document.getElementById("t-status");

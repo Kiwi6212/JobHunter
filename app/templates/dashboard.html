@@ -268,7 +268,7 @@
                     <button type="button" class="btn btn-small btn-apply{% if uo and uo.cv_sent %} btn-applied{% endif %}"
                             data-url="{{ offer.url }}" data-offer-id="{{ offer.id }}"
                             {% if uo and uo.cv_sent %}disabled{% endif %}>
-                        {{ '&#10003;' if uo and uo.cv_sent else 'Postuler &#8599;' }}
+                        {{ '✓' if uo and uo.cv_sent else 'Postuler ↗' }}
                     </button>
                     {% else %}
                     <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>
