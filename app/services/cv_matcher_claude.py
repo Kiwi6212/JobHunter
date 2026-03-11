@@ -36,7 +36,7 @@ def _build_prompt(cv_text: str, batch: list) -> str:
     offers_block = "\n".join(
         f'- ID {offer.id}: {_offer_summary(offer)}' for offer in batch
     )
-    return f"""Tu es un expert RH. Évalue la compatibilité entre ce CV et chaque offre d'emploi.
+    return f"""Tu es un recruteur senior exigeant. Évalue la compatibilité RÉELLE entre ce CV et chaque offre d'emploi. Sois STRICT et RÉALISTE dans tes scores — la plupart des offres doivent obtenir entre 20% et 60%.
 
 CV DU CANDIDAT :
 {cv_text[:3000]}
@@ -50,11 +50,19 @@ Réponds UNIQUEMENT avec un objet JSON valide (pas de markdown, pas de texte ava
   ...
 }}
 
-Critères de scoring :
-- 80-100 : compétences principales très bien alignées
-- 50-79  : bon alignement partiel
-- 20-49  : quelques points communs
-- 0-19   : peu ou pas d'alignement"""
+BARÈME DE SCORING STRICT (respecte-le rigoureusement) :
+- 0-20%   : aucun rapport — le CV et l'offre concernent des domaines complètement différents
+- 20-40%  : quelques compétences communes mais le profil est fondamentalement différent (ex: un sysadmin pour un poste de développeur)
+- 40-60%  : profil partiellement compatible — certaines compétences correspondent mais il manque des éléments clés (ex: bon domaine mais mauvais niveau ou technologies différentes)
+- 60-80%  : bonne correspondance — la plupart des compétences requises sont présentes dans le CV, le domaine et le niveau correspondent
+- 80-100% : correspondance excellente — le profil matche presque parfaitement l'offre, les compétences clés, le niveau d'expérience et le domaine sont tous alignés
+
+RÈGLES IMPORTANTES :
+- Un score > 70% exige que le candidat possède les compétences CLÉS demandées dans l'offre, pas juste des compétences vaguement liées
+- Un score > 85% est RARE et ne devrait être donné que pour une correspondance quasi-parfaite
+- Si l'offre demande un niveau d'expérience très différent du CV, pénalise fortement (-20 à -30 points)
+- Si l'offre est dans un sous-domaine différent de celui du CV (ex: cybersécurité vs administration système), le score ne devrait pas dépasser 50%
+- Ne sois PAS généreux : un score moyen de 40-50% pour un ensemble d'offres mixtes est normal"""
 
 
 class ClaudeCVMatcher:

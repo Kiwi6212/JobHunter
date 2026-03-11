@@ -253,7 +253,7 @@
                 {% if has_cv %}
                 <td class="col-cv-score">
                     {% if cv_score_val is not none %}
-                    <span class="cv-match-badge {% if cv_score_val >= 70 %}cv-match-high{% elif cv_score_val >= 40 %}cv-match-mid{% else %}cv-match-low{% endif %}">
+                    <span class="cv-match-badge {% if cv_score_val >= 85 %}cv-match-excellent{% elif cv_score_val >= 70 %}cv-match-high{% elif cv_score_val >= 50 %}cv-match-mid{% elif cv_score_val >= 30 %}cv-match-orange{% else %}cv-match-low{% endif %}">
                         {{ '%.0f' % cv_score_val }}%
                     </span>
                     {% else %}

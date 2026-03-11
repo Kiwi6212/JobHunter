@@ -39,7 +39,7 @@
                     <th>Match CV :</th>
                     <td>
                         {% set score = offer.cv_match_score %}
-                        <span class="cv-match-badge {% if score >= 70 %}cv-match-high{% elif score >= 40 %}cv-match-mid{% else %}cv-match-low{% endif %}">
+                        <span class="cv-match-badge {% if score >= 85 %}cv-match-excellent{% elif score >= 70 %}cv-match-high{% elif score >= 50 %}cv-match-mid{% elif score >= 30 %}cv-match-orange{% else %}cv-match-low{% endif %}">
                             {{ '%.0f' % score }}%
                         </span>
                     </td>
