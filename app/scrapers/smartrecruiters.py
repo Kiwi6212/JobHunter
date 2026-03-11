@@ -42,20 +42,13 @@ SEARCH_QUERIES = [
     "alternance support informatique",
 ]
 
-# Île-de-France region names and department prefixes for filtering
-IDF_INDICATORS = {
-    "idf", "ile-de-france", "île-de-france",
-    "paris", "hauts-de-seine", "seine-saint-denis", "val-de-marne",
-    "yvelines", "essonne", "seine-et-marne", "val-d'oise",
-}
-IDF_POSTAL_PREFIXES = {"75", "77", "78", "91", "92", "93", "94", "95"}
 
 
 class SmartRecruitersScraper(BaseScraper):
     """
     Scraper for SmartRecruiters public postings API.
 
-    Searches multiple target companies for alternance offers in Île-de-France.
+    Searches multiple target companies for alternance offers in France.
     Uses the public API (no authentication required).
     """
 
@@ -129,17 +122,17 @@ class SmartRecruitersScraper(BaseScraper):
             seen.add(pid)
             unique.append(p)
 
-        # Filter for IDF location and parse
+        # Filter for France and parse
         offers = []
         for posting in unique:
-            if not self._is_idf(posting):
+            if not self._is_france(posting):
                 continue
             offer = self._parse_posting(posting, company_name)
             if offer:
                 offers.append(offer)
 
         logger.info(
-            f"[smartrecruiters] [{company_name}] {len(offers)} IDF offers "
+            f"[smartrecruiters] [{company_name}] {len(offers)} France offers "
             f"(from {len(unique)} unique postings)"
         )
 
@@ -194,39 +187,17 @@ class SmartRecruitersScraper(BaseScraper):
 
         return postings
 
-    def _is_idf(self, posting):
-        """Check if a posting is located in Île-de-France."""
+    def _is_france(self, posting):
+        """Check if a posting is located in France."""
         location = posting.get("location", {})
         country = (location.get("country") or "").lower()
 
-        # Must be in France
-        if country and country != "fr":
+        # Reject if explicitly not France
+        if country and country not in ("fr", "france"):
             return False
 
-        # Check postal code
-        postal = location.get("postalCode", "")
-        if postal and postal[:2] in IDF_POSTAL_PREFIXES:
-            return True
-
-        # Check region name
-        region = (location.get("region") or "").lower()
-        if region:
-            for indicator in IDF_INDICATORS:
-                if indicator in region:
-                    return True
-
-        # Check city name
-        city = (location.get("city") or "").lower()
-        if city in ("paris", "levallois-perret", "bezons", "nanterre",
-                     "boulogne-billancourt", "puteaux", "la défense",
-                     "courbevoie", "issy-les-moulineaux", "saint-denis"):
-            return True
-
-        # No location data — keep it (avoid false negatives)
-        if not region and not postal and not city:
-            return True
-
-        return False
+        # No country data — keep it (avoid false negatives)
+        return True
 
     def _parse_posting(self, posting, company_name):
         """Parse a SmartRecruiters posting into a normalized offer dict."""

@@ -29,21 +29,6 @@ SEARCH_QUERIES = [
     "alternance",
 ]
 
-# IDF location indicators for filtering
-IDF_INDICATORS = [
-    "paris", "île-de-france", "ile-de-france", "idf",
-    "la défense", "la defense",
-    "nanterre", "boulogne", "levallois", "puteaux",
-    "courbevoie", "issy", "saint-denis", "massy",
-    "vélizy", "velizy", "guyancourt", "saclay",
-    "versailles", "meudon", "rueil", "noisy",
-    "créteil", "roissy", "gennevilliers",
-    "hauts-de-seine", "val-de-marne", "seine-saint-denis",
-    "yvelines", "essonne", "val-d'oise", "seine-et-marne",
-    "moissy", "villaroche", "corbeil", "evry", "melun",
-    "argenteuil", "colombes", "montrouge",
-]
-
 MAX_PAGES = 30  # safety cap per query
 
 
@@ -51,8 +36,7 @@ class SafranScraper(BaseScraper):
     """
     Scraper for Safran Group Drupal career portal.
 
-    Fetches alternance offers in France, parses HTML listings,
-    and filters for Île-de-France locations.
+    Fetches alternance offers in France, parses HTML listings.
     """
 
     @property
@@ -109,19 +93,18 @@ class SafranScraper(BaseScraper):
             page += 1
             self._delay()
 
-        # Filter for IDF
-        idf_offers = []
+        # Parse all offers (already filtered for France by API parameter)
+        offers = []
         for job in all_jobs.values():
-            if self._is_idf(job.get("location", "")):
-                offer = self._to_offer(job)
-                if offer:
-                    idf_offers.append(offer)
+            offer = self._to_offer(job)
+            if offer:
+                offers.append(offer)
 
         logger.info(
-            f"[safran] q='{query}': {len(idf_offers)} IDF offers "
+            f"[safran] q='{query}': {len(offers)} France offers "
             f"(from {len(all_jobs)} unique)"
         )
-        return idf_offers
+        return offers
 
     def _fetch_page(self, query, page):
         """Fetch one page of offers from the Safran career site."""
@@ -247,13 +230,6 @@ class SafranScraper(BaseScraper):
         # Also check: if there are pagination items, see if current is last
         pager_items = soup.select('.pager__item a, .pagination a')
         return len(pager_items) > 1
-
-    def _is_idf(self, location):
-        """Check if location is in Île-de-France."""
-        if not location:
-            return False
-        loc_lower = location.lower()
-        return any(ind in loc_lower for ind in IDF_INDICATORS)
 
     def _to_offer(self, job):
         """Convert parsed job dict to normalized offer."""

@@ -8,7 +8,7 @@ Authentication: OAuth2 client_credentials
 Search endpoint:
   GET https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search
 
-Coverage: Île-de-France departments, alternance (typeContrat=E), sysadmin ROME codes.
+Coverage: nationwide France, alternance (typeContrat=E), sysadmin ROME codes.
 Pagination via the `range` query parameter (max 150 per page).
 """
 
@@ -35,9 +35,9 @@ class FranceTravailScraper(BaseScraper):
     """
     Fetches alternance job offers from the France Travail v2 API.
 
-    Iterates over every (ROME code, IDF department) pair and paginates
+    Iterates over ROME codes (nationwide, no department filter) and paginates
     through results using the `range` header / query parameter.
-    Deduplicates by external_id across all pages and pairs.
+    Deduplicates by external_id across all pages.
     """
 
     @property
@@ -96,25 +96,31 @@ class FranceTravailScraper(BaseScraper):
             "Accept": "application/json",
         }
 
-        departments = FILTERS.get("departments", ["75", "77", "78", "91", "92", "93", "94", "95"])
+        departments = FILTERS.get("departments", [])
         all_offers = []
         seen_ids = set()
         seen_urls = set()
 
         for rome in ROME_CODES:
-            for dept in departments:
-                offers = self._search_page(headers, rome, dept, seen_ids, seen_urls)
+            if departments:
+                # Search per department
+                for dept in departments:
+                    offers = self._search_rome(headers, rome, seen_ids, seen_urls, departement=dept)
+                    all_offers.extend(offers)
+                    if offers:
+                        logger.info(f"[france_travail] ROME={rome} dept={dept}: {len(offers)} offers")
+            else:
+                # Nationwide search (no department filter)
+                offers = self._search_rome(headers, rome, seen_ids, seen_urls)
                 all_offers.extend(offers)
                 if offers:
-                    logger.info(
-                        f"[france_travail] ROME={rome} dept={dept}: {len(offers)} offers"
-                    )
+                    logger.info(f"[france_travail] ROME={rome} (nationwide): {len(offers)} offers")
 
         logger.info(f"[france_travail] Total unique offers: {len(all_offers)}")
         return all_offers
 
-    def _search_page(self, headers, rome_code, departement, seen_ids, seen_urls):
-        """Paginate through all results for one (ROME, department) pair."""
+    def _search_rome(self, headers, rome_code, seen_ids, seen_urls, departement=None):
+        """Paginate through all results for a ROME code (optionally filtered by department)."""
         offers = []
         start = 0
 
@@ -122,10 +128,11 @@ class FranceTravailScraper(BaseScraper):
             end = start + PAGE_SIZE - 1
             params = {
                 "codeROME": rome_code,
-                "departement": departement,
                 "natureContrat": "E1",       # E1 = Apprentissage
                 "range": f"{start}-{end}",
             }
+            if departement:
+                params["departement"] = departement
 
             try:
                 resp = requests.get(
@@ -137,7 +144,7 @@ class FranceTravailScraper(BaseScraper):
             except requests.exceptions.RequestException as e:
                 logger.error(
                     f"[france_travail] Request error "
-                    f"(ROME={rome_code}, dept={departement}): {e}"
+                    f"(ROME={rome_code}, dept={departement or 'all'}): {e}"
                 )
                 break
 
@@ -146,7 +153,7 @@ class FranceTravailScraper(BaseScraper):
             if resp.status_code in (400, 401, 403):
                 logger.error(
                     f"[france_travail] HTTP {resp.status_code} "
-                    f"(ROME={rome_code}, dept={departement})"
+                    f"(ROME={rome_code}, dept={departement or 'all'})"
                 )
                 break
             if resp.status_code not in (200, 206):

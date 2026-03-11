@@ -18,10 +18,6 @@ ALGOLIA_APP_ID = "CSEKHVMS53"
 ALGOLIA_API_KEY = "4bd8f6215d0cc52b26430765769e65a0"
 ALGOLIA_URL = f"https://{ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/wttj_jobs_production_fr/query"
 
-# Paris center for geo-search
-IDF_CENTER_LAT = 48.8566
-IDF_CENTER_LNG = 2.3522
-IDF_RADIUS_M = 80000  # 80km in meters
 
 # WTTJ sub-category for network/sysadmin roles
 SYSADMIN_SUBCATEGORY = "network-engineering-and-administration-yZjhm"
@@ -49,7 +45,7 @@ class WTTJScraper(BaseScraper):
     Scraper for Welcome to the Jungle via Algolia.
 
     Uses Algolia's search API with WTTJ's public credentials to find
-    alternance offers in Ile-de-France for sysadmin/infrastructure roles.
+    alternance offers across France for sysadmin/infrastructure roles.
     """
 
     @property
@@ -133,8 +129,7 @@ class WTTJScraper(BaseScraper):
                 "hitsPerPage": 50,
                 "page": page,
                 "facetFilters": facet_filters,
-                "aroundLatLng": f"{IDF_CENTER_LAT}, {IDF_CENTER_LNG}",
-                "aroundRadius": IDF_RADIUS_M,
+                "filters": "office.country_code:FR",
             }
 
             try:

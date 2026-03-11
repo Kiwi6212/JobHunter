@@ -14,14 +14,14 @@ from config import APIKeys, ROME_CODES, FILTERS
 
 logger = logging.getLogger(__name__)
 
-# Paris center coordinates for geo-search
-IDF_CENTER = {
-    "latitude": 48.8566,
-    "longitude": 2.3522,
+# France center coordinates for geo-search (geographic center near Bourges)
+FRANCE_CENTER = {
+    "latitude": 46.603354,
+    "longitude": 1.888334,
 }
 
-# 80km radius covers all of Ile-de-France
-IDF_RADIUS_KM = 80
+# 600km radius covers all of metropolitan France from center
+FRANCE_RADIUS_KM = 600
 
 
 class LaBonneAlternanceScraper(BaseScraper):
@@ -50,7 +50,7 @@ class LaBonneAlternanceScraper(BaseScraper):
     def collect(self):
         """
         Collect alternance offers from La bonne alternance API.
-        Searches using ROME codes for Ile-de-France region.
+        Searches using ROME codes across all of France.
 
         Returns:
             list[dict]: Normalized offer dictionaries.
@@ -107,12 +107,12 @@ class LaBonneAlternanceScraper(BaseScraper):
         self.session.close()
 
     def _search_by_geo(self, rome_codes_str):
-        """Search offers by geographic coordinates (Paris center)."""
+        """Search offers by geographic coordinates (France center)."""
         params = {
             "romes": rome_codes_str,
-            "latitude": IDF_CENTER["latitude"],
-            "longitude": IDF_CENTER["longitude"],
-            "radius": IDF_RADIUS_KM,
+            "latitude": FRANCE_CENTER["latitude"],
+            "longitude": FRANCE_CENTER["longitude"],
+            "radius": FRANCE_RADIUS_KM,
         }
 
         return self._execute_search(params, "geo-search")

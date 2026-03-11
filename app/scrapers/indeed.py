@@ -62,7 +62,7 @@ SEARCH_QUERIES = [
 ]
 
 # Location filter
-LOCATION = "Île-de-France"
+LOCATION = "France"
 
 # Max pages per query (10 results per page)
 MAX_PAGES = 1
@@ -77,7 +77,7 @@ class IndeedScraper(BaseScraper):
 
     Uses Brave browser (minimized window) to bypass Cloudflare protection.
     Indeed blocks headless browsers, so a visible window is required.
-    Searches for alternance offers in Île-de-France, parses job cards,
+    Searches for alternance offers across France, parses job cards,
     and deduplicates by job key.
     """
 

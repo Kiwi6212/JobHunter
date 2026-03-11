@@ -140,8 +140,8 @@ KEYWORDS = [
 
 FILTERS = {
     "contract_type": "alternance",
-    "location": "Île-de-France",
-    "departments": ["75", "78", "91", "92", "93", "94", "95", "77"],
+    "location": "France",
+    "departments": [],  # Empty = nationwide (no department filter)
     "min_level": "bac+3",
     "max_level": "bac+5",
     "duration": "24 months",

@@ -55,16 +55,12 @@ SEARCH_QUERIES = [
     "apprentissage informatique",
 ]
 
-# IDF location indicators for filtering
-IDF_INDICATORS = [
-    "paris", "île-de-france", "ile-de-france", "idf",
-    "la défense", "la defense",
-    "nanterre", "boulogne", "levallois", "puteaux",
-    "courbevoie", "issy", "saint-denis", "massy",
-    "vélizy", "velizy", "guyancourt", "saclay",
-    "palaiseau", "roissy", "noisy", "créteil",
-    "versailles", "meudon", "rueil",
-    "elancourt", "limours", "gennevilliers",
+# France location indicators for filtering (reject non-France locations)
+NON_FRANCE_INDICATORS = [
+    "united states", "usa", "u.s.", "germany", "deutschland",
+    "united kingdom", "uk", "canada", "india", "china",
+    "spain", "italia", "italy", "netherlands", "belgium",
+    "australia", "singapore", "japan", "brazil",
 ]
 
 
@@ -73,7 +69,7 @@ class WorkdayScraper(BaseScraper):
     Scraper for Workday public jobs API.
 
     Searches multiple target companies for alternance offers,
-    filters for Île-de-France locations.
+    filters for France locations.
     """
 
     @property
@@ -147,18 +143,18 @@ class WorkdayScraper(BaseScraper):
             seen.add(path)
             unique.append(job)
 
-        # Filter for IDF and parse
+        # Filter for France and parse
         base_url = f"https://{slug}.wd{wd_num}.myworkdayjobs.com"
         offers = []
         for job in unique:
-            if not self._is_idf(job):
+            if not self._is_france(job):
                 continue
             offer = self._parse_job(job, company_name, base_url)
             if offer:
                 offers.append(offer)
 
         logger.info(
-            f"[workday] [{company_name}] {len(offers)} IDF offers "
+            f"[workday] [{company_name}] {len(offers)} France offers "
             f"(from {len(unique)} unique postings)"
         )
 
@@ -220,18 +216,21 @@ class WorkdayScraper(BaseScraper):
 
         return all_jobs
 
-    def _is_idf(self, job):
-        """Check if a job is located in Île-de-France."""
+    def _is_france(self, job):
+        """Check if a job is located in France (reject known non-France locations)."""
         location = (job.get("locationsText") or "").lower()
 
         if not location:
             return False  # Skip jobs without location
 
-        for indicator in IDF_INDICATORS:
+        # Reject if location matches a known non-France country
+        for indicator in NON_FRANCE_INDICATORS:
             if indicator in location:
-                return True
+                return False
 
-        return False
+        # Accept: includes "france", French city names, or unrecognized locations
+        # (Workday companies are searched with French queries, so most results are French)
+        return True
 
     def _parse_job(self, job, company_name, base_url):
         """Parse a Workday job posting into a normalized offer dict."""

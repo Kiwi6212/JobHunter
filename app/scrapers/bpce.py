@@ -32,8 +32,6 @@ SEARCH_QUERIES = [
     "alternance",
 ]
 
-# IDF state name in the dataset
-IDF_STATE = "Ile de France"
 
 
 class BpceScraper(BaseScraper):
@@ -41,7 +39,7 @@ class BpceScraper(BaseScraper):
     Scraper for BPCE group jobs via OpenDataSoft public API.
 
     Fetches Natixis (and other BPCE entities) alternance offers
-    in Île-de-France.
+    across France.
     """
 
     @property
@@ -88,10 +86,9 @@ class BpceScraper(BaseScraper):
         offset = 0
         limit = 100
 
-        # Build WHERE clause: organization + IDF + alternance
+        # Build WHERE clause: organization (nationwide, no state filter)
         where_parts = [
             f'organization like "{org_name}"',
-            f'state = "{IDF_STATE}"',
         ]
         where_clause = " AND ".join(where_parts)
 
@@ -143,7 +140,7 @@ class BpceScraper(BaseScraper):
 
         logger.info(
             f"[bpce] [{org_name}] {len(offers)} matching offers "
-            f"(from {len(all_records)} IDF records)"
+            f"(from {len(all_records)} records)"
         )
         return offers
 
