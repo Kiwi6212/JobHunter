@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statut — MyJobHunter</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+    <style nonce="{{ csp_nonce }}">
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --primary:      #2563EB;
+            --primary-dark: #1d4ed8;
+            --accent:       #7c3aed;
+            --bg:           #ffffff;
+            --bg-alt:       #f8fafc;
+            --card:         #ffffff;
+            --border:       #e2e8f0;
+            --text:         #0f172a;
+            --text-sub:     #475569;
+            --text-muted:   #94a3b8;
+            --shadow:       0 8px 32px rgba(0,0,0,.10);
+            --shadow-sm:    0 2px 12px rgba(0,0,0,.06);
+            --radius:       14px;
+            --radius-sm:    10px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary:      #3b82f6;
+                --primary-dark: #2563eb;
+                --accent:       #a78bfa;
+                --bg:           #0f172a;
+                --bg-alt:       #1e293b;
+                --card:         #1e293b;
+                --border:       #334155;
+                --text:         #f1f5f9;
+                --text-sub:     #94a3b8;
+                --text-muted:   #64748b;
+                --shadow:       0 8px 32px rgba(0,0,0,.5);
+                --shadow-sm:    0 2px 12px rgba(0,0,0,.3);
+            }
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: inherit; text-decoration: none; }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 0 1.5rem; }
+
+        /* ── Nav ─────────────────────────────────────────────── */
+        nav {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+        @media (prefers-color-scheme: dark) {
+            nav { background: rgba(15,23,42,.88); }
+        }
+        .nav-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 64px; max-width: 800px; margin: 0 auto; padding: 0 1.5rem;
+        }
+        .nav-logo {
+            font-size: 1.3rem; font-weight: 800;
+            color: var(--primary); letter-spacing: -0.5px;
+        }
+        .nav-actions { display: flex; gap: 0.6rem; align-items: center; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.55rem 1.2rem; border-radius: 8px;
+            font-size: 0.9rem; font-weight: 600;
+            cursor: pointer; border: none; transition: all 0.2s;
+        }
+        .btn-ghost { background: transparent; color: var(--text-sub); }
+        .btn-ghost:hover { background: var(--bg-alt); }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        /* ── Hero ─────────────────────────────────────────────── */
+        .hero {
+            padding: 3rem 0 2rem;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: 2rem; font-weight: 800; color: #fff;
+            letter-spacing: -0.5px; margin-bottom: 0.5rem;
+        }
+        .hero p { color: rgba(255,255,255,.8); font-size: 1rem; }
+
+        /* ── Overall status banner ────────────────────────────── */
+        .status-banner {
+            margin: 2rem 0 1.5rem;
+            padding: 1.5rem 2rem;
+            border-radius: var(--radius);
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+            box-shadow: var(--shadow-sm);
+        }
+        .status-banner.operational {
+            background: #dcfce7; color: #166534;
+            border: 1px solid #86efac;
+        }
+        .status-banner.degraded {
+            background: #fee2e2; color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        @media (prefers-color-scheme: dark) {
+            .status-banner.operational { background: #14532d; color: #86efac; border-color: #166534; }
+            .status-banner.degraded    { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+        }
+
+        /* ── Cards ────────────────────────────────────────────── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .card h2 {
+            font-size: 1.05rem; font-weight: 700;
+            margin-bottom: 1rem; color: var(--text);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        /* ── Metrics grid ─────────────────────────────────────── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .metric {
+            display: flex; flex-direction: column; gap: 0.25rem;
+        }
+        .metric-label {
+            font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.4px; color: var(--text-muted);
+        }
+        .metric-value {
+            font-size: 1.05rem; font-weight: 600; color: var(--text);
+        }
+        .metric-value.ok   { color: #16a34a; }
+        .metric-value.err  { color: #dc2626; }
+
+        /* ── Incident list ────────────────────────────────────── */
+        .incident-list { list-style: none; padding: 0; }
+        .incident-item {
+            display: flex; gap: 0.75rem; align-items: baseline;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.88rem;
+        }
+        .incident-item:last-child { border-bottom: none; }
+        .incident-date {
+            flex-shrink: 0; font-size: 0.78rem;
+            font-weight: 600; color: var(--text-muted);
+            min-width: 130px;
+        }
+        .incident-msg { color: var(--text-sub); }
+        .no-incidents {
+            text-align: center; padding: 1.5rem;
+            color: var(--text-muted); font-size: 0.9rem;
+        }
+
+        /* ── Footer ───────────────────────────────────────────── */
+        footer {
+            padding: 2rem 0; text-align: center;
+            border-top: 1px solid var(--border); margin-top: 2rem;
+        }
+        footer p { font-size: 0.82rem; color: var(--text-muted); }
+        footer a { color: var(--text-muted); text-decoration: underline; }
+
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 1.5rem; }
+            .card { padding: 1.2rem 1rem; }
+            .metrics-grid { grid-template-columns: 1fr 1fr; }
+            .incident-date { min-width: 100px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="nav-logo">MyJobHunter</a>
+        <div class="nav-actions">
+            <a href="/login" class="btn btn-ghost">Connexion</a>
+            <a href="/register" class="btn btn-primary">S'inscrire</a>
+        </div>
+    </div>
+</nav>
+
+<div class="hero">
+    <div class="container">
+        <h1>Statut du service</h1>
+        <p>Disponibilit&eacute; en temps r&eacute;el de MyJobHunter</p>
+    </div>
+</div>
+
+<div class="container">
+    {% if db_ok %}
+    <div class="status-banner operational">
+        Tous les syst&egrave;mes sont op&eacute;rationnels
+    </div>
+    {% else %}
+    <div class="status-banner degraded">
+        Probl&egrave;me d&eacute;tect&eacute;
+    </div>
+    {% endif %}
+
+    <!-- ── System metrics ──────────────────────────────────── -->
+    <div class="card">
+        <h2>Composants</h2>
+        <div class="metrics-grid">
+            <div class="metric">
+                <span class="metric-label">Application</span>
+                <span class="metric-value ok">Op&eacute;rationnel</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Base de donn&eacute;es</span>
+                <span class="metric-value {{ 'ok' if db_ok else 'err' }}">
+                    {{ 'OK' if db_ok else 'Erreur' }}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Offres actives</span>
+                <span class="metric-value">{{ active_offers }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Dernier scraping</span>
+                <span class="metric-value">{{ last_scraping }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Uptime serveur</span>
+                <span class="metric-value">{{ uptime }}</span>
+            </div>
+            {% if uptimerobot_url %}
+            <div class="metric">
+                <span class="metric-label">Monitoring externe</span>
+                <span class="metric-value">
+                    <a href="{{ uptimerobot_url }}" target="_blank" rel="noopener noreferrer"
+                       style="color:var(--primary);text-decoration:underline;">
+                        UptimeRobot
+                    </a>
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── Recent incidents ─────────────────────────────────── -->
+    <div class="card">
+        <h2>Incidents r&eacute;cents</h2>
+        {% if incidents %}
+        <ul class="incident-list">
+            {% for inc in incidents %}
+            <li class="incident-item">
+                <span class="incident-date">{{ inc.date }}</span>
+                <span class="incident-msg">{{ inc.summary }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="no-incidents">
+            Aucun incident ces derniers jours.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<footer>
+    <p>
+        &copy; 2026 MyJobHunter &mdash; Mathias Quillateau &nbsp;|&nbsp;
+        <a href="/">Accueil</a> &nbsp;|&nbsp;
+        <a href="/faq">FAQ</a>
+    </p>
+</footer>
+
+</body>
+</html>

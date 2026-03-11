@@ -3353,6 +3353,106 @@ def health():
     })
 
 
+# ── Public status page ────────────────────────────────────────────────────────
+
+def _format_uptime(seconds: int) -> str:
+    """Format seconds into a human-readable French uptime string."""
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days > 0:
+        return f"{days}j {hours}h {minutes}min"
+    if hours > 0:
+        return f"{hours}h {minutes}min"
+    return f"{minutes}min"
+
+
+def _read_recent_incidents(n: int = 10) -> list[dict]:
+    """Read the last n error entries from errors.log for public display.
+
+    Returns a list of {date, summary} dicts with sensitive details stripped.
+    """
+    from collections import deque
+    from config import Config as _Cfg
+
+    # Try configured path, then fallback
+    log_path = Path(_Cfg.ERROR_LOG_PATH) if hasattr(_Cfg, "ERROR_LOG_PATH") else None
+    if not log_path or not log_path.exists():
+        log_path = DATA_DIR / "errors.log"
+    if not log_path.exists():
+        return []
+
+    try:
+        raw_lines = deque(log_path.read_text(encoding="utf-8", errors="replace").splitlines(), maxlen=n * 3)
+        entries = []
+        for line in reversed(raw_lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                ts = entry.get("timestamp", entry.get("time", ""))
+                # Format date for display (strip seconds)
+                date_str = ts[:16].replace("T", " ") if ts else "?"
+                # Build a safe summary: error type + short message, no tracebacks/paths
+                exc_type = entry.get("exception_type", "")
+                message = entry.get("message", entry.get("error", "Erreur interne"))
+                # Truncate and sanitise
+                if exc_type:
+                    summary = f"{exc_type}: {message[:120]}"
+                else:
+                    summary = message[:140]
+                entries.append({"date": date_str, "summary": summary})
+            except (json.JSONDecodeError, KeyError):
+                pass
+            if len(entries) >= n:
+                break
+        return entries
+    except Exception:
+        return []
+
+
+@bp.route('/status')
+@limiter.limit('30 per minute')
+def status_page():
+    """Public status page showing service health and recent incidents."""
+    uptime_sec = int((datetime.utcnow() - _APP_START_TIME).total_seconds())
+
+    db_ok = False
+    active_offers = 0
+    last_scraping = "N/A"
+    try:
+        db = SessionLocal()
+        try:
+            active_offers = db.query(func.count(Offer.id)).filter(
+                Offer.is_active.is_(True)
+            ).scalar() or 0
+            db_ok = True
+            # Most recent found_date
+            latest = db.query(func.max(Offer.found_date)).scalar()
+            if latest:
+                last_scraping = latest.strftime("%d/%m/%Y %H:%M")
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    # UptimeRobot public page URL (optional env var)
+    uptimerobot_url = os.getenv("UPTIMEROBOT_STATUS_URL", "")
+
+    incidents = _read_recent_incidents(10)
+
+    return render_template(
+        'status.html',
+        db_ok=db_ok,
+        active_offers=active_offers,
+        last_scraping=last_scraping,
+        uptime=_format_uptime(uptime_sec),
+        uptimerobot_url=uptimerobot_url,
+        incidents=incidents,
+    )
+
+
 # ── Admin error log ────────────────────────────────────────────────────────────
 
 def _get_log_path(key: str) -> Path:
