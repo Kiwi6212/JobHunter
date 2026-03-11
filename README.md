@@ -330,6 +330,17 @@ Add this line to your crontab (`crontab -e`) to run the backup every night at
 0 3 * * 0 cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/check_dead_links.py >> /home/ubuntu/logs/dead_links.log 2>&1
 ```
 
+### Monthly inactive user cleanup (cron)
+
+`scripts/cleanup_inactive_users.py` deletes non-admin user accounts that have
+been inactive for more than 90 days (no login), along with all associated data
+(tracking, documents, password resets). Add this to your crontab to run on the
+1st of each month at 04:00 UTC:
+
+```cron
+0 4 1 * * cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/cleanup_inactive_users.py >> /home/ubuntu/logs/cleanup_users.log 2>&1
+```
+
 You can override the backup directory via the `BACKUP_DIR` environment variable:
 
 ```bash

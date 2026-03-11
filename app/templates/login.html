@@ -114,6 +114,12 @@
             {% endif %}
         </div>
         {% endif %}
+        {% if request.args.get('reason') == 'inactivity' %}
+        <div style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;
+                    padding:.65rem .85rem;font-size:.9rem;margin-bottom:1.25rem;">
+            Vous avez &eacute;t&eacute; d&eacute;connect&eacute; pour inactivit&eacute;.
+        </div>
+        {% endif %}
         {% if request.args.get('ok') == 'password_reset' %}
         <div style="background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;
                     padding:.65rem .85rem;font-size:.9rem;margin-bottom:1.25rem;">

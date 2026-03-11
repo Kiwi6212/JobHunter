@@ -396,8 +396,12 @@ def login_2fa():
 @bp.route('/logout', methods=['GET', 'POST'])
 def logout():
     """Clear session and redirect to login."""
+    reason = request.args.get("reason", "")
     session.clear()
-    return redirect(url_for("main.login"))
+    target = url_for("main.login")
+    if reason == "inactivity":
+        target = url_for("main.login", reason="inactivity")
+    return redirect(target)
 
 
 @bp.route('/register', methods=['GET', 'POST'])
