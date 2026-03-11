@@ -915,14 +915,15 @@ def dashboard():
         f_show_recruiters = request.args.get('show_recruiters', '') == '1'
         f_favorites = request.args.get('favorites', '') == '1'
         f_cv_sent = request.args.get('cv_sent', '') == '1'
-        f_sort = request.args.get('sort', 'score')
-        f_order = request.args.get('order', 'desc')
+        f_sort = request.args.get('sort', '').strip()
+        f_order = request.args.get('order', '').strip()
+        sort_explicit = bool(f_sort)
 
         # Validate
         if f_status and f_status not in VALID_STATUSES:
             f_status = ''
-        if f_sort not in ('title', 'company', 'location', 'source', 'date', 'score', 'cv_score'):
-            f_sort = 'score'
+        if f_sort and f_sort not in ('title', 'company', 'location', 'source', 'date', 'score', 'cv_score', 'found_date'):
+            f_sort = ''  # resolved below after we know if CV scores exist
         if f_order not in ('asc', 'desc'):
             f_order = 'desc'
 
@@ -1037,6 +1038,29 @@ def dashboard():
         if page > total_pages:
             page = total_pages
 
+        # ── Resolve default sort (when no explicit sort param) ──────────
+        if not sort_explicit:
+            # Default: cv_match_score desc if user has any scores
+            has_scores = False
+            if user_id is not None:
+                has_scores = db.query(UserOffer.id).filter(
+                    UserOffer.user_id == user_id,
+                    UserOffer.cv_match_score.isnot(None),
+                ).limit(1).first() is not None
+            else:
+                score_q = db.query(Offer.id).filter(
+                    Offer.cv_match_score.isnot(None),
+                )
+                if domain_id:
+                    score_q = score_q.filter(Offer.domain_id == domain_id)
+                has_scores = score_q.limit(1).first() is not None
+
+            if has_scores:
+                f_sort = 'cv_score'
+            else:
+                f_sort = 'found_date'
+            f_order = 'desc'
+
         # ── Sort ───────────────────────────────────────────────────────
         sort_map = {
             'title': Offer.title,
@@ -1045,6 +1069,7 @@ def dashboard():
             'source': Offer.source,
             'date': Offer.posted_date,
             'score': Offer.relevance_score,
+            'found_date': Offer.found_date,
         }
         if f_sort == 'cv_score':
             sort_col = UserOffer.cv_match_score if user_id is not None else Offer.cv_match_score
@@ -1154,8 +1179,8 @@ def dashboard():
             'show_recruiters': '1' if f_show_recruiters else '',
             'favorites': '1' if f_favorites else '',
             'cv_sent': '1' if f_cv_sent else '',
-            'sort': f_sort if f_sort != 'score' else '',
-            'order': f_order if f_order != 'desc' else '',
+            'sort': f_sort if sort_explicit else '',
+            'order': f_order if sort_explicit else '',
         }.items() if v})
 
         page_range = _make_page_range(page, total_pages)

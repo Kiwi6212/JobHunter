@@ -174,6 +174,21 @@
     applyLang(e.detail.lang);
   });
 
+  // ── Persist dashboard params in sessionStorage ─────────────────────
+  // On load: if URL has query params, save them; if not, restore from session.
+  (function persistDashboardParams() {
+    var search = window.location.search;
+    if (search && search !== "?") {
+      sessionStorage.setItem("dashboard_params", search);
+    } else {
+      var saved = sessionStorage.getItem("dashboard_params");
+      if (saved) {
+        window.location.replace(window.location.pathname + saved);
+        return; // page will reload
+      }
+    }
+  })();
+
   // ── Guard: early return if no table ─────────────────────────────────
 
   var tbody = document.querySelector("#offers-table tbody");
@@ -377,6 +392,7 @@
   var resetBtn = document.getElementById("filters-reset");
   if (resetBtn) {
     resetBtn.addEventListener("click", function () {
+      sessionStorage.removeItem("dashboard_params");
       window.location.href = window.location.pathname;
     });
   }

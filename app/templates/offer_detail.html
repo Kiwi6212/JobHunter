@@ -145,7 +145,7 @@
         <!-- ── Actions ──────────────────────────────────────────── -->
         <div class="offer-actions">
             <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Voir l'offre originale</a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Retour au dashboard</a>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary" id="btn-back-dashboard">Retour au dashboard</a>
         </div>
     </div>
 </div>
@@ -155,6 +155,15 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
     "use strict";
+
+    // ── Back to dashboard with saved filters ───────────────────────────
+    var btnBack = document.getElementById("btn-back-dashboard");
+    if (btnBack) {
+        var saved = sessionStorage.getItem("dashboard_params");
+        if (saved) {
+            btnBack.href = btnBack.href.split("?")[0] + saved;
+        }
+    }
 
     // ── Tracking save ──────────────────────────────────────────────────
     var btnSave = document.getElementById("btn-save-tracking");
