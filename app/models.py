@@ -159,6 +159,11 @@ class User(Base):
 
     # Email preferences
     email_weekly = Column(Boolean, nullable=False, default=True)
+    email_alerts = Column(Boolean, nullable=False, default=True)
+
+    # Daily alert rate-limiting
+    daily_alert_count = Column(Integer, nullable=False, default=0)
+    daily_alert_date = Column(String(10), nullable=True, default=None)  # YYYY-MM-DD
 
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))

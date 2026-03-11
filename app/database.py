@@ -240,6 +240,30 @@ def _migrate_columns():
                 ))
             print("[MIGRATE] Done.")
 
+        if "email_alerts" not in user_cols:
+            print("[MIGRATE] Adding email_alerts column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN email_alerts BOOLEAN NOT NULL DEFAULT 1"
+                ))
+            print("[MIGRATE] Done.")
+
+        if "daily_alert_count" not in user_cols:
+            print("[MIGRATE] Adding daily_alert_count column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN daily_alert_count INTEGER NOT NULL DEFAULT 0"
+                ))
+            print("[MIGRATE] Done.")
+
+        if "daily_alert_date" not in user_cols:
+            print("[MIGRATE] Adding daily_alert_date column to users table...")
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN daily_alert_date TEXT"
+                ))
+            print("[MIGRATE] Done.")
+
         # Encrypt existing plaintext TOTP secrets if TOTP_ENCRYPTION_KEY is set
         _migrate_totp_secrets()
 

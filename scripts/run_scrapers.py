@@ -8,9 +8,12 @@ Usage:
 """
 
 import sys
+import hashlib
+import hmac
+import html as _html
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add project root to Python path
 project_root = Path(__file__).resolve().parent.parent
@@ -34,8 +37,8 @@ import app.scrapers.bpce as _bpce_mod
 import app.services.filter_engine as _fe_mod
 
 from app.database import SessionLocal, init_db
-from app.models import Offer, Tracking, Domain
-from config import LOG_LEVEL
+from app.models import Offer, Tracking, Domain, User, UserOffer
+from config import Config, LOG_LEVEL
 
 # Configure logging
 logging.basicConfig(
@@ -370,15 +373,17 @@ def save_offers_to_db(
     domain_id: int,
     seen_urls: set,
     seen_ext_ids: set,
+    new_offer_ids: list[int] | None = None,
 ) -> tuple[int, int]:
     """
     Save filtered offers to the database for a specific domain.
 
     Args:
-        offers       – filtered offer dicts from FilterEngine
-        domain_id    – domain to associate with new offers
-        seen_urls    – global set of URLs already saved (updated in-place)
-        seen_ext_ids – global set of external_ids already saved (updated in-place)
+        offers         – filtered offer dicts from FilterEngine
+        domain_id      – domain to associate with new offers
+        seen_urls      – global set of URLs already saved (updated in-place)
+        seen_ext_ids   – global set of external_ids already saved (updated in-place)
+        new_offer_ids  – if provided, newly created offer IDs are appended here
 
     Returns:
         (new_count, duplicate_count)
@@ -439,6 +444,9 @@ def save_offers_to_db(
                 seen_ext_ids.add(ext_id)
             new_count += 1
 
+            if new_offer_ids is not None:
+                new_offer_ids.append(new_offer.id)
+
         db.commit()
         logger.info(f"[db] Saved {new_count} new offers, {duplicate_count} duplicates skipped")
 
@@ -456,6 +464,7 @@ def run_domain(
     domain_name: str,
     seen_urls: set,
     seen_ext_ids: set,
+    new_offer_ids: list[int] | None = None,
 ) -> tuple[int, int]:
     """
     Run all scrapers for a single domain.
@@ -522,7 +531,7 @@ def run_domain(
         return 0, 0
 
     # Save with domain_id (global dedup via seen_urls / seen_ext_ids)
-    new_count, dup_count = save_offers_to_db(filtered, domain_id, seen_urls, seen_ext_ids)
+    new_count, dup_count = save_offers_to_db(filtered, domain_id, seen_urls, seen_ext_ids, new_offer_ids)
     print(f"  Saved: {new_count} new, {dup_count} duplicates skipped")
 
     return new_count, dup_count
@@ -548,12 +557,13 @@ def main():
     # Global dedup sets — shared across all domain runs
     seen_urls: set = set()
     seen_ext_ids: set = set()
+    new_offer_ids: list[int] = []
 
     total_new = 0
     total_dup = 0
 
     for domain_id, domain_name in domains:
-        new_count, dup_count = run_domain(domain_id, domain_name, seen_urls, seen_ext_ids)
+        new_count, dup_count = run_domain(domain_id, domain_name, seen_urls, seen_ext_ids, new_offer_ids)
         total_new += new_count
         total_dup += dup_count
 
@@ -562,6 +572,14 @@ def main():
     logger.info("[dedup] Running post-scraping deduplication...")
     dedup_removed = cleanup_duplicate_offers()
 
+    # ── Instant email alerts for high-match offers ───────────────────
+    if new_offer_ids:
+        logger.info(f"[alert] Checking {len(new_offer_ids)} new offer(s) for instant alerts...")
+        try:
+            send_instant_alerts(new_offer_ids)
+        except Exception as exc:
+            logger.error(f"[alert] Instant alerts failed: {exc}", exc_info=True)
+
     print(f"\n{'=' * 60}")
     print(f"[OK] All domains processed.")
     print(f"     Total new offers saved : {total_new}")
@@ -569,6 +587,289 @@ def main():
     print(f"     Dedup pass removed      : {dedup_removed}")
     print(f"[OK] Launch dashboard: python run.py")
     print(f"{'=' * 60}")
+
+
+# ── Instant email alerts ────────────────────────────────────────────────────
+
+ALERT_MIN_SCORE = 80
+ALERT_MAX_PER_DAY = 3
+ALERT_BASE_URL = Config.BASE_URL if hasattr(Config, "BASE_URL") else "https://myjobhunter.fr"
+
+# Allowed CV extensions (mirrors routes.py)
+_CV_EXTS = {".pdf", ".docx", ".doc", ".txt", ".rtf", ".odt"}
+
+
+def _find_cv_text_for_user(user_id: int) -> str | None:
+    """Find and extract CV text for a user from data/documents/{user_id}/."""
+    docs_dir = Path(project_root) / "data" / "documents" / str(user_id)
+    if not docs_dir.exists():
+        return None
+
+    files = [f for f in docs_dir.iterdir() if f.is_file() and f.suffix.lower() in _CV_EXTS]
+    if not files:
+        return None
+
+    # Priority: files whose stem contains 'cv', most recent first
+    cv_named = sorted(
+        [f for f in files if "cv" in f.stem.lower()],
+        key=lambda f: f.stat().st_mtime, reverse=True,
+    )
+    target = cv_named[0] if cv_named else sorted(
+        [f for f in files if f.suffix.lower() in (".pdf", ".docx")],
+        key=lambda f: f.stat().st_mtime, reverse=True,
+    )[0] if any(f.suffix.lower() in (".pdf", ".docx") for f in files) else None
+
+    if target is None:
+        return None
+
+    try:
+        ext = target.suffix.lower()
+        if ext == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(target) as pdf:
+                return "\n".join(p.extract_text() or "" for p in pdf.pages)
+        elif ext == ".docx":
+            import docx
+            doc = docx.Document(target)
+            return "\n".join(p.text for p in doc.paragraphs)
+        elif ext in (".txt", ".rtf"):
+            return target.read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        logger.warning(f"[alert] Cannot extract CV text for user {user_id}: {exc}")
+    return None
+
+
+def _build_alert_email_html(username: str, offer, score: float) -> str:
+    """Build instant alert HTML email for a single high-match offer."""
+    safe_user = _html.escape(username)
+    safe_title = _html.escape(offer.title or "Sans titre")
+    safe_company = _html.escape(offer.company or "Entreprise inconnue")
+    safe_location = _html.escape(offer.location or "France")
+    detail_url = _html.escape(f"{ALERT_BASE_URL}/offer/{offer.id}")
+    dashboard_url = _html.escape(f"{ALERT_BASE_URL}/dashboard")
+
+    score_bg = "#dcfce7" if score >= 90 else "#fef9c3"
+    score_fg = "#15803d" if score >= 90 else "#854d0e"
+
+    return f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;">
+        <tr>
+          <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:28px 40px;text-align:center;">
+            <span style="font-size:2.2rem;">&#128640;</span>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:1.4rem;font-weight:700;letter-spacing:-.3px;">
+              MyJobHunter
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <h2 style="margin:0 0 12px;font-size:1.15rem;color:#0f172a;">
+              Nouvelle offre \u00e0 {score:.0f}% pour vous !
+            </h2>
+            <p style="margin:0 0 20px;color:#475569;font-size:.95rem;line-height:1.6;">
+              Bonjour <strong>{safe_user}</strong>,<br>
+              Une offre vient d\u2019\u00eatre d\u00e9couverte avec un excellent score
+              de correspondance avec votre CV.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background:#f1f5f9;">
+                <th style="padding:10px 12px;text-align:left;font-size:.82rem;color:#475569;font-weight:600;
+                           border-bottom:1px solid #e2e8f0;">Offre</th>
+                <th style="padding:10px 12px;text-align:center;font-size:.82rem;color:#475569;font-weight:600;
+                           border-bottom:1px solid #e2e8f0;width:80px;">Match</th>
+              </tr>
+              <tr>
+                <td style="padding:12px;">
+                  <a href="{detail_url}" style="color:#2563eb;text-decoration:none;font-weight:600;font-size:.95rem;">
+                    {safe_title}
+                  </a>
+                  <div style="color:#64748b;font-size:.82rem;margin-top:4px;">
+                    {safe_company} &middot; {safe_location}
+                  </div>
+                </td>
+                <td style="padding:12px;text-align:center;">
+                  <span style="display:inline-block;background:{score_bg};color:{score_fg};
+                               padding:4px 12px;border-radius:12px;font-size:.88rem;font-weight:700;">
+                    {score:.0f}%
+                  </span>
+                </td>
+              </tr>
+            </table>
+            <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+              <tr><td align="center">
+                <a href="{detail_url}"
+                   style="display:inline-block;background:#2563eb;color:#ffffff;
+                          text-decoration:none;padding:14px 36px;border-radius:8px;
+                          font-size:1rem;font-weight:600;letter-spacing:-.2px;">
+                  Voir l\u2019offre &#8594;
+                </a>
+              </td></tr>
+            </table>
+            <p style="margin:0;color:#94a3b8;font-size:.82rem;line-height:1.5;">
+              Vous recevez cet email car vous avez activ\u00e9 les alertes instantan\u00e9es
+              sur MyJobHunter. Vous pouvez les d\u00e9sactiver dans
+              <a href="{dashboard_url}" style="color:#64748b;">votre profil</a>.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;
+                     border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:.78rem;">
+              &copy; 2026 MyJobHunter &middot; Cet email est automatique, ne pas r\u00e9pondre.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_instant_alerts(new_offer_ids: list[int]):
+    """Send instant alert emails to eligible users for new high-match offers.
+
+    For each eligible user (active, email confirmed, alerts enabled, has CV),
+    compute TF-IDF scores against new offers in their domain. Send an alert
+    for each offer scoring >= 80%, up to 3 emails/user/day.
+    """
+    if not new_offer_ids:
+        logger.info("[alert] No new offers — skipping instant alerts.")
+        return
+
+    from app.services.cv_matcher import CVMatcher
+    from app import create_app, mail
+    from flask_mail import Message
+
+    app = create_app()
+    db = SessionLocal()
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    try:
+        # Eligible users
+        users = db.query(User).filter(
+            User.is_active.is_(True),
+            User.email.isnot(None),
+            User.email != "",
+            User.email_confirmed.is_(True),
+            User.email_alerts.is_(True),
+        ).all()
+
+        if not users:
+            logger.info("[alert] No eligible users for instant alerts.")
+            return
+
+        # Load new offers
+        new_offers = db.query(Offer).filter(Offer.id.in_(new_offer_ids)).all()
+        if not new_offers:
+            return
+
+        # Group new offers by domain_id
+        offers_by_domain: dict[int | None, list] = {}
+        for o in new_offers:
+            offers_by_domain.setdefault(o.domain_id, []).append(o)
+
+        total_sent = 0
+
+        for user in users:
+            # Reset daily counter if date changed
+            if user.daily_alert_date != today_str:
+                user.daily_alert_count = 0
+                user.daily_alert_date = today_str
+
+            # Check daily limit
+            if user.daily_alert_count >= ALERT_MAX_PER_DAY:
+                continue
+
+            # Get new offers for the user's domain
+            domain_offers = offers_by_domain.get(user.domain_id, [])
+            if not domain_offers:
+                continue
+
+            # Extract CV text
+            cv_text = _find_cv_text_for_user(user.id)
+            if not cv_text or not cv_text.strip():
+                continue
+
+            # Score offers against CV
+            try:
+                matcher = CVMatcher(cv_text)
+                scores = matcher.score_offers(domain_offers)
+            except Exception as exc:
+                logger.warning(f"[alert] CV matching failed for user {user.username}: {exc}")
+                continue
+
+            # Find offers above threshold, sorted by score desc
+            high_matches = sorted(
+                [(oid, sc) for oid, sc in scores.items() if sc >= ALERT_MIN_SCORE],
+                key=lambda x: x[1],
+                reverse=True,
+            )
+
+            if not high_matches:
+                continue
+
+            # Build offer lookup
+            offer_map = {o.id: o for o in domain_offers}
+
+            remaining = ALERT_MAX_PER_DAY - user.daily_alert_count
+            to_send = high_matches[:remaining]
+
+            for offer_id, score in to_send:
+                offer = offer_map.get(offer_id)
+                if not offer:
+                    continue
+
+                html_body = _build_alert_email_html(user.username, offer, score)
+
+                with app.app_context():
+                    try:
+                        msg = Message(
+                            subject=f"MyJobHunter \u2014 Nouvelle offre \u00e0 {score:.0f}% pour vous !",
+                            recipients=[user.email],
+                            html=html_body,
+                        )
+                        mail.send(msg)
+                        user.daily_alert_count += 1
+                        total_sent += 1
+                        logger.info(
+                            f"[alert] Sent alert to {user.username} ({user.email}): "
+                            f"offer #{offer_id} '{offer.title}' at {score:.0f}%"
+                        )
+                    except Exception as exc:
+                        logger.error(f"[alert] Failed to send alert to {user.email}: {exc}")
+
+            # Also store match scores in user_offers for these offers
+            for offer_id, score in high_matches:
+                existing = db.query(UserOffer).filter(
+                    UserOffer.user_id == user.id,
+                    UserOffer.offer_id == offer_id,
+                ).first()
+                if existing:
+                    existing.cv_match_score = score
+                else:
+                    db.add(UserOffer(
+                        user_id=user.id,
+                        offer_id=offer_id,
+                        cv_match_score=score,
+                    ))
+
+        db.commit()
+        logger.info(f"[alert] Instant alerts done: {total_sent} email(s) sent.")
+
+    except Exception:
+        db.rollback()
+        logger.exception("[alert] Error during instant alerts.")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

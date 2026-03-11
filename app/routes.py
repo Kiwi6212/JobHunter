@@ -2454,6 +2454,25 @@ def toggle_weekly_email():
         db.close()
 
 
+@bp.route('/api/account/toggle-alerts', methods=['POST'])
+@login_required
+def toggle_alert_email():
+    """Toggle instant alert email subscription on/off for the current user."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Non autorisé'}), 403
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return jsonify({'ok': False, 'error': 'Utilisateur introuvable'}), 404
+        user.email_alerts = not user.email_alerts
+        db.commit()
+        return jsonify({'ok': True, 'email_alerts': user.email_alerts})
+    finally:
+        db.close()
+
+
 @bp.route('/api/account/unsubscribe-weekly')
 def unsubscribe_weekly():
     """One-click unsubscribe from weekly emails via signed token (no login required)."""

@@ -290,6 +290,18 @@
             Chaque lundi, recevez par email vos offres avec le meilleur score Match IA.
         </p>
         <span id="weekly-save-msg" style="font-size:.85rem;"></span>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:1rem;">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:.95rem;color:var(--text-primary);">
+                <input type="checkbox" id="toggle-alerts"
+                       {{ 'checked' if user.email_alerts }}
+                       style="width:18px;height:18px;cursor:pointer;">
+                Recevoir des alertes quand une offre &gt; 80% correspond à mon CV
+            </label>
+        </div>
+        <p style="font-size:.82rem;color:var(--text-secondary);margin-top:0.5rem;">
+            Alerte instantanée après chaque scraping (max 3/jour).
+        </p>
+        <span id="alerts-save-msg" style="font-size:.85rem;"></span>
     </div>
     {% endif %}
 
@@ -386,6 +398,32 @@ if (toggleWeekly) {
                 msg.textContent = 'Erreur réseau';
                 msg.style.color = '#dc2626';
                 toggleWeekly.checked = !toggleWeekly.checked;
+            });
+    });
+}
+
+// Alerts email toggle
+var toggleAlerts = document.getElementById('toggle-alerts');
+if (toggleAlerts) {
+    toggleAlerts.addEventListener('change', function () {
+        var msg = document.getElementById('alerts-save-msg');
+        fetch('/api/account/toggle-alerts', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res.ok) {
+                    msg.textContent = res.email_alerts ? 'Alertes activées' : 'Alertes désactivées';
+                    msg.style.color = res.email_alerts ? '#15803d' : '#94a3b8';
+                } else {
+                    msg.textContent = 'Erreur';
+                    msg.style.color = '#dc2626';
+                    toggleAlerts.checked = !toggleAlerts.checked;
+                }
+                setTimeout(function () { msg.textContent = ''; }, 3000);
+            })
+            .catch(function () {
+                msg.textContent = 'Erreur réseau';
+                msg.style.color = '#dc2626';
+                toggleAlerts.checked = !toggleAlerts.checked;
             });
     });
 }
