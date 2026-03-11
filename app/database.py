@@ -87,6 +87,14 @@ def _migrate_columns():
             ))
         print("[MIGRATE] Done.")
 
+    if "is_active" not in existing:
+        print("[MIGRATE] Adding is_active column to offers table...")
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE offers ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"
+            ))
+        print("[MIGRATE] Done.")
+
     if "domain_id" not in existing:
         print("[MIGRATE] Adding domain_id column to offers table...")
         with engine.begin() as conn:

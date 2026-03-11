@@ -45,6 +45,9 @@ class Offer(Base):
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=lambda: datetime.now(timezone.utc))
 
+    # Active flag (False = dead link / expired)
+    is_active = Column(Boolean, nullable=False, default=True)
+
     # Domain (for multi-user filtering)
     domain_id = Column(Integer, ForeignKey("domains.id"), nullable=True, index=True)
     domain = relationship("Domain", back_populates="offers")

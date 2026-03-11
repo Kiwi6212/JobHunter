@@ -320,6 +320,16 @@ Add this line to your crontab (`crontab -e`) to run the backup every night at
 0 2 * * * cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/backup.py >> /home/ubuntu/backups/backup.log 2>&1
 ```
 
+### Weekly dead link check (cron)
+
+`scripts/check_dead_links.py` verifies offer URLs and marks dead links
+(HTTP 404/410, connection refused) as inactive. Only offers from the last
+30 days are checked. Add this to your crontab to run every Sunday at 3:00 UTC:
+
+```cron
+0 3 * * 0 cd /home/ubuntu/JobHunter && /home/ubuntu/JobHunter/venv/bin/python scripts/check_dead_links.py >> /home/ubuntu/logs/dead_links.log 2>&1
+```
+
 You can override the backup directory via the `BACKUP_DIR` environment variable:
 
 ```bash

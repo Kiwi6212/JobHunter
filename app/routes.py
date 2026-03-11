@@ -914,6 +914,7 @@ def dashboard():
         f_show_all = request.args.get('show_all', '') == '1'
         f_show_recruiters = request.args.get('show_recruiters', '') == '1'
         f_favorites = request.args.get('favorites', '') == '1'
+        f_cv_sent = request.args.get('cv_sent', '') == '1'
         f_sort = request.args.get('sort', 'score')
         f_order = request.args.get('order', 'desc')
 
@@ -950,6 +951,9 @@ def dashboard():
                 if t in co:
                     target_ids.add(oid)
                     break
+
+        # ── Hide inactive offers ──────────────────────────────────────
+        query = query.filter(Offer.is_active == True)
 
         # ── Apply filters ──────────────────────────────────────────────
         if not f_show_recruiters:
@@ -1021,6 +1025,12 @@ def dashboard():
         if f_favorites and user_id is not None:
             query = query.filter(UserOffer.is_favorite == True)
 
+        if f_cv_sent:
+            if user_id is not None:
+                query = query.filter(UserOffer.cv_sent == True)
+            else:
+                query = query.filter(Tracking.cv_sent == True)
+
         # ── Count + pagination ─────────────────────────────────────────
         total_offers = query.count()
         total_pages = max(1, math.ceil(total_offers / per_page))
@@ -1071,7 +1081,7 @@ def dashboard():
             user_offers_map = {uo.offer_id: uo for uo in user_offer_rows}
 
         # ── Stats (domain-wide, not affected by filters) ───────────────
-        total_domain_count = db.query(func.count(Offer.id))
+        total_domain_count = db.query(func.count(Offer.id)).filter(Offer.is_active == True)
         if domain_id:
             total_domain_count = total_domain_count.filter(Offer.domain_id == domain_id)
         total_domain_count = total_domain_count.scalar()
@@ -1125,6 +1135,7 @@ def dashboard():
             'show_all': f_show_all,
             'show_recruiters': f_show_recruiters,
             'favorites': f_favorites,
+            'cv_sent': f_cv_sent,
             'sort': f_sort,
             'order': f_order,
         }
@@ -1142,6 +1153,7 @@ def dashboard():
             'show_all': '1' if f_show_all else '',
             'show_recruiters': '1' if f_show_recruiters else '',
             'favorites': '1' if f_favorites else '',
+            'cv_sent': '1' if f_cv_sent else '',
             'sort': f_sort if f_sort != 'score' else '',
             'order': f_order if f_order != 'desc' else '',
         }.items() if v})

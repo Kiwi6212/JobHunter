@@ -557,10 +557,16 @@ def main():
         total_new += new_count
         total_dup += dup_count
 
+    # ── Post-scraping deduplication ──────────────────────────────────
+    from scripts.cleanup_offers import cleanup_duplicate_offers
+    logger.info("[dedup] Running post-scraping deduplication...")
+    dedup_removed = cleanup_duplicate_offers()
+
     print(f"\n{'=' * 60}")
     print(f"[OK] All domains processed.")
     print(f"     Total new offers saved : {total_new}")
     print(f"     Total duplicates skipped: {total_dup}")
+    print(f"     Dedup pass removed      : {dedup_removed}")
     print(f"[OK] Launch dashboard: python run.py")
     print(f"{'=' * 60}")
 

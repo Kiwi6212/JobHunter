@@ -114,6 +114,10 @@
             <input type="checkbox" id="show-favorites" name="favorites" value="1" {{ 'checked' if filters.favorites }}>
             <span data-i18n="filter_favorites">Favoris uniquement</span>
         </label>
+        <label class="filter-toggle">
+            <input type="checkbox" id="filter-cv-sent" name="cv_sent" value="1" {{ 'checked' if filters.cv_sent }}>
+            <span data-i18n="filter_cv_sent">CV envoyé uniquement</span>
+        </label>
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">

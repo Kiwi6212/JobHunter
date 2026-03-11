@@ -352,7 +352,7 @@
   // Select/checkbox filters → submit immediately
   var autoSubmitIds = [
     "filter-status", "filter-source", "filter-domain", "filter-contract",
-    "show-all-offers", "show-recruiters", "show-favorites"
+    "show-all-offers", "show-recruiters", "show-favorites", "filter-cv-sent"
   ];
   autoSubmitIds.forEach(function (id) {
     var el = document.getElementById(id);
