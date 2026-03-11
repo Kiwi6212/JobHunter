@@ -1,14 +1,20 @@
 """
 Deduplication script for JobHunter offers.
-Detects and removes duplicate offers (same title + company, case-insensitive, trimmed).
-Keeps the most recent offer (by found_date) and migrates user_offers from duplicates.
+Detects and removes duplicate offers using fuzzy matching on normalized
+title + company. Handles cross-source duplicates (e.g. 'SOPRA STERIA GROUP'
+vs 'Sopra Steria', titles with 'H/F' suffixes, accents, etc.).
+
+When duplicates span multiple sources, the offer from the highest-priority
+source is kept (career sites > aggregators).
 
 Usage:
     python scripts/cleanup_offers.py
 """
 
+import re
 import sys
 import logging
+import unicodedata
 from pathlib import Path
 from collections import defaultdict
 
@@ -16,7 +22,6 @@ from collections import defaultdict
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy import func, text
 from app.database import SessionLocal, init_db
 from app.models import Offer, UserOffer, Tracking
 
@@ -30,11 +35,92 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ── Source priority (lower = higher priority) ─────────────────────────────
+# Direct career sites are most reliable, then specialized boards, then aggregators.
+SOURCE_PRIORITY = {
+    "safran": 0,
+    "bpce": 0,
+    "smartrecruiters": 1,
+    "workday": 2,
+    "france_travail": 3,
+    "la_bonne_alternance": 4,
+    "welcome_to_the_jungle": 5,
+    "indeed": 6,
+    "lever": 7,
+    "talentbrew": 8,
+    "phenom": 9,
+    "place_emploi_public": 10,
+}
+
+# Words to strip from company names before comparison
+# Applied AFTER special chars are removed, so 'S.A.' becomes 'sa' first
+_COMPANY_NOISE = re.compile(
+    r"\b(group|groupe|france|sas|sa|sarl|eurl|inc|ltd|gmbh|se)\b",
+    re.IGNORECASE,
+)
+
+# Title suffixes to remove (gender markers, etc.)
+_TITLE_SUFFIXES = re.compile(
+    r"\s*[-–—/]\s*[HFMhfm]\s*/\s*[HFMhfm]"  # - H/F, – F/H, / M/F …
+    r"|\s*\(\s*[HFMhfm]\s*/\s*[HFMhfm]\s*\)"  # (H/F), (F/H), (M/F) …
+    r"|\s*[HFhf]\s*/\s*[HFhf]\s*$",            # trailing H/F without parens
+)
+
+# Collapse multiple whitespace / special chars
+_MULTI_SPACE = re.compile(r"\s+")
+_SPECIAL_CHARS = re.compile(r"[^\w\s]", re.UNICODE)
+
+
+def _strip_accents(text: str) -> str:
+    """Remove diacritics: é→e, è→e, ü→u, etc."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def normalize_company(raw: str) -> str:
+    """Normalize a company name for duplicate comparison.
+
+    'SOPRA STERIA GROUP' → 'sopra steria'
+    'Sopra Steria'       → 'sopra steria'
+    'Thales S.A.'        → 'thales'
+    """
+    s = raw.strip().lower()
+    s = _strip_accents(s)
+    # Remove dots/special before noise removal so 'S.A.S' → 'sas', 'S.A.' → 'sa'
+    s = re.sub(r"\.(?=\S)", "", s)       # Remove dots between chars: S.A. → SA.
+    s = _SPECIAL_CHARS.sub(" ", s)
+    s = _COMPANY_NOISE.sub("", s)
+    # Remove isolated single-letter fragments (leftover from e.g. 'S. A.')
+    s = re.sub(r"\b[a-z]\b", "", s)
+    s = _MULTI_SPACE.sub(" ", s).strip()
+    return s
+
+
+def normalize_title(raw: str) -> str:
+    """Normalize a job title for duplicate comparison.
+
+    'Administrateur Systèmes (H/F)'  → 'administrateur systemes'
+    'Admin Systèmes - H/F'           → 'admin systemes'
+    """
+    s = raw.strip()
+    s = _TITLE_SUFFIXES.sub("", s)
+    s = s.lower()
+    s = _strip_accents(s)
+    s = _SPECIAL_CHARS.sub(" ", s)
+    s = _MULTI_SPACE.sub(" ", s).strip()
+    return s
+
+
+def _source_priority(source: str) -> int:
+    """Return priority rank for a source (lower = better)."""
+    return SOURCE_PRIORITY.get(source, 99)
+
+
 def cleanup_duplicate_offers() -> int:
     """
-    Find and remove duplicate offers (same title + company, case-insensitive).
-    Keeps the offer with the most recent found_date.
-    Migrates user_offers and tracking from duplicates to the kept offer.
+    Find and remove duplicate offers using normalized title + company.
+    When duplicates come from different sources, keeps the highest-priority source.
+    Migrates user_offers from removed offers to the kept offer.
 
     Returns the number of duplicates removed.
     """
@@ -42,53 +128,44 @@ def cleanup_duplicate_offers() -> int:
     total_removed = 0
 
     try:
-        # Find duplicate groups: same (lower(trim(title)), lower(trim(company)))
-        dupes = (
-            db.query(
-                func.lower(func.trim(Offer.title)).label("norm_title"),
-                func.lower(func.trim(Offer.company)).label("norm_company"),
-                func.count(Offer.id).label("cnt"),
-            )
-            .group_by(
-                func.lower(func.trim(Offer.title)),
-                func.lower(func.trim(Offer.company)),
-            )
-            .having(func.count(Offer.id) > 1)
-            .all()
-        )
+        # Load all offers into memory for Python-side normalization
+        all_offers = db.query(Offer).all()
+        logger.info(f"[dedup] Loaded {len(all_offers)} offer(s) for deduplication.")
 
-        if not dupes:
+        # Group by (normalized_title, normalized_company)
+        groups: dict[tuple[str, str], list[Offer]] = defaultdict(list)
+        for offer in all_offers:
+            key = (normalize_title(offer.title), normalize_company(offer.company))
+            groups[key].append(offer)
+
+        # Process groups with more than one offer
+        dup_groups = {k: v for k, v in groups.items() if len(v) > 1}
+        if not dup_groups:
             logger.info("[dedup] No duplicate offers found.")
             return 0
 
-        logger.info(f"[dedup] Found {len(dupes)} duplicate group(s) to process.")
+        logger.info(f"[dedup] Found {len(dup_groups)} duplicate group(s) to process.")
 
-        for norm_title, norm_company, cnt in dupes:
-            # Get all offers in this group, ordered by found_date descending
-            group = (
-                db.query(Offer)
-                .filter(
-                    func.lower(func.trim(Offer.title)) == norm_title,
-                    func.lower(func.trim(Offer.company)) == norm_company,
+        for (norm_title, norm_company), group in dup_groups.items():
+            # Sort: best source priority first, then most recent found_date, then highest id
+            group.sort(
+                key=lambda o: (
+                    _source_priority(o.source),
+                    -(o.found_date.timestamp() if o.found_date else 0),
+                    -o.id,
                 )
-                .order_by(Offer.found_date.desc(), Offer.id.desc())
-                .all()
             )
 
-            if len(group) < 2:
-                continue
-
-            # Keep the first (most recent found_date)
             keeper = group[0]
             duplicates = group[1:]
 
-            # Get existing user_offer (user_id, offer_id) pairs for the keeper
-            existing_uo = set(
-                db.query(UserOffer.user_id)
+            # Collect existing user_offer user_ids for the keeper
+            existing_user_ids = {
+                row[0]
+                for row in db.query(UserOffer.user_id)
                 .filter(UserOffer.offer_id == keeper.id)
                 .all()
-            )
-            existing_user_ids = {row[0] for row in existing_uo}
+            }
 
             for dup in duplicates:
                 # Migrate user_offers from duplicate to keeper
@@ -99,23 +176,21 @@ def cleanup_duplicate_offers() -> int:
                 )
                 for uo in dup_user_offers:
                     if uo.user_id not in existing_user_ids:
-                        # Re-point to keeper
                         uo.offer_id = keeper.id
                         existing_user_ids.add(uo.user_id)
                     else:
-                        # Already exists for keeper — delete the duplicate user_offer
                         db.delete(uo)
 
                 # Delete tracking entries for the duplicate
-                dup_tracking = (
-                    db.query(Tracking)
-                    .filter(Tracking.offer_id == dup.id)
-                    .all()
-                )
-                for t in dup_tracking:
+                for t in db.query(Tracking).filter(Tracking.offer_id == dup.id).all():
                     db.delete(t)
 
-                # Delete the duplicate offer
+                logger.debug(
+                    f"[dedup] Removing #{dup.id} ({dup.source}) "
+                    f"→ keeping #{keeper.id} ({keeper.source}) "
+                    f"| '{norm_title}' @ '{norm_company}'"
+                )
+
                 db.delete(dup)
                 total_removed += 1
 
