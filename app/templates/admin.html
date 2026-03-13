@@ -82,20 +82,20 @@
                     {{ u.created_at.strftime('%d/%m/%Y %H:%M') }}
                 </td>
                 {# ── Dernière connexion + indicateur activité ── #}
-                <td style="font-size:0.85em;white-space:nowrap;"
+                <td class="cell-last-login"
                     data-last-login="{{ u.last_login.strftime('%Y-%m-%dT%H:%M:%SZ') if u.last_login else '' }}">
                     {% if u.last_login %}
                         {% set diff = (now - u.last_login).total_seconds() %}
                         {% if diff < 900 %}
-                            <span class="login-dot" style="color:#22c55e;font-size:0.9em;" title="En ligne">●</span>
+                            <span class="login-dot dot-green" title="En ligne"></span>
                         {% elif diff < 3600 %}
-                            <span class="login-dot" style="color:#f97316;font-size:0.9em;" title="Récemment actif">●</span>
+                            <span class="login-dot dot-orange" title="Récemment actif"></span>
                         {% else %}
-                            <span class="login-dot" style="color:#ef4444;font-size:0.9em;" title="Hors ligne">●</span>
+                            <span class="login-dot dot-red" title="Hors ligne"></span>
                         {% endif %}
                         {{ u.last_login.strftime('%d/%m/%Y %H:%M') }}
                     {% else %}
-                        <span class="login-dot" style="color:#ef4444;font-size:0.9em;" title="Jamais connecté">●</span>
+                        <span class="login-dot dot-red" title="Jamais connecté"></span>
                         <em style="color:var(--text-secondary);">Jamais</em>
                     {% endif %}
                 </td>
@@ -354,20 +354,21 @@ function refreshLoginDots() {
         var iso = td.getAttribute('data-last-login');
         var dot = td.querySelector('.login-dot');
         if (!dot) return;
+        dot.classList.remove('dot-green', 'dot-orange', 'dot-red');
         if (!iso) {
-            dot.style.color = '#ef4444';
+            dot.classList.add('dot-red');
             dot.title = 'Jamais connecté';
             return;
         }
         var diff = (now - new Date(iso).getTime()) / 1000;
         if (diff < 900) {
-            dot.style.color = '#22c55e';
+            dot.classList.add('dot-green');
             dot.title = 'En ligne';
         } else if (diff < 3600) {
-            dot.style.color = '#f97316';
+            dot.classList.add('dot-orange');
             dot.title = 'Récemment actif';
         } else {
-            dot.style.color = '#ef4444';
+            dot.classList.add('dot-red');
             dot.title = 'Hors ligne';
         }
     });
@@ -435,6 +436,21 @@ setInterval(refreshLoginDots, 60000);
     font-size: .82rem;
     color: var(--text-primary);
 }
+.cell-last-login {
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+.login-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.dot-green  { background-color: #22c55e; }
+.dot-orange { background-color: #f97316; }
+.dot-red    { background-color: #ef4444; }
 .row-disabled td {
     opacity: 0.45;
 }
