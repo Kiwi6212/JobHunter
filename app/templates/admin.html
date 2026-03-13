@@ -82,19 +82,20 @@
                     {{ u.created_at.strftime('%d/%m/%Y %H:%M') }}
                 </td>
                 {# ── Dernière connexion + indicateur activité ── #}
-                <td style="font-size:0.85em;white-space:nowrap;">
+                <td style="font-size:0.85em;white-space:nowrap;"
+                    data-last-login="{{ u.last_login.strftime('%Y-%m-%dT%H:%M:%SZ') if u.last_login else '' }}">
                     {% if u.last_login %}
                         {% set diff = (now - u.last_login).total_seconds() %}
-                        {% if diff < 86400 %}
-                            <span style="color:#22c55e;font-size:0.9em;" title="Connecté il y a moins de 24h">●</span>
-                        {% elif diff < 604800 %}
-                            <span style="color:#f97316;font-size:0.9em;" title="Connecté il y a moins de 7 jours">●</span>
+                        {% if diff < 900 %}
+                            <span class="login-dot" style="color:#22c55e;font-size:0.9em;" title="En ligne">●</span>
+                        {% elif diff < 3600 %}
+                            <span class="login-dot" style="color:#f97316;font-size:0.9em;" title="Récemment actif">●</span>
                         {% else %}
-                            <span style="color:#94a3b8;font-size:0.9em;" title="Inactif depuis plus de 7 jours">●</span>
+                            <span class="login-dot" style="color:#ef4444;font-size:0.9em;" title="Hors ligne">●</span>
                         {% endif %}
                         {{ u.last_login.strftime('%d/%m/%Y %H:%M') }}
                     {% else %}
-                        <span style="color:#ef4444;font-size:0.9em;" title="Jamais connecté">●</span>
+                        <span class="login-dot" style="color:#ef4444;font-size:0.9em;" title="Jamais connecté">●</span>
                         <em style="color:var(--text-secondary);">Jamais</em>
                     {% endif %}
                 </td>
@@ -344,6 +345,34 @@ function loadStats() {
 }
 loadStats();
 setInterval(loadStats, 30000);
+
+/* ── Recalcul temps réel des indicateurs de connexion ── */
+function refreshLoginDots() {
+    var cells = document.querySelectorAll('#admin-users-table td[data-last-login]');
+    var now = Date.now();
+    cells.forEach(function(td) {
+        var iso = td.getAttribute('data-last-login');
+        var dot = td.querySelector('.login-dot');
+        if (!dot) return;
+        if (!iso) {
+            dot.style.color = '#ef4444';
+            dot.title = 'Jamais connecté';
+            return;
+        }
+        var diff = (now - new Date(iso).getTime()) / 1000;
+        if (diff < 900) {
+            dot.style.color = '#22c55e';
+            dot.title = 'En ligne';
+        } else if (diff < 3600) {
+            dot.style.color = '#f97316';
+            dot.title = 'Récemment actif';
+        } else {
+            dot.style.color = '#ef4444';
+            dot.title = 'Hors ligne';
+        }
+    });
+}
+setInterval(refreshLoginDots, 60000);
 </script>
 
 <style nonce="{{ csp_nonce }}">

@@ -2778,7 +2778,10 @@ def admin_page():
     """Admin panel: list all registered users with management actions."""
     db = SessionLocal()
     try:
-        users = db.query(User).order_by(User.created_at.desc()).all()
+        users = db.query(User).order_by(
+            User.last_login.is_(None),        # NULLs go to the bottom
+            User.last_login.desc(),            # most recent first
+        ).all()
         domains = {d.id: d.name for d in db.query(Domain).all()}
         # Count documents per user
         doc_counts: dict[int, int] = {}
