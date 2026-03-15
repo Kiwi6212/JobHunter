@@ -54,7 +54,7 @@ try:
 except ImportError:
     _HAS_FCNTL = False
 
-from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_file, flash
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import joinedload
 
@@ -1447,6 +1447,7 @@ def report_unavailable(offer_id):
         offer.updated_at = datetime.utcnow()
         db.commit()
         _sec_log("OFFER_REPORTED", username, f"offer_id={offer_id}")
+        flash("Merci ! L'offre a été signalée et retirée.", "success")
         return jsonify({'ok': True})
     except Exception:
         db.rollback()

@@ -360,8 +360,7 @@
                     if (res.ok) {
                         var dashUrl = "{{ url_for('main.dashboard') }}";
                         var saved = sessionStorage.getItem("dashboard_params");
-                        var sep = (saved && saved.charAt(0) === "?") ? "&" : "?";
-                        window.location.href = dashUrl + (saved || "") + sep + "reported=1";
+                        window.location.href = dashUrl + (saved || "");
                     } else {
                         btnReport.disabled = false;
                         alert(res.error || "Erreur lors du signalement.");
