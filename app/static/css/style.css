@@ -1039,6 +1039,8 @@ body {
     display: flex;
     gap: 0.35rem;
     align-items: center;
+    flex-wrap: wrap;
+    min-width: 170px;
 }
 
 .row-applied {
@@ -1068,6 +1070,9 @@ body {
     cursor: pointer;
     font-size: 0.78rem;
     line-height: 1;
+    padding: 0.25rem 0.4rem;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .btn-dismiss-row:hover {
     background: #fee2e2;
