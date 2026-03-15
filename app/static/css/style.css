@@ -450,6 +450,7 @@ body {
 .offers-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: auto;
     font-size: 0.88rem;
 }
 
@@ -490,15 +491,21 @@ body {
 }
 
 .col-title {
-    min-width: 350px;
+    min-width: 200px;
+    max-width: 320px;
+    word-break: break-word;
 }
 
 .col-company {
-    min-width: 200px;
+    min-width: 120px;
+    max-width: 200px;
+    word-break: break-word;
 }
 
 .col-location {
-    min-width: 180px;
+    min-width: 100px;
+    max-width: 160px;
+    word-break: break-word;
 }
 
 .col-source {
@@ -1040,7 +1047,7 @@ body {
     gap: 0.35rem;
     align-items: center;
     flex-wrap: wrap;
-    min-width: 170px;
+    min-width: 150px;
 }
 
 .row-applied {
@@ -1528,9 +1535,9 @@ footer {
 
     /* ── Table ── */
     .table-container { border-radius: 0; }
-    .col-title { min-width: 220px; }
-    .col-company { min-width: 140px; }
-    .col-location { min-width: 120px; }
+    .col-title { min-width: 160px; max-width: 240px; }
+    .col-company { min-width: 100px; max-width: 160px; }
+    .col-location { min-width: 80px; max-width: 120px; }
 
     /* ── Pagination compact ── */
     .pagination-bar { gap: 0.2rem; }
@@ -1575,7 +1582,7 @@ footer {
     /* ── Table further compacted ── */
     .offers-table { font-size: 0.8rem; }
     .offers-table th, .offers-table td { padding: 0.35rem 0.3rem; }
-    .col-title { min-width: 180px; }
+    .col-title { min-width: 140px; max-width: 200px; }
     .status-select { width: 90px; max-width: 90px; font-size: 0.72rem; }
 
     /* ── Offer detail ── */
