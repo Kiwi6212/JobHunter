@@ -3,6 +3,12 @@
 {% block title %}Dashboard - JobHunter{% endblock %}
 
 {% block content %}
+{% if request.args.get('reported') == '1' %}
+<div class="flash-banner flash-banner--success" id="flash-reported">
+    Merci ! L'offre a été signalée et retirée.
+    <button type="button" class="flash-close" onclick="document.getElementById('flash-reported').remove()">&times;</button>
+</div>
+{% endif %}
 <div class="dashboard-header">
     <h2 data-i18n="dashboard_title">Tableau de bord des offres</h2>
     <div class="stats-summary">

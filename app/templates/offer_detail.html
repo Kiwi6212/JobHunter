@@ -143,6 +143,7 @@
         {% endif %}
 
         <!-- ── Actions ──────────────────────────────────────────── -->
+        <hr class="offer-divider">
         <div class="offer-actions">
             {% if role != 'viewer' %}
             {% set already_applied = user_offer and user_offer.cv_sent %}
@@ -155,6 +156,14 @@
             <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Voir l'offre originale</a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary" id="btn-back-dashboard">Retour au dashboard</a>
         </div>
+
+        <!-- ── Signaler offre indisponible ────────────────────── -->
+        {% if role != 'viewer' %}
+        <div class="report-section">
+            <button type="button" id="btn-report-unavailable" class="btn btn-report"
+                    data-offer-id="{{ offer.id }}">Signaler comme indisponible</button>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -336,6 +345,33 @@
                 URL.revokeObjectURL(url);
             });
         }
+    }
+
+    // ── Report unavailable ──────────────────────────────────────────
+    var btnReport = document.getElementById("btn-report-unavailable");
+    if (btnReport) {
+        btnReport.addEventListener("click", function () {
+            if (!confirm("Êtes-vous sûr que cette offre n'est plus disponible ?")) return;
+            var offerId = btnReport.getAttribute("data-offer-id");
+            btnReport.disabled = true;
+            fetch("/api/tracking/" + offerId + "/report-unavailable", { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        var dashUrl = "{{ url_for('main.dashboard') }}";
+                        var saved = sessionStorage.getItem("dashboard_params");
+                        var sep = (saved && saved.charAt(0) === "?") ? "&" : "?";
+                        window.location.href = dashUrl + (saved || "") + sep + "reported=1";
+                    } else {
+                        btnReport.disabled = false;
+                        alert(res.error || "Erreur lors du signalement.");
+                    }
+                })
+                .catch(function () {
+                    btnReport.disabled = false;
+                    alert("Erreur réseau");
+                });
+        });
     }
 })();
 </script>

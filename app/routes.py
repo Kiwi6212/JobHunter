@@ -1413,6 +1413,48 @@ def quick_apply(offer_id):
         db.close()
 
 
+@bp.route('/api/tracking/<int:offer_id>/report-unavailable', methods=['POST'])
+@login_required
+def report_unavailable(offer_id):
+    """Let a user flag an offer as no longer available (sets is_active=False)."""
+    user_id = session.get("user_id")
+    username = session.get("username", "-")
+    if user_id is None:
+        return jsonify({'error': 'Non authentifié'}), 401
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    # Anti-abuse: non-admin users may report at most 10 offers per day
+    role = session.get("role", "")
+    if role != "admin":
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        report_date = session.get("_report_date", "")
+        report_count = session.get("_report_count", 0)
+        if report_date != today:
+            report_date = today
+            report_count = 0
+        if report_count >= 10:
+            return jsonify({'error': 'Limite de signalements atteinte (10/jour)'}), 429
+        session["_report_date"] = report_date
+        session["_report_count"] = report_count + 1
+
+    db = SessionLocal()
+    try:
+        offer = db.query(Offer).filter(Offer.id == offer_id).first()
+        if not offer:
+            return jsonify({'error': 'Offre introuvable'}), 404
+        offer.is_active = False
+        offer.updated_at = datetime.utcnow()
+        db.commit()
+        _sec_log("OFFER_REPORTED", username, f"offer_id={offer_id}")
+        return jsonify({'ok': True})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
 @bp.route('/api/export/pdf')
 @login_required
 def export_pdf():
