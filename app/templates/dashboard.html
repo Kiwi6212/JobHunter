@@ -123,6 +123,10 @@
             <input type="checkbox" id="filter-cv-sent" name="cv_sent" value="1" {{ 'checked' if filters.cv_sent }}>
             <span data-i18n="filter_cv_sent">CV envoyé uniquement</span>
         </label>
+        <label class="filter-toggle">
+            <input type="checkbox" id="show-dismissed" name="show_dismissed" value="1" {{ 'checked' if filters.show_dismissed }}>
+            <span>Afficher les offres ignorées</span>
+        </label>
     </div>
     <!-- Row 2: action buttons -->
     <div class="filters-row filters-row-actions">
@@ -275,6 +279,8 @@
                             {% if uo and uo.cv_sent %}disabled{% endif %}>
                         {{ '✓' if uo and uo.cv_sent else 'Postuler ↗' }}
                     </button>
+                    <button type="button" class="btn btn-small btn-dismiss-row" data-offer-id="{{ offer.id }}"
+                            title="Pas intéressé">👎</button>
                     {% else %}
                     <span class="btn btn-small btn-view-locked" title="Accès lecture seule">Voir</span>
                     {% endif %}

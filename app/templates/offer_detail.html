@@ -147,11 +147,19 @@
         <div class="offer-actions">
             {% if role != 'viewer' %}
             {% set already_applied = user_offer and user_offer.cv_sent %}
+            {% set is_dismissed = user_offer and user_offer.status == 'Dismissed' %}
             <button type="button" id="btn-quick-apply" class="btn btn-primary{% if already_applied %} btn-applied{% endif %}"
                     data-url="{{ offer.url }}" data-offer-id="{{ offer.id }}"
                     {% if already_applied %}disabled{% endif %}>
                 {{ '✓ Postulé' if already_applied else 'Postuler ↗' }}
             </button>
+            {% if is_dismissed %}
+            <button type="button" id="btn-restore-offer" class="btn btn-secondary"
+                    data-offer-id="{{ offer.id }}">Remettre dans ma liste</button>
+            {% else %}
+            <button type="button" id="btn-dismiss-offer" class="btn btn-dismiss"
+                    data-offer-id="{{ offer.id }}">Pas intéressé 👎</button>
+            {% endif %}
             {% endif %}
             <a href="{{ offer.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Voir l'offre originale</a>
             <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary" id="btn-back-dashboard">Retour au dashboard</a>
@@ -345,6 +353,56 @@
                 URL.revokeObjectURL(url);
             });
         }
+    }
+
+    // ── Dismiss offer ────────────────────────────────────────────────
+    var btnDismiss = document.getElementById("btn-dismiss-offer");
+    if (btnDismiss) {
+        btnDismiss.addEventListener("click", function () {
+            var offerId = btnDismiss.getAttribute("data-offer-id");
+            btnDismiss.disabled = true;
+            fetch("/api/tracking/" + offerId + "/dismiss", { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        var dashUrl = "{{ url_for('main.dashboard') }}";
+                        var saved = sessionStorage.getItem("dashboard_params");
+                        window.location.href = dashUrl + (saved || "");
+                    } else {
+                        btnDismiss.disabled = false;
+                    }
+                })
+                .catch(function () { btnDismiss.disabled = false; });
+        });
+    }
+
+    // ── Restore offer ────────────────────────────────────────────────
+    var btnRestore = document.getElementById("btn-restore-offer");
+    if (btnRestore) {
+        btnRestore.addEventListener("click", function () {
+            var offerId = btnRestore.getAttribute("data-offer-id");
+            btnRestore.disabled = true;
+            fetch("/api/tracking/" + offerId + "/restore", { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) {
+                        // Replace restore button with dismiss button
+                        var newBtn = document.createElement("button");
+                        newBtn.type = "button";
+                        newBtn.id = "btn-dismiss-offer";
+                        newBtn.className = "btn btn-dismiss";
+                        newBtn.setAttribute("data-offer-id", offerId);
+                        newBtn.textContent = "Pas intéressé \uD83D\uDC4E";
+                        btnRestore.parentNode.replaceChild(newBtn, btnRestore);
+                        // Update status select
+                        var sel = document.getElementById("t-status");
+                        if (sel) { sel.value = "New"; sel.className = "status-select status-color-new"; }
+                    } else {
+                        btnRestore.disabled = false;
+                    }
+                })
+                .catch(function () { btnRestore.disabled = false; });
+        });
     }
 
     // ── Report unavailable ──────────────────────────────────────────

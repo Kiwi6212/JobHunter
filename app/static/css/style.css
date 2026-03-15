@@ -1045,6 +1045,51 @@ body {
     opacity: 0.85;
 }
 
+/* Dismiss button (offer detail) */
+.btn-dismiss {
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+.btn-dismiss:hover {
+    background-color: #4b5563;
+}
+.btn-dismiss:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Dismiss button in dashboard table row */
+.btn-dismiss-row {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-size: 0.78rem;
+    line-height: 1;
+}
+.btn-dismiss-row:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+.btn-dismiss-row:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Fade-out animation for dismissed rows */
+.row-fade-out {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+/* Dismissed status color */
+.status-color-dismissed { background-color: #f1f5f9; color: #94a3b8; }
+[data-theme="dark"] .status-color-dismissed { background-color: #1e293b; color: #64748b; }
+.status-dismissed { background-color: #f1f5f9; color: #94a3b8; }
+[data-theme="dark"] .status-dismissed { background-color: #1e293b; color: #64748b; }
+
 /* Empty State */
 .empty-state {
     text-align: center;

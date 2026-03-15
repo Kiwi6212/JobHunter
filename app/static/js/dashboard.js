@@ -18,6 +18,7 @@
       "Accepted":    "Accepté",
       "Rejected":    "Refusé",
       "No response": "Sans réponse",
+      "Dismissed":   "Ignoré",
     },
     en: {
       "New":         "New",
@@ -27,6 +28,7 @@
       "Accepted":    "Accepted",
       "Rejected":    "Rejected",
       "No response": "No response",
+      "Dismissed":   "Dismissed",
     }
   };
 
@@ -393,6 +395,33 @@
       });
   });
 
+  // ── Event delegation: dismiss button (fade-out + AJAX) ──────────────
+
+  tbody.addEventListener("click", function (e) {
+    var btn = e.target.closest(".btn-dismiss-row");
+    if (!btn || btn.disabled) return;
+    var row = btn.closest(".offer-row");
+    if (!row) return;
+    var offerId = row.dataset.offerId;
+
+    btn.disabled = true;
+    fetch("/api/tracking/" + offerId + "/dismiss", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.ok) {
+          row.classList.add("row-fade-out");
+          setTimeout(function () {
+            row.classList.add("hidden");
+          }, 500);
+        } else {
+          btn.disabled = false;
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+      });
+  });
+
   // ── Event delegation: notes (debounced AJAX) ───────────────────────
 
   tbody.addEventListener("input", function (e) {
@@ -420,7 +449,8 @@
   // Select/checkbox filters → submit immediately
   var autoSubmitIds = [
     "filter-status", "filter-source", "filter-domain", "filter-contract",
-    "show-all-offers", "show-recruiters", "show-favorites", "filter-cv-sent"
+    "show-all-offers", "show-recruiters", "show-favorites", "filter-cv-sent",
+    "show-dismissed"
   ];
   autoSubmitIds.forEach(function (id) {
     var el = document.getElementById(id);

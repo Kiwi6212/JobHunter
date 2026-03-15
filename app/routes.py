@@ -587,7 +587,7 @@ def resend_confirmation():
 
 VALID_STATUSES = [
     'New', 'Applied', 'Followed up', 'Interview',
-    'Accepted', 'Rejected', 'No response',
+    'Accepted', 'Rejected', 'No response', 'Dismissed',
 ]
 
 # CV storage paths
@@ -919,6 +919,7 @@ def dashboard():
         f_show_recruiters = request.args.get('show_recruiters', '') == '1'
         f_favorites = request.args.get('favorites', '') == '1'
         f_cv_sent = request.args.get('cv_sent', '') == '1'
+        f_show_dismissed = request.args.get('show_dismissed', '') == '1'
         f_sort = request.args.get('sort', '').strip()
         f_order = request.args.get('order', '').strip()
         sort_explicit = bool(f_sort)
@@ -1035,6 +1036,12 @@ def dashboard():
                 query = query.filter(UserOffer.cv_sent == True)
             else:
                 query = query.filter(Tracking.cv_sent == True)
+
+        # ── Hide dismissed offers by default ───────────────────────────
+        if not f_show_dismissed and user_id is not None:
+            query = query.filter(
+                or_(UserOffer.status.is_(None), UserOffer.status != 'Dismissed')
+            )
 
         # ── Count + pagination ─────────────────────────────────────────
         total_offers = query.count()
@@ -1172,6 +1179,7 @@ def dashboard():
             'show_recruiters': f_show_recruiters,
             'favorites': f_favorites,
             'cv_sent': f_cv_sent,
+            'show_dismissed': f_show_dismissed,
             'sort': f_sort,
             'order': f_order,
         }
@@ -1190,6 +1198,7 @@ def dashboard():
             'show_recruiters': '1' if f_show_recruiters else '',
             'favorites': '1' if f_favorites else '',
             'cv_sent': '1' if f_cv_sent else '',
+            'show_dismissed': '1' if f_show_dismissed else '',
             'sort': f_sort if sort_explicit else '',
             'order': f_order if sort_explicit else '',
         }.items() if v})
@@ -1449,6 +1458,69 @@ def report_unavailable(offer_id):
         _sec_log("OFFER_REPORTED", username, f"offer_id={offer_id}")
         flash("Merci ! L'offre a été signalée et retirée.", "success")
         return jsonify({'ok': True})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
+@bp.route('/api/tracking/<int:offer_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_offer(offer_id):
+    """Mark an offer as dismissed (hidden from dashboard) for the current user."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return jsonify({'error': 'Non disponible'}), 400
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    db = SessionLocal()
+    try:
+        uo = db.query(UserOffer).filter(
+            UserOffer.user_id == user_id,
+            UserOffer.offer_id == offer_id,
+        ).first()
+        if not uo:
+            offer_exists = db.query(Offer.id).filter(Offer.id == offer_id).scalar()
+            if not offer_exists:
+                return jsonify({'error': 'Offer not found'}), 404
+            uo = UserOffer(user_id=user_id, offer_id=offer_id, status='Dismissed')
+            db.add(uo)
+        else:
+            uo.status = 'Dismissed'
+        uo.updated_at = datetime.utcnow()
+        db.commit()
+        return jsonify({'ok': True, 'status': 'Dismissed'})
+    except Exception:
+        db.rollback()
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    finally:
+        db.close()
+
+
+@bp.route('/api/tracking/<int:offer_id>/restore', methods=['POST'])
+@login_required
+def restore_offer(offer_id):
+    """Restore a dismissed offer back to 'New' status."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return jsonify({'error': 'Non disponible'}), 400
+    if session.get("role") == "viewer":
+        return jsonify({"error": "Accès réservé"}), 403
+
+    db = SessionLocal()
+    try:
+        uo = db.query(UserOffer).filter(
+            UserOffer.user_id == user_id,
+            UserOffer.offer_id == offer_id,
+        ).first()
+        if not uo:
+            return jsonify({'error': 'Offer not found'}), 404
+        uo.status = 'New'
+        uo.updated_at = datetime.utcnow()
+        db.commit()
+        return jsonify({'ok': True, 'status': 'New'})
     except Exception:
         db.rollback()
         return jsonify({'error': 'Erreur interne du serveur'}), 500
