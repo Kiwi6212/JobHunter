@@ -246,6 +246,21 @@
     </script>
     {% endif %}
 
+    <script nonce="{{ csp_nonce }}">
+    // ── Auto-dismiss flash banners and alerts after 5 s ──
+    (function () {
+        var items = document.querySelectorAll(".flash-banner, .alert");
+        for (var i = 0; i < items.length; i++) {
+            (function (el) {
+                setTimeout(function () {
+                    el.classList.add("flash-fade-out");
+                    setTimeout(function () { el.remove(); }, 500);
+                }, 5000);
+            })(items[i]);
+        }
+    })();
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

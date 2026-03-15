@@ -4,9 +4,8 @@
 
 {% block content %}
 {% if request.args.get('reported') == '1' %}
-<div class="flash-banner flash-banner--success" id="flash-reported">
+<div class="flash-banner flash-banner--success">
     Merci ! L'offre a été signalée et retirée.
-    <button type="button" class="flash-close" onclick="document.getElementById('flash-reported').remove()">&times;</button>
 </div>
 {% endif %}
 <div class="dashboard-header">
