@@ -440,11 +440,11 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow);
     overflow: hidden;
-    overflow-x: auto;
 }
 
 .table-scroll {
     overflow-x: auto;
+    overflow-y: visible;
 }
 
 .offers-table {
